@@ -176,7 +176,7 @@ Max Concurrent: 4 (Wave 1)
 
 ---
 
-- [ ] 1. `action.yml` — Action definition with all inputs and outputs
+- [x] 1. `action.yml` — Action definition with all inputs and outputs
 
   **What to do**:
   - Create `action.yml` with `name`, `description`, `branding` (color: blue, icon: eye)
@@ -270,7 +270,7 @@ Max Concurrent: 4 (Wave 1)
 
 ---
 
-- [ ] 2. `prompts/code-review.md` + `prompts/security-review.md`
+- [x] 2. `prompts/code-review.md` + `prompts/security-review.md`
 
   **What to do**:
   - Create `prompts/` directory
@@ -343,7 +343,7 @@ Max Concurrent: 4 (Wave 1)
 
 ---
 
-- [ ] 3. `prompts/dependency-review.md` + `prompts/test-coverage.md`
+- [x] 3. `prompts/dependency-review.md` + `prompts/test-coverage.md`
 
   **What to do**:
   - Create `prompts/dependency-review.md`:
@@ -409,7 +409,7 @@ Max Concurrent: 4 (Wave 1)
 
 ---
 
-- [ ] 4. `scripts/post-comment.sh` — PR comment posting with sentinel permission test
+- [x] 4. `scripts/post-comment.sh` — PR comment posting with sentinel permission test
 
   **What to do**:
   - Create `scripts/post-comment.sh` — executable bash script (add `#!/usr/bin/env bash` + `set -euo pipefail`)
