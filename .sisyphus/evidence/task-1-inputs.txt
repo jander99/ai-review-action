@@ -1,1 +1,0 @@
-['github-token', 'copilot-token', 'model', 'models', 'prompt', 'prompt-file', 'prompts', 'fusion', 'fusion-model', 'post-comment', 'allowed-tools', 'min-prompt-length', 'max-comment-chars']

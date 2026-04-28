@@ -1,7 +1,0 @@
-exit=0
-14:#   COPILOT_AUTO_UPDATE     - must remain 'false' in all copilot invocations
-74:if ! command -v copilot &>/dev/null; then
-75:  echo "ERROR: copilot CLI not found; ensure the npm install step ran before this script" >&2
-79:if copilot help 2>&1 | grep -q 'no-custom-instructions'; then
-191:    if COPILOT_AUTO_UPDATE=false copilot "${copilot_args[@]}" > "$output_file"; then
-236:  if COPILOT_AUTO_UPDATE=false copilot "${fusion_args[@]}" > "$fusion_output"; then
