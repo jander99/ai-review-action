@@ -27,6 +27,15 @@
       "agent": "Sisyphus-Junior",
       "category": "deep",
       "updated_at": "2026-04-28T01:37:13.134Z"
+    },
+    "todo:6": {
+      "task_key": "todo:6",
+      "task_label": "6",
+      "task_title": "`README.md` — Marketplace-quality documentation",
+      "session_id": "ses_22e428757ffexuAjfGY2cuT460",
+      "agent": "Sisyphus-Junior",
+      "category": "writing",
+      "updated_at": "2026-04-28T01:40:40.782Z"
     }
   }
 }

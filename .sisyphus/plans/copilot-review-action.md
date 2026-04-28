@@ -636,7 +636,7 @@ Max Concurrent: 4 (Wave 1)
 
 ---
 
-- [ ] 6. `README.md` — Marketplace-quality documentation
+- [x] 6. `README.md` — Marketplace-quality documentation
 
   **What to do**:
   - Write `README.md` targeting GitHub Marketplace standards
@@ -728,7 +728,7 @@ Max Concurrent: 4 (Wave 1)
 
 ---
 
-- [ ] 7. `.github/workflows/example-copilot-review.yml` — Example consumer workflow
+- [x] 7. `.github/workflows/example-copilot-review.yml` — Example consumer workflow
 
   **What to do**:
   - Create `.github/workflows/example-copilot-review.yml`
