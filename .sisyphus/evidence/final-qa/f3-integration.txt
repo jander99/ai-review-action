@@ -1,0 +1,43 @@
+## F3 Real Integration QA Evidence
+Run ID: 25029985175
+PR: https://github.com/jander99/copilot-action/pull/1
+Date: 2026-04-28
+
+### What ran
+- Workflow triggered: pull_request event ✓
+- npm install @github/copilot@1.0.37 markdownlint-cli2: 88 packages in 6s ✓
+- chmod on both scripts: ✓
+- run-reviews.sh executed with correct env vars ✓
+  - INPUT_MODEL=claude-sonnet-4.6
+  - INPUT_PROMPTS=code-review,security-review
+  - COPILOT_AUTO_UPDATE=false
+  - INPUT_POST_COMMENT=true
+- post-comment.sh executed with correct env vars ✓
+
+### What failed (expected without COPILOT_TOKEN)
+- COPILOT_GITHUB_TOKEN was empty (secret not configured)
+- Copilot CLI: "Error: No authentication information found."
+- run-reviews.sh: WARNING (not exit 1) for each review failure ✓
+- run-reviews.sh: "WARNING: All reviews failed; no output generated." ✓
+- post-comment.sh: "WARNING: REVIEW_FILE is missing or empty; skipping PR comment." ✓
+
+### Verified behaviors
+✓ Graceful degradation: all failures are warnings, not hard errors
+✓ Job exits 0 even when all reviews fail (does not break CI)
+✓ Correct env var names passed from action.yml to scripts
+✓ PR_NUMBER correctly set (GITHUB_PR_NUMBER=1)
+✓ Action structure is correct (install → chmod → run-reviews → post-comment)
+
+### Not verified (requires COPILOT_TOKEN)
+✗ Comment posted to PR
+✗ comment-url output populated
+✗ models-used output populated
+
+### Verdict
+Integration [PARTIAL] | Comment posted [NO — COPILOT_TOKEN not set] | 
+VERDICT: CONDITIONAL PASS — graceful degradation confirmed, happy-path blocked on missing secret
+
+### To complete F3 fully:
+1. Set COPILOT_TOKEN secret at https://github.com/jander99/copilot-action/settings/secrets/actions
+2. Secret must be a fine-grained PAT with "Copilot Requests" permission
+3. Push a commit to the PR branch to retrigger the workflow
