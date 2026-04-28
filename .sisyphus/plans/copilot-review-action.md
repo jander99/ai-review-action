@@ -814,11 +814,11 @@ Max Concurrent: 4 (Wave 1)
 
 > 4 review agents run in PARALLEL. ALL must APPROVE. Present consolidated results to user and get explicit "okay" before completing.
 
-- [ ] F1. **Plan Compliance Audit** — `oracle`
+- [x] F1. **Plan Compliance Audit** — `oracle`
   Read `action.yml`, both scripts, all 4 prompts, `README.md`, and example workflow. For each "Must Have": verify implementation exists. For each "Must NOT Have": search codebase for forbidden patterns (especially `2>&1` on copilot output, `pull_request_target`, `@latest` in npm install, unquoted `$INPUT_ALLOWED_TOOLS`). Check evidence files exist in `.sisyphus/evidence/`.
   Output: `Must Have [N/N] | Must NOT Have [N/N] | Tasks [N/N] | VERDICT: APPROVE/REJECT`
 
-- [ ] F2. **Code Quality Review** — `unspecified-high`
+- [x] F2. **Code Quality Review** — `unspecified-high`
   Run `shellcheck scripts/*.sh`, `actionlint action.yml`, `actionlint .github/workflows/example-copilot-review.yml`, `markdownlint-cli2 README.md prompts/*.md`. Check scripts for: `set -euo pipefail`, proper quoting, no `eval`, `mktemp` for temp files, heredoc for multi-line GITHUB_OUTPUT. Flag AI-generated anti-patterns: over-commenting, redundant checks, unused variables.
   Output: `shellcheck [PASS/FAIL] | actionlint [PASS/FAIL] | markdownlint [PASS/FAIL] | VERDICT`
 
@@ -833,7 +833,7 @@ Max Concurrent: 4 (Wave 1)
   Save screenshots/command output to `.sisyphus/evidence/final-qa/`.
   Output: `Integration [PASS/FAIL] | Comment posted [YES/NO] | VERDICT`
 
-- [ ] F4. **Scope Fidelity Check** — `deep`
+- [x] F4. **Scope Fidelity Check** — `deep`
   For each task: read "What to do", check actual file content. Verify nothing beyond spec was added. Check for: inline PR comments code (forbidden), approval/label mutation code (forbidden), `pull_request_target` anywhere (forbidden), `@latest` in npm install (forbidden), hardcoded model lists (forbidden). Flag any unaccounted files created.
   Output: `Tasks [N/N compliant] | Forbidden patterns [CLEAN/N issues] | VERDICT`
 
