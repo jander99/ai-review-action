@@ -18,6 +18,15 @@
       "agent": "Sisyphus-Junior",
       "category": "quick",
       "updated_at": "2026-04-28T01:24:17.153Z"
+    },
+    "todo:5": {
+      "task_key": "todo:5",
+      "task_label": "5",
+      "task_title": "`scripts/run-reviews.sh` — Main orchestration",
+      "session_id": "ses_22e49e0deffePK9TNEoP0ZzNdW",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-04-28T01:37:13.134Z"
     }
   }
 }

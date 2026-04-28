@@ -507,7 +507,7 @@ Max Concurrent: 4 (Wave 1)
 
 ---
 
-- [ ] 5. `scripts/run-reviews.sh` — Main orchestration
+- [x] 5. `scripts/run-reviews.sh` — Main orchestration
 
   **What to do**:
   - Create `scripts/run-reviews.sh` — executable bash script (`#!/usr/bin/env bash`, `set -euo pipefail`)
