@@ -1,0 +1,12 @@
+Section count:
+9
+Prerequisites check:
+## Prerequisites
+fetch-depth check:
+- **GitHub Checkout**: Must use `actions/checkout` with `fetch-depth: 0`.
+          fetch-depth: 0
+fine-grained check:
+- **Fine-grained PAT**: A fine-grained Personal Access Token with
+| `github-token` | String | Yes | | `GITHUB_TOKEN` or fine-grained PAT. |
+  `copilot-token` (a fine-grained PAT) to pull requests from forks.
+  `copilot-token` is a fine-grained PAT with "Copilot Requests" permission.
