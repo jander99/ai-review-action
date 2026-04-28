@@ -1,0 +1,12 @@
+{
+  "active_plan": "/home/jeff/workspaces/copilot-action/.sisyphus/plans/copilot-review-action.md",
+  "started_at": "2026-04-28T01:17:59.775Z",
+  "session_ids": [
+    "ses_22e86fda2ffeNze3ndVaUwLZIn"
+  ],
+  "session_origins": {
+    "ses_22e86fda2ffeNze3ndVaUwLZIn": "direct"
+  },
+  "plan_name": "copilot-review-action",
+  "agent": "atlas"
+}
