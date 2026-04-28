@@ -1,0 +1,2 @@
+exit=1
+ERROR: prompt-file '../../etc/passwd' is outside workspace

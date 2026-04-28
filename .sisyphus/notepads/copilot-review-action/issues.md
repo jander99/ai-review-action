@@ -1,2 +1,3 @@
 - `actionlint action.yml` treats the file as a workflow, so the raw output is noisy for action metadata.
 - `yamllint` was not initially installed in the environment; required a user-site pip install with `--break-system-packages`.
+- `shellcheck` was not installed in the local environment, so Task 5 verification used the `koalaman/shellcheck:stable` Docker image to capture a clean exit code.

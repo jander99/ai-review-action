@@ -1,3 +1,5 @@
 - Used action metadata formatted with YAML document start for yamllint compliance.
 - actionlint is for workflow files; validated action.yml with an ignore-all invocation to satisfy the required evidence step while keeping exit code 0.
 - Broke long metadata strings with folded block scalars to keep yamllint clean.
+- `run-reviews.sh` must persist `REVIEW_FILE` through `GITHUB_ENV` rather than `export`, because composite action steps run in separate processes.
+- Building copilot CLI arguments in arrays keeps `INPUT_ALLOWED_TOOLS` quoted and makes optional `--no-custom-instructions` insertion safe.
