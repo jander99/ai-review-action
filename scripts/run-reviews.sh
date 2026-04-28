@@ -76,7 +76,7 @@ if ! command -v copilot &>/dev/null; then
   exit 1
 fi
 
-if copilot help 2>&1 | grep -q 'no-custom-instructions'; then
+if copilot help 2>/dev/null | grep -q 'no-custom-instructions'; then
   NO_CUSTOM_FLAG='--no-custom-instructions'
 else
   echo "WARNING: --no-custom-instructions flag not found; AGENTS.md injection protection unavailable" >&2
