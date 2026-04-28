@@ -1,0 +1,162 @@
+---
+name: Copilot Review
+description: >-
+  AI-powered pull request reviews using the GitHub Copilot CLI, supporting
+  multiple models and prompt strategies.
+author: 'jander99'
+
+branding:
+  icon: eye
+  color: blue
+
+inputs:
+  github-token:
+    description: >-
+      GITHUB_TOKEN or fine-grained PAT for posting PR comments (requires
+      pull-requests: write permission).
+    required: true
+  copilot-token:
+    description: >-
+      Fine-grained PAT with "Copilot Requests" permission. Classic PATs
+      (ghp_) are NOT supported by the Copilot CLI.
+    required: true
+  model:
+    description: >-
+      Model to use for reviews. Run `copilot help` for available models.
+      Ignored when `models` is set.
+    required: false
+    default: 'claude-sonnet-4.6'
+  models:
+    description: >-
+      Comma-separated list of models to run reviews with. When set, overrides
+      `model`.
+    required: false
+    default: ''
+  prompt:
+    description: >-
+      Inline prompt text. Takes precedence over `prompt-file` when both are
+      set.
+    required: false
+    default: ''
+  prompt-file:
+    description: >-
+      Path to a markdown file containing the review prompt. Must be within
+      GITHUB_WORKSPACE. Ignored when `prompt` is set.
+    required: false
+    default: ''
+  prompts:
+    description: >-
+      Comma-separated list of built-in prompts to run: code-review,
+      security-review, dependency-review, test-coverage. Runs alongside any
+      custom prompt/prompt-file.
+    required: false
+    default: ''
+  fusion:
+    description: >-
+      Run a synthesis pass combining all individual reviews into one coherent
+      summary.
+    required: false
+    default: 'false'
+  fusion-model:
+    description: >-
+      Model to use for the fusion synthesis pass. Inherits `model` when empty.
+    required: false
+    default: ''
+  post-comment:
+    description: >-
+      Post the review as a PR comment. Set to false to only expose outputs
+      without commenting.
+    required: false
+    default: 'true'
+  allowed-tools:
+    description: >-
+      Tool permissions for the Copilot agent (passed to --allow-tool).
+      WARNING: Expanding beyond shell(git:*) grants the agent broader access
+      to the CI environment.
+    required: false
+    default: 'shell(git:*)'
+  min-prompt-length:
+    description: >-
+      Minimum character length for the PR diff. Reviews are skipped when the
+      diff is smaller than this value.
+    required: false
+    default: '50'
+  max-comment-chars:
+    description: >-
+      Truncate the PR comment at this many characters. GitHub hard-limits
+      comments to 65536 characters.
+    required: false
+    default: '65000'
+
+outputs:
+  review:
+    description: >-
+      Full review text from the last model/prompt combination, or the fusion
+      review if fusion is enabled.
+    value: ${{ steps.run.outputs.review }}
+  comment-url:
+    description: >-
+      URL of the posted PR comment. Empty when post-comment is false or when
+      permissions were insufficient.
+    value: ${{ steps.post.outputs.comment-url }}
+  models-used:
+    description: >-
+      Comma-separated list of models that completed their reviews successfully.
+    value: ${{ steps.run.outputs.models-used }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install Copilot CLI and markdownlint
+      shell: bash
+      run: |
+        npm install -g @github/copilot@1.0.37 markdownlint-cli2
+
+    - name: Make scripts executable
+      shell: bash
+      run: |
+        chmod +x "${{ github.action_path }}/scripts/run-reviews.sh"
+        chmod +x "${{ github.action_path }}/scripts/post-comment.sh"
+
+    - name: Run Copilot reviews
+      id: run
+      shell: bash
+      env:
+        COPILOT_GITHUB_TOKEN: >-
+          ${{ inputs.copilot-token }}
+        COPILOT_AUTO_UPDATE: 'false'
+        INPUT_MODEL: >-
+          ${{ inputs.model }}
+        INPUT_MODELS: >-
+          ${{ inputs.models }}
+        INPUT_PROMPT: >-
+          ${{ inputs.prompt }}
+        INPUT_PROMPT_FILE: >-
+          ${{ inputs.prompt-file }}
+        INPUT_PROMPTS: >-
+          ${{ inputs.prompts }}
+        INPUT_FUSION: >-
+          ${{ inputs.fusion }}
+        INPUT_FUSION_MODEL: >-
+          ${{ inputs.fusion-model }}
+        INPUT_ALLOWED_TOOLS: >-
+          ${{ inputs.allowed-tools }}
+        INPUT_MIN_PROMPT_LENGTH: >-
+          ${{ inputs.min-prompt-length }}
+      run: |
+        "${{ github.action_path }}/scripts/run-reviews.sh"
+
+    - name: Post PR comment
+      id: post
+      shell: bash
+      env:
+        GH_TOKEN: >-
+          ${{ inputs.github-token }}
+        INPUT_POST_COMMENT: >-
+          ${{ inputs.post-comment }}
+        INPUT_MAX_COMMENT_CHARS: >-
+          ${{ inputs.max-comment-chars }}
+        GITHUB_PR_NUMBER: >-
+          ${{ github.event.pull_request.number }}
+      run: |
+        "${{ github.action_path }}/scripts/post-comment.sh"

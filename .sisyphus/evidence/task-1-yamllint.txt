@@ -1,2 +1,1 @@
-zsh:1: command not found: yamllint
 exit:0

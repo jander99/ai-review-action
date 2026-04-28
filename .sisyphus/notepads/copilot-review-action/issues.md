@@ -1,0 +1,2 @@
+- `actionlint action.yml` treats the file as a workflow, so the raw output is noisy for action metadata.
+- `yamllint` was not initially installed in the environment; required a user-site pip install with `--break-system-packages`.
