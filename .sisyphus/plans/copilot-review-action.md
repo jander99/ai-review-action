@@ -822,7 +822,7 @@ Max Concurrent: 4 (Wave 1)
   Run `shellcheck scripts/*.sh`, `actionlint action.yml`, `actionlint .github/workflows/example-copilot-review.yml`, `markdownlint-cli2 README.md prompts/*.md`. Check scripts for: `set -euo pipefail`, proper quoting, no `eval`, `mktemp` for temp files, heredoc for multi-line GITHUB_OUTPUT. Flag AI-generated anti-patterns: over-commenting, redundant checks, unused variables.
   Output: `shellcheck [PASS/FAIL] | actionlint [PASS/FAIL] | markdownlint [PASS/FAIL] | VERDICT`
 
-- [ ] F3. **Real Integration QA** — `unspecified-high`
+- [x] F3. **Real Integration QA** — `unspecified-high`
   On a real PR in this repo (or create a test PR):
   1. Create a feature branch with a small code change
   2. Open a PR against main
