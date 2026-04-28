@@ -1,0 +1,11 @@
+Unable to find image 'koalaman/shellcheck:stable' locally
+stable: Pulling from koalaman/shellcheck
+08ea58bc53cf: Pulling fs layer
+957cfdbf2dcf: Pulling fs layer
+520816647741: Download complete
+957cfdbf2dcf: Download complete
+957cfdbf2dcf: Pull complete
+08ea58bc53cf: Download complete
+08ea58bc53cf: Pull complete
+Digest: sha256:bb596a0d169b85ddd81d8b6d3a2ff6d5baf5fca10b97f575ebc647c3dff62b3d
+Status: Downloaded newer image for koalaman/shellcheck:stable

@@ -1,0 +1,4 @@
+markdownlint-cli2 v0.22.1 (markdownlint v0.40.0)
+Finding: prompts/dependency-review.md prompts/test-coverage.md
+Linting: 2 file(s)
+Summary: 0 error(s)

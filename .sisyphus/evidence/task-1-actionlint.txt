@@ -1,0 +1,33 @@
+action.yml:1:1: "jobs" section is missing in workflow [syntax-check]
+  |
+1 | name: Copilot Review
+  | ^~~~~
+action.yml:1:1: "on" section is missing in workflow [syntax-check]
+  |
+1 | name: Copilot Review
+  | ^~~~~
+action.yml:2:1: unexpected key "description" for "workflow" section. expected one of "concurrency", "defaults", "env", "jobs", "name", "on", "permissions", "run-name" [syntax-check]
+  |
+2 | description: 'AI-powered pull request reviews using the GitHub Copilot CLI, supporting multiple models and prompt strategies.'
+  | ^~~~~~~~~~~~
+action.yml:3:1: unexpected key "author" for "workflow" section. expected one of "concurrency", "defaults", "env", "jobs", "name", "on", "permissions", "run-name" [syntax-check]
+  |
+3 | author: 'jander99'
+  | ^~~~~~~
+action.yml:5:1: unexpected key "branding" for "workflow" section. expected one of "concurrency", "defaults", "env", "jobs", "name", "on", "permissions", "run-name" [syntax-check]
+  |
+5 | branding:
+  | ^~~~~~~~~
+action.yml:9:1: unexpected key "inputs" for "workflow" section. expected one of "concurrency", "defaults", "env", "jobs", "name", "on", "permissions", "run-name" [syntax-check]
+  |
+9 | inputs:
+  | ^~~~~~~
+action.yml:61:1: unexpected key "outputs" for "workflow" section. expected one of "concurrency", "defaults", "env", "jobs", "name", "on", "permissions", "run-name" [syntax-check]
+   |
+61 | outputs:
+   | ^~~~~~~~
+action.yml:72:1: unexpected key "runs" for "workflow" section. expected one of "concurrency", "defaults", "env", "jobs", "name", "on", "permissions", "run-name" [syntax-check]
+   |
+72 | runs:
+   | ^~~~~
+exit:0

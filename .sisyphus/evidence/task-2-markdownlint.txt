@@ -1,0 +1,13 @@
+markdownlint-cli2 v0.22.1 (markdownlint v0.40.0)
+Finding: prompts/code-review.md prompts/security-review.md
+Linting: 2 file(s)
+Summary: 9 error(s)
+prompts/code-review.md:20 error MD001/heading-increment Heading levels should only increment by one level at a time [Expected: h2; Actual: h3]
+prompts/code-review.md:20 error MD022/blanks-around-headings Headings should be surrounded by blank lines [Expected: 1; Actual: 0; Below] [Context: "### Code Quality"]
+prompts/code-review.md:21 error MD022/blanks-around-headings Headings should be surrounded by blank lines [Expected: 1; Actual: 0; Above] [Context: "### Logic & Correctness"]
+prompts/code-review.md:21 error MD022/blanks-around-headings Headings should be surrounded by blank lines [Expected: 1; Actual: 0; Below] [Context: "### Logic & Correctness"]
+prompts/code-review.md:22 error MD022/blanks-around-headings Headings should be surrounded by blank lines [Expected: 1; Actual: 0; Above] [Context: "### Maintainability"]
+prompts/code-review.md:22 error MD022/blanks-around-headings Headings should be surrounded by blank lines [Expected: 1; Actual: 0; Below] [Context: "### Maintainability"]
+prompts/code-review.md:23 error MD022/blanks-around-headings Headings should be surrounded by blank lines [Expected: 1; Actual: 0; Above] [Context: "### Performance"]
+prompts/code-review.md:23 error MD022/blanks-around-headings Headings should be surrounded by blank lines [Expected: 1; Actual: 0; Below] [Context: "### Performance"]
+prompts/code-review.md:24 error MD022/blanks-around-headings Headings should be surrounded by blank lines [Expected: 1; Actual: 0; Above] [Context: "### Summary"]
