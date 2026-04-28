@@ -5,4 +5,4 @@
 - Building copilot CLI arguments in arrays keeps `INPUT_ALLOWED_TOOLS` quoted and makes optional `--no-custom-instructions` insertion safe.
 - Marketplace-quality README requires strict markdownlint compliance (MD013 line length) even for tables and lists.
 - Emphasized prerequisites (fetch-depth: 0 and fine-grained PAT) early to prevent common user friction points.
-- Included security section to warn about pull_request_target and tool permissions, crucial for GitHub Actions that handle secrets.
+- Included security section to warn about privileged triggers and token exposure, crucial for GitHub Actions that handle secrets.
