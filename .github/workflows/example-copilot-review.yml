@@ -17,17 +17,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.2
         with:
           fetch-depth: 0
 
       - name: Copilot Review
         uses: ./
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
           # COPILOT_TOKEN must be a fine-grained PAT with "Copilot Requests" permission.
           # Classic PATs (ghp_...) are NOT supported by the Copilot CLI.
           copilot-token: ${{ secrets.COPILOT_TOKEN }}
-          model: claude-sonnet-4.6
+          models: claude-sonnet-4.6
           prompts: code-review,security-review
+          allow-all-tools: false
           post-comment: true
