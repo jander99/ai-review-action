@@ -2,14 +2,11 @@
 set -euo pipefail
 
 # Reads env vars:
-#   INPUT_MODEL             - single review model (default: claude-sonnet-4.6)
-#   INPUT_MODELS            - comma-separated review models; overrides INPUT_MODEL
-#   INPUT_PROMPT            - inline prompt text; overrides INPUT_PROMPT_FILE
-#   INPUT_PROMPT_FILE       - prompt file path inside GITHUB_WORKSPACE
-#   INPUT_PROMPTS           - comma-separated built-in prompt names
+#   INPUT_MODELS            - comma-separated review models (default: claude-sonnet-4.6)
+#   INPUT_PROMPTS           - comma-separated built-in names or workspace-relative paths (default: code-review)
 #   INPUT_FUSION            - 'true' to synthesize individual reviews
 #   INPUT_FUSION_MODEL      - fusion model override
-#   INPUT_ALLOWED_TOOLS     - Copilot tool allowlist
+#   INPUT_ALLOW_ALL_TOOLS   - 'true' to pass --yolo; 'false' to use --allow-tool="shell(git:*)"
 #   INPUT_MIN_PROMPT_LENGTH - minimum PR diff length before review runs
 #   COPILOT_AUTO_UPDATE     - must remain 'false' in all copilot invocations
 #   GITHUB_ACTION_PATH      - action root containing prompts/
@@ -83,17 +80,26 @@ else
   NO_CUSTOM_FLAG=''
 fi
 
-# Step 2 — Resolve models list
-if [[ -n "${INPUT_MODELS:-}" ]]; then
-  if [[ -n "${INPUT_MODEL:-}" ]]; then
-    echo "WARNING: INPUT_MODELS is set; ignoring INPUT_MODEL." >&2
-  fi
-
-  IFS=',' read -r -a raw_models <<< "$INPUT_MODELS"
-else
-  raw_models=("${INPUT_MODEL:-claude-sonnet-4.6}")
+# Check --yolo flag availability
+YOLO_SUPPORTED=false
+if copilot help 2>&1 | grep -q -- '--yolo'; then
+  YOLO_SUPPORTED=true
 fi
 
+# Resolve tool flags
+if [[ "${INPUT_ALLOW_ALL_TOOLS:-false}" == "true" ]]; then
+  if [[ "$YOLO_SUPPORTED" == "true" ]]; then
+    TOOL_FLAGS=('--yolo')
+  else
+    echo "WARNING: --yolo not supported in this copilot version; falling back to --allow-tool=\"shell(git:*)\"" >&2
+    TOOL_FLAGS=("--allow-tool=shell(git:*)")
+  fi
+else
+  TOOL_FLAGS=("--allow-tool=shell(git:*)")
+fi
+
+# Step 2 — Resolve models list
+IFS=',' read -r -a raw_models <<< "${INPUT_MODELS:-claude-sonnet-4.6}"
 MODELS_LIST=()
 for model in "${raw_models[@]}"; do
   model="${model// /}"
@@ -111,44 +117,35 @@ fi
 PROMPT_FILES=()
 workspace_root="${GITHUB_WORKSPACE:-/github/workspace}"
 
-if [[ -n "${INPUT_PROMPT:-}" ]]; then
-  if [[ -n "${INPUT_PROMPT_FILE:-}" ]]; then
-    echo "WARNING: INPUT_PROMPT is set; ignoring INPUT_PROMPT_FILE." >&2
+IFS=',' read -r -a raw_prompts <<< "${INPUT_PROMPTS:-code-review}"
+for entry in "${raw_prompts[@]}"; do
+  # Trim whitespace
+  entry="${entry## }"
+  entry="${entry%% }"
+  if [[ -z "$entry" ]]; then
+    continue
   fi
 
-  tmp_prompt=$(mktemp)
-  record_temp_file "$tmp_prompt"
-  printf '%s' "$INPUT_PROMPT" > "$tmp_prompt"
-  PROMPT_FILES+=("$tmp_prompt")
-elif [[ -n "${INPUT_PROMPT_FILE:-}" ]]; then
-  resolved_prompt=$(python3 -c "import os,sys; print(os.path.realpath(os.path.join(sys.argv[1], sys.argv[2])))" "$workspace_root" "$INPUT_PROMPT_FILE")
-  if ! is_within_workspace "$resolved_prompt" "$workspace_root"; then
-    echo "ERROR: prompt-file '$INPUT_PROMPT_FILE' is outside workspace" >&2
-    exit 1
-  fi
-  if [[ ! -f "$resolved_prompt" ]]; then
-    echo "ERROR: prompt-file not found: $resolved_prompt" >&2
-    exit 1
-  fi
-  PROMPT_FILES+=("$resolved_prompt")
-fi
+  # Strip .md suffix for built-in lookup
+  name="${entry%.md}"
+  builtin_path="${GITHUB_ACTION_PATH}/prompts/${name}.md"
 
-if [[ -n "${INPUT_PROMPTS:-}" ]]; then
-  IFS=',' read -r -a BUILTIN_NAMES <<< "$INPUT_PROMPTS"
-  for name in "${BUILTIN_NAMES[@]}"; do
-    name="${name// /}"
-    if [[ -z "$name" ]]; then
+  if [[ -f "$builtin_path" ]]; then
+    PROMPT_FILES+=("$builtin_path")
+  else
+    # Treat as workspace-relative file path
+    resolved_path=$(realpath --canonicalize-missing "${workspace_root}/${entry}")
+    if ! is_within_workspace "$resolved_path" "$workspace_root"; then
+      echo "ERROR: prompt path '$entry' is outside workspace" >&2
       continue
     fi
-
-    pfile="${GITHUB_ACTION_PATH}/prompts/${name}.md"
-    if [[ ! -f "$pfile" ]]; then
-      echo "ERROR: Built-in prompt '$name' not found at $pfile" >&2
-      exit 1
+    if [[ ! -f "$resolved_path" ]]; then
+      echo "WARNING: prompt '$entry' is neither a built-in nor an existing file; skipping" >&2
+      continue
     fi
-    PROMPT_FILES+=("$pfile")
-  done
-fi
+    PROMPT_FILES+=("$resolved_path")
+  fi
+done
 
 if [[ "${#PROMPT_FILES[@]}" -eq 0 ]]; then
   PROMPT_FILES+=("${GITHUB_ACTION_PATH}/prompts/code-review.md")
@@ -192,7 +189,7 @@ for prompt_file in "${PROMPT_FILES[@]}"; do
       -p "$(cat "$prompt_file")"
       -s
       --no-ask-user
-      --allow-tool="${INPUT_ALLOWED_TOOLS:-shell(git:*)}"
+      "${TOOL_FLAGS[@]}"
       --model "$model"
     )
     if [[ -n "$NO_CUSTOM_FLAG" ]]; then
@@ -237,7 +234,7 @@ if [[ "${INPUT_FUSION:-false}" == "true" ]] && [[ "${#SUCCEEDED_MODELS[@]}" -gt 
     -p "$(cat "$fusion_prompt")"
     -s
     --no-ask-user
-    --allow-tool="${INPUT_ALLOWED_TOOLS:-shell(git:*)}"
+    "${TOOL_FLAGS[@]}"
     --model "$fusion_model"
   )
   if [[ -n "$NO_CUSTOM_FLAG" ]]; then

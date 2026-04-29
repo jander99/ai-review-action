@@ -12,45 +12,25 @@ branding:
 inputs:
   github-token:
     description: >-
-      GITHUB_TOKEN or fine-grained PAT for posting PR comments (requires
-      pull-requests: write permission).
-    required: true
+      GITHUB_TOKEN or fine-grained PAT for posting PR comments (falls back to
+      github.token when omitted; requires pull-requests: write permission).
+    required: false
   copilot-token:
     description: >-
       Fine-grained PAT with "Copilot Requests" permission. Classic PATs
       (ghp_) are NOT supported by the Copilot CLI.
     required: true
-  model:
-    description: >-
-      Model to use for reviews. Run `copilot help` for available models.
-      Ignored when `models` is set.
-    required: false
-    default: 'claude-sonnet-4.6'
   models:
     description: >-
-      Comma-separated list of models to run reviews with. When set, overrides
-      `model`.
+      Comma-separated list of models to run sequentially. Each model is called
+      once per prompt. Default: claude-sonnet-4.6
     required: false
-    default: ''
-  prompt:
-    description: >-
-      Inline prompt text. Takes precedence over `prompt-file` when both are
-      set.
-    required: false
-    default: ''
-  prompt-file:
-    description: >-
-      Path to a markdown file containing the review prompt. Must be within
-      GITHUB_WORKSPACE. Ignored when `prompt` is set.
-    required: false
-    default: ''
   prompts:
     description: >-
-      Comma-separated list of built-in prompts to run: code-review,
-      security-review, dependency-review, test-coverage. Runs alongside any
-      custom prompt/prompt-file.
+      Comma-separated list of built-in prompt names (code-review,
+      security-review, dependency-review, test-coverage) or workspace-relative
+      file paths to run sequentially. Default: code-review
     required: false
-    default: ''
   fusion:
     description: >-
       Run a synthesis pass combining all individual reviews into one coherent
@@ -59,7 +39,8 @@ inputs:
     default: 'false'
   fusion-model:
     description: >-
-      Model to use for the fusion synthesis pass. Inherits `model` when empty.
+      Single model for the fusion synthesis pass. Inherits first entry of
+      models when empty. Must be a single model name, not a list.
     required: false
     default: ''
   post-comment:
@@ -68,13 +49,10 @@ inputs:
       without commenting.
     required: false
     default: 'true'
-  allowed-tools:
-    description: >-
-      Tool permissions for the Copilot agent (passed to --allow-tool).
-      WARNING: Expanding beyond shell(git:*) grants the agent broader access
-      to the CI environment.
+  allow-all-tools:
+    description: 'Pass --yolo to copilot CLI (grants full tool access). Default: false'
     required: false
-    default: 'shell(git:*)'
+    default: 'false'
   min-prompt-length:
     description: >-
       Minimum character length for the PR diff. Reviews are skipped when the
@@ -125,22 +103,16 @@ runs:
         COPILOT_GITHUB_TOKEN: >-
           ${{ inputs.copilot-token }}
         COPILOT_AUTO_UPDATE: 'false'
-        INPUT_MODEL: >-
-          ${{ inputs.model }}
         INPUT_MODELS: >-
           ${{ inputs.models }}
-        INPUT_PROMPT: >-
-          ${{ inputs.prompt }}
-        INPUT_PROMPT_FILE: >-
-          ${{ inputs.prompt-file }}
         INPUT_PROMPTS: >-
           ${{ inputs.prompts }}
         INPUT_FUSION: >-
           ${{ inputs.fusion }}
         INPUT_FUSION_MODEL: >-
           ${{ inputs.fusion-model }}
-        INPUT_ALLOWED_TOOLS: >-
-          ${{ inputs.allowed-tools }}
+        INPUT_ALLOW_ALL_TOOLS: >-
+          ${{ inputs.allow-all-tools }}
         INPUT_MIN_PROMPT_LENGTH: >-
           ${{ inputs.min-prompt-length }}
       run: |
@@ -151,7 +123,7 @@ runs:
       shell: bash
       env:
         GH_TOKEN: >-
-          ${{ inputs.github-token }}
+          ${{ inputs.github-token || github.token }}
         INPUT_POST_COMMENT: >-
           ${{ inputs.post-comment }}
         INPUT_MAX_COMMENT_CHARS: >-

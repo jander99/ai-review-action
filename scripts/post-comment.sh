@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Dependencies:
+#   jq  - Required for JSON body construction (line ~95).
+#         Pre-installed on GitHub-hosted runners (ubuntu-latest).
+#         Self-hosted runners: apt-get install -y jq
+
 # Reads env vars:
 #   GH_TOKEN                - GitHub token for API calls (required)
 #   INPUT_POST_COMMENT      - 'true' or 'false' (default: 'true')
