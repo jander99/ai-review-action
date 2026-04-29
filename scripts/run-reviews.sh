@@ -119,9 +119,8 @@ workspace_root="${GITHUB_WORKSPACE:-/github/workspace}"
 
 IFS=',' read -r -a raw_prompts <<< "${INPUT_PROMPTS:-code-review}"
 for entry in "${raw_prompts[@]}"; do
-  # Trim whitespace
-  entry="${entry## }"
-  entry="${entry%% }"
+  # Trim all leading/trailing whitespace (tabs, multiple spaces)
+  entry="$(echo "$entry" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
   if [[ -z "$entry" ]]; then
     continue
   fi
@@ -134,7 +133,9 @@ for entry in "${raw_prompts[@]}"; do
     PROMPT_FILES+=("$builtin_path")
   else
     # Treat as workspace-relative file path
-    resolved_path=$(realpath --canonicalize-missing "${workspace_root}/${entry}")
+    resolved_path=$(realpath --canonicalize-missing "${workspace_root}/${entry}" 2>/dev/null \
+      || python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "${workspace_root}/${entry}" 2>/dev/null \
+      || echo "${workspace_root}/${entry}")
     if ! is_within_workspace "$resolved_path" "$workspace_root"; then
       echo "ERROR: prompt path '$entry' is outside workspace" >&2
       continue

@@ -23,14 +23,16 @@ inputs:
   models:
     description: >-
       Comma-separated list of models to run sequentially. Each model is called
-      once per prompt. Default: claude-sonnet-4.6
+      once per prompt.
     required: false
+    default: 'claude-sonnet-4.6'
   prompts:
     description: >-
       Comma-separated list of built-in prompt names (code-review,
       security-review, dependency-review, test-coverage) or workspace-relative
-      file paths to run sequentially. Default: code-review
+      file paths to run sequentially.
     required: false
+    default: 'code-review'
   fusion:
     description: >-
       Run a synthesis pass combining all individual reviews into one coherent
