@@ -61,6 +61,10 @@ inputs:
       diff is smaller than this value.
     required: false
     default: '50'
+  fail-on-error:
+    description: >- Exit with a non-zero status if all reviews fail. When false (default), the action always exits successfully even if no reviews ran.
+    required: false
+    default: 'false'
   max-comment-chars:
     description: >-
       Truncate the PR comment at this many characters. GitHub hard-limits
@@ -117,6 +121,8 @@ runs:
           ${{ inputs.allow-all-tools }}
         INPUT_MIN_PROMPT_LENGTH: >-
           ${{ inputs.min-prompt-length }}
+        INPUT_FAIL_ON_ERROR: >-
+          ${{ inputs.fail-on-error }}
       run: |
         "${{ github.action_path }}/scripts/run-reviews.sh"
 
