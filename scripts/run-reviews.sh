@@ -121,7 +121,7 @@ if [[ -n "${INPUT_PROMPT:-}" ]]; then
   printf '%s' "$INPUT_PROMPT" > "$tmp_prompt"
   PROMPT_FILES+=("$tmp_prompt")
 elif [[ -n "${INPUT_PROMPT_FILE:-}" ]]; then
-  resolved_prompt=$(realpath -m "${workspace_root}/${INPUT_PROMPT_FILE}")
+  resolved_prompt=$(python3 -c "import os,sys; print(os.path.realpath(os.path.join(sys.argv[1], sys.argv[2])))" "$workspace_root" "$INPUT_PROMPT_FILE")
   if ! is_within_workspace "$resolved_prompt" "$workspace_root"; then
     echo "ERROR: prompt-file '$INPUT_PROMPT_FILE' is outside workspace" >&2
     exit 1
@@ -155,10 +155,21 @@ if [[ "${#PROMPT_FILES[@]}" -eq 0 ]]; then
 fi
 
 # Step 4 — PR diff length check
-PR_DIFF=$(git diff "origin/${GITHUB_BASE_REF:-main}...HEAD" 2>/dev/null || echo "")
+set +e
+pr_diff_len=$(git diff "origin/${GITHUB_BASE_REF:-main}...HEAD" 2>/dev/null | wc -c)
+_git_rc=${PIPESTATUS[0]}
+set -e
+if [[ "$_git_rc" -ne 0 ]]; then
+  echo "WARNING: git diff failed (exit $_git_rc); check that fetch-depth: 0 is set in actions/checkout." >&2
+fi
+pr_diff_len=$(( pr_diff_len ))
 min_len="${INPUT_MIN_PROMPT_LENGTH:-50}"
-if (( ${#PR_DIFF} < min_len )); then
-  echo "PR diff (${#PR_DIFF} chars) is smaller than min-prompt-length ($min_len); skipping review." >&2
+if ! [[ "$min_len" =~ ^[0-9]+$ ]]; then
+  echo "WARNING: min-prompt-length '$min_len' is not a valid integer; using default 50." >&2
+  min_len=50
+fi
+if (( pr_diff_len < min_len )); then
+  echo "PR diff (${pr_diff_len} chars) is smaller than min-prompt-length ($min_len); skipping review." >&2
   write_empty_outputs
   exit 0
 fi
@@ -226,7 +237,7 @@ if [[ "${INPUT_FUSION:-false}" == "true" ]] && [[ "${#SUCCEEDED_MODELS[@]}" -gt 
     -p "$(cat "$fusion_prompt")"
     -s
     --no-ask-user
-    --allow-tool='shell(git:*)'
+    --allow-tool="${INPUT_ALLOWED_TOOLS:-shell(git:*)}"
     --model "$fusion_model"
   )
   if [[ -n "$NO_CUSTOM_FLAG" ]]; then
@@ -242,10 +253,15 @@ fi
 
 # Step 7 — Set outputs
 {
-  echo "review<<EOF_REVIEW"
+  _delim="REVIEW_$(openssl rand -hex 8 2>/dev/null || printf '%s' "$$$(date +%s)")"
+  echo "review<<${_delim}"
   cat "$LAST_REVIEW_FILE"
-  echo "EOF_REVIEW"
+  echo "${_delim}"
 } >> "$GITHUB_OUTPUT"
+
+models_csv=$(IFS=','; echo "${SUCCEEDED_MODELS[*]}")
+echo "models-used=${models_csv}" >> "$GITHUB_OUTPUT"
+echo "REVIEW_FILE=${LAST_REVIEW_FILE}" >> "$GITHUB_ENV"
 
 models_csv=$(IFS=','; echo "${SUCCEEDED_MODELS[*]}")
 echo "models-used=${models_csv}" >> "$GITHUB_OUTPUT"

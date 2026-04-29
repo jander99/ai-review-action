@@ -107,10 +107,10 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Install Copilot CLI and markdownlint
+    - name: Install Copilot CLI
       shell: bash
       run: |
-        npm install -g @github/copilot@1.0.37 markdownlint-cli2
+        npm install -g @github/copilot@1.0.37
 
     - name: Make scripts executable
       shell: bash
