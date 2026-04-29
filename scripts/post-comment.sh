@@ -58,27 +58,7 @@ if ! command -v gh > /dev/null 2>&1; then
   exit 1
 fi
 
-# 5. Sentinel permission test — temporarily disable set -e for this block
-set +e
-reaction_response=$(gh api \
-  "repos/${GITHUB_REPOSITORY}/issues/${GITHUB_PR_NUMBER}/reactions" \
-  -f content=eyes \
-  --jq '.id' 2>/dev/null)
-set -e
-
-if [[ -z "${reaction_response:-}" ]]; then
-  echo "WARNING: Insufficient permissions to post PR comment (403 or API error); skipping." >&2
-  echo "comment-url=" >> "${GITHUB_OUTPUT}"
-  exit 0
-fi
-
-# Clean up: delete the reaction we just created
-gh api \
-  --method DELETE \
-  "repos/${GITHUB_REPOSITORY}/issues/${GITHUB_PR_NUMBER}/reactions/${reaction_response}" \
-  --silent 2>/dev/null || true
-
-# 6. Truncation
+# 5. Truncation
 review_text=$(cat "${REVIEW_FILE}")
 max_chars="${INPUT_MAX_COMMENT_CHARS}"
 
@@ -87,7 +67,7 @@ if [[ "${#review_text}" -gt "${max_chars}" ]]; then
   review_text="${review_text}"$'\n\n---\n'"*Review truncated at ${max_chars} characters.*"
 fi
 
-# 7. Write content to temp file
+# 6. Write content to temp file
 tmp_body=$(mktemp)
 tmp_body_json=$(mktemp)
 
@@ -96,16 +76,22 @@ trap 'rm -f "${tmp_body}" "${tmp_body_json}"' EXIT
 
 printf '%s' "${review_text}" > "${tmp_body}"
 
-# 8. Post comment atomically and capture the URL from the creation response
+# 7. Post comment — handle permission and other failures gracefully
 jq -n --rawfile body "${tmp_body}" '{"body":$body}' > "${tmp_body_json}"
+set +e
 comment_url=$(gh api \
   "repos/${GITHUB_REPOSITORY}/issues/${GITHUB_PR_NUMBER}/comments" \
   --input "${tmp_body_json}" \
-  --jq '.html_url') || {
-  echo "ERROR: Failed to post PR comment." >&2
-  exit 1
-}
+  --jq '.html_url' 2>/dev/null)
+post_rc=$?
+set -e
 
-# 9. Set output
+if [[ "$post_rc" -ne 0 ]] || [[ -z "${comment_url:-}" ]]; then
+  echo "WARNING: Failed to post PR comment (exit ${post_rc}); check token permissions." >&2
+  echo "comment-url=" >> "${GITHUB_OUTPUT}"
+  exit 0
+fi
+
+# 8. Set output
 echo "comment-url=${comment_url}" >> "${GITHUB_OUTPUT}"
 echo "Posted PR comment: ${comment_url}" >&2

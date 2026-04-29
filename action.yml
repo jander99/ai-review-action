@@ -62,7 +62,9 @@ inputs:
     required: false
     default: '50'
   fail-on-error:
-    description: >- Exit with a non-zero status if all reviews fail. When false (default), the action always exits successfully even if no reviews ran.
+    description: >-
+      Exit with a non-zero status if all reviews fail. When false (default),
+      the action always exits successfully even if no reviews ran.
     required: false
     default: 'false'
   max-comment-chars:
