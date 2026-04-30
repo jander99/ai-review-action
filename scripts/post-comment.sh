@@ -54,7 +54,7 @@ fi
 
 # 4a. Verify gh CLI is available
 if ! command -v gh > /dev/null 2>&1; then
-  echo "ERROR: 'gh' CLI not found. GitHub-hosted runners include gh by default; self-hosted runners must install it." >&2
+  echo "ERROR: 'gh' CLI not found. The action attempts to install it automatically; if this error persists, ensure the runner has network access to github.com or pre-install gh CLI manually." >&2
   exit 1
 fi
 
