@@ -46,6 +46,7 @@ function isWithinWorkspace(filePath: string, workspace: string): boolean {
   }
 
   const allowAllTools = core.getInput('allow-all-tools') === 'true';
+  const copilotToken = core.getInput('copilot-token');
   let toolFlags: string[];
   if (allowAllTools) {
     if (yoloSupported) {
@@ -159,6 +160,7 @@ function isWithinWorkspace(filePath: string, workspace: string): boolean {
           env: {
             ...process.env,
             COPILOT_AUTO_UPDATE: 'false',
+            COPILOT_GITHUB_TOKEN: copilotToken,
           },
           stdio: ['pipe', 'pipe', 'pipe'],
           maxBuffer: 50 * 1024 * 1024,
@@ -207,6 +209,7 @@ function isWithinWorkspace(filePath: string, workspace: string): boolean {
         env: {
           ...process.env,
           COPILOT_AUTO_UPDATE: 'false',
+          COPILOT_GITHUB_TOKEN: copilotToken,
         },
         stdio: ['pipe', 'pipe', 'pipe'],
         maxBuffer: 50 * 1024 * 1024,

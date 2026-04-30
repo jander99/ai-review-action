@@ -19842,6 +19842,7 @@ function isWithinWorkspace(filePath, workspace) {
   } catch {
   }
   const allowAllTools = core.getInput("allow-all-tools") === "true";
+  const copilotToken = core.getInput("copilot-token");
   let toolFlags;
   if (allowAllTools) {
     if (yoloSupported) {
@@ -19936,7 +19937,8 @@ function isWithinWorkspace(filePath, workspace) {
         const result = (0, import_child_process.execSync)(`copilot ${args.map((arg) => JSON.stringify(arg)).join(" ")}`, {
           env: {
             ...process.env,
-            COPILOT_AUTO_UPDATE: "false"
+            COPILOT_AUTO_UPDATE: "false",
+            COPILOT_GITHUB_TOKEN: copilotToken
           },
           stdio: ["pipe", "pipe", "pipe"],
           maxBuffer: 50 * 1024 * 1024
@@ -19980,7 +19982,8 @@ ${fs.readFileSync(file, "utf8")}
       const fusionResult = (0, import_child_process.execSync)(`copilot ${fusionArgs.map((arg) => JSON.stringify(arg)).join(" ")}`, {
         env: {
           ...process.env,
-          COPILOT_AUTO_UPDATE: "false"
+          COPILOT_AUTO_UPDATE: "false",
+          COPILOT_GITHUB_TOKEN: copilotToken
         },
         stdio: ["pipe", "pipe", "pipe"],
         maxBuffer: 50 * 1024 * 1024
