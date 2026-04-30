@@ -40,5 +40,5 @@ outputs:
     description: 'Comma-separated list of models used'
     value: ${{ steps.run.outputs.models-used }}
 runs:
-  using: node20
+  using: node24
   main: dist/main.cjs
