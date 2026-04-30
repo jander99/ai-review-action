@@ -93,89 +93,29 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Install GitHub CLI
-      shell: bash
-      run: |
-        if command -v gh &>/dev/null; then
-          echo "gh CLI already available: $(gh --version | head -1)" >&2
-          exit 0
-        fi
-        echo "gh CLI not found; installing from GitHub releases..." >&2
-        case "$(uname -m)" in
-          x86_64)  gh_arch=amd64 ;;
-          aarch64) gh_arch=arm64 ;;
-          armv*)   gh_arch=arm   ;;
-          *)       echo "ERROR: Unsupported architecture: $(uname -m)" >&2; exit 1 ;;
-        esac
-        gh_version=$(curl -sf 'https://api.github.com/repos/cli/cli/releases/latest' \
-          | grep '"tag_name"' | head -1 | sed 's/.*"v\([^"]*\)".*/\1/')
-        if [[ -z "${gh_version}" ]]; then
-          echo "ERROR: Could not determine latest gh CLI version" >&2
-          exit 1
-        fi
-        tmp=$(mktemp -d)
-        trap 'rm -rf "$tmp"' EXIT
-        curl -fsSL \
-          "https://github.com/cli/cli/releases/download/v${gh_version}/gh_${gh_version}_linux_${gh_arch}.tar.gz" \
-          | tar -xz -C "$tmp"
-        gh_bin="$tmp/gh_${gh_version}_linux_${gh_arch}/bin/gh"
-        if sudo install -m 755 "$gh_bin" /usr/local/bin/gh 2>/dev/null; then
-          echo "gh ${gh_version} installed to /usr/local/bin" >&2
-        else
-          mkdir -p "$HOME/.local/bin"
-          install -m 755 "$gh_bin" "$HOME/.local/bin/gh"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          echo "gh ${gh_version} installed to $HOME/.local/bin" >&2
-        fi
-
     - name: Install Copilot CLI
       shell: bash
       run: |
         npm install -g @github/copilot@1.0.37
 
-    - name: Make scripts executable
-      shell: bash
-      run: |
-        chmod +x "${{ github.action_path }}/scripts/run-reviews.sh"
-        chmod +x "${{ github.action_path }}/scripts/post-comment.sh"
-
-    - name: Run Copilot reviews
+    - name: Run reviews
       id: run
-      shell: bash
-      env:
-        COPILOT_GITHUB_TOKEN: >-
-          ${{ inputs.copilot-token }}
-        COPILOT_AUTO_UPDATE: 'false'
-        INPUT_MODELS: >-
-          ${{ inputs.models }}
-        INPUT_PROMPTS: >-
-          ${{ inputs.prompts }}
-        INPUT_FUSION: >-
-          ${{ inputs.fusion }}
-        INPUT_FUSION_MODEL: >-
-          ${{ inputs.fusion-model }}
-        INPUT_ALLOW_ALL_TOOLS: >-
-          ${{ inputs.allow-all-tools }}
-        INPUT_MIN_PROMPT_LENGTH: >-
-          ${{ inputs.min-prompt-length }}
-        INPUT_FAIL_ON_ERROR: >-
-          ${{ inputs.fail-on-error }}
-        GITHUB_BASE_SHA: >-
-          ${{ github.event.pull_request.base.sha }}
-      run: |
-        "${{ github.action_path }}/scripts/run-reviews.sh"
+      uses: ./packages/run-reviews
+      with:
+        copilot-token: ${{ inputs.copilot-token }}
+        models: ${{ inputs.models }}
+        prompts: ${{ inputs.prompts }}
+        fusion: ${{ inputs.fusion }}
+        fusion-model: ${{ inputs.fusion-model }}
+        allow-all-tools: ${{ inputs.allow-all-tools }}
+        min-prompt-length: ${{ inputs.min-prompt-length }}
+        fail-on-error: ${{ inputs.fail-on-error }}
 
-    - name: Post PR comment
+    - name: Post comment
       id: post
-      shell: bash
-      env:
-        GH_TOKEN: >-
-          ${{ inputs.github-token || github.token }}
-        INPUT_POST_COMMENT: >-
-          ${{ inputs.post-comment }}
-        INPUT_MAX_COMMENT_CHARS: >-
-          ${{ inputs.max-comment-chars }}
-        GITHUB_PR_NUMBER: >-
-          ${{ github.event.pull_request.number }}
-      run: |
-        "${{ github.action_path }}/scripts/post-comment.sh"
+      uses: ./packages/post-comment
+      with:
+        github-token: ${{ inputs.github-token || github.token }}
+        review: ${{ steps.run.outputs.review }}
+        post-comment: ${{ inputs.post-comment }}
+        max-comment-chars: ${{ inputs.max-comment-chars }}
