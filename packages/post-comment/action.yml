@@ -20,5 +20,5 @@ outputs:
     description: 'URL of the posted comment'
     value: ${{ steps.post.outputs.comment-url }}
 runs:
-  using: node20
+  using: node24
   main: dist/main.cjs
