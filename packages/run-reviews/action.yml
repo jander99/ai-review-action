@@ -1,0 +1,44 @@
+name: 'Run Reviews'
+description: 'Run Copilot code reviews on a pull request'
+inputs:
+  copilot-token:
+    description: 'GitHub Copilot token for authentication'
+    required: true
+  models:
+    description: 'Comma-separated list of models to use'
+    required: false
+    default: 'claude-sonnet-4.6'
+  prompts:
+    description: 'Comma-separated list of prompts to use'
+    required: false
+    default: 'code-review'
+  fusion:
+    description: 'Whether to run fusion synthesis'
+    required: false
+    default: 'false'
+  fusion-model:
+    description: 'Model to use for fusion synthesis'
+    required: false
+    default: ''
+  allow-all-tools:
+    description: 'Whether to allow all tools (--yolo flag)'
+    required: false
+    default: 'false'
+  min-prompt-length:
+    description: 'Minimum diff length to trigger review'
+    required: false
+    default: '50'
+  fail-on-error:
+    description: 'Whether to fail if review errors occur'
+    required: false
+    default: 'false'
+outputs:
+  review:
+    description: 'The review text output'
+    value: ${{ steps.run.outputs.review }}
+  models-used:
+    description: 'Comma-separated list of models used'
+    value: ${{ steps.run.outputs.models-used }}
+runs:
+  using: node20
+  main: dist/main.cjs

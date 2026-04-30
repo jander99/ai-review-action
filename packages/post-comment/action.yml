@@ -1,0 +1,24 @@
+name: 'Post Comment'
+description: 'Post a review comment to a pull request'
+inputs:
+  github-token:
+    description: 'GitHub token for authentication'
+    required: false
+  review:
+    description: 'Review text to post as comment'
+    required: true
+  post-comment:
+    description: 'Whether to post the comment'
+    required: false
+    default: 'true'
+  max-comment-chars:
+    description: 'Maximum comment length in characters'
+    required: false
+    default: '65000'
+outputs:
+  comment-url:
+    description: 'URL of the posted comment'
+    value: ${{ steps.post.outputs.comment-url }}
+runs:
+  using: node20
+  main: dist/main.cjs

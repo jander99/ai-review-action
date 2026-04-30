@@ -1,0 +1,24 @@
+{
+  "name": "post-comment",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "root": "packages/post-comment",
+  "sourceRoot": "packages/post-comment/src",
+  "targets": {
+    "build": {
+      "executor": "@nx/esbuild:esbuild",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "main": "packages/post-comment/src/main.ts",
+        "outputPath": "packages/post-comment/dist",
+        "outputFileName": "main.js",
+        "tsConfig": "packages/post-comment/tsconfig.json",
+        "bundle": true,
+        "platform": "node",
+        "target": "node20",
+        "format": ["cjs"],
+        "thirdParty": true
+      }
+    }
+  }
+}

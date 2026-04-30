@@ -1,0 +1,31 @@
+{
+  "name": "run-reviews",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "root": "packages/run-reviews",
+  "sourceRoot": "packages/run-reviews/src",
+  "targets": {
+    "build": {
+      "executor": "@nx/esbuild:esbuild",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "main": "packages/run-reviews/src/main.ts",
+        "outputPath": "packages/run-reviews/dist",
+        "outputFileName": "main.js",
+        "tsConfig": "packages/run-reviews/tsconfig.json",
+        "bundle": true,
+        "platform": "node",
+        "target": "node20",
+        "format": ["cjs"],
+        "thirdParty": true,
+        "assets": [
+          {
+            "input": "packages/run-reviews/prompts",
+            "output": "prompts",
+            "glob": "**/*.md"
+          }
+        ]
+      }
+    }
+  }
+}
