@@ -61,6 +61,12 @@ inputs:
       diff is smaller than this value.
     required: false
     default: '50'
+  fail-on-error:
+    description: >-
+      Exit with a non-zero status if all reviews fail. When false (default),
+      the action always exits successfully even if no reviews ran.
+    required: false
+    default: 'false'
   max-comment-chars:
     description: >-
       Truncate the PR comment at this many characters. GitHub hard-limits
@@ -87,6 +93,41 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Install GitHub CLI
+      shell: bash
+      run: |
+        if command -v gh &>/dev/null; then
+          echo "gh CLI already available: $(gh --version | head -1)" >&2
+          exit 0
+        fi
+        echo "gh CLI not found; installing from GitHub releases..." >&2
+        case "$(uname -m)" in
+          x86_64)  gh_arch=amd64 ;;
+          aarch64) gh_arch=arm64 ;;
+          armv*)   gh_arch=arm   ;;
+          *)       echo "ERROR: Unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+        esac
+        gh_version=$(curl -sf 'https://api.github.com/repos/cli/cli/releases/latest' \
+          | grep '"tag_name"' | head -1 | sed 's/.*"v\([^"]*\)".*/\1/')
+        if [[ -z "${gh_version}" ]]; then
+          echo "ERROR: Could not determine latest gh CLI version" >&2
+          exit 1
+        fi
+        tmp=$(mktemp -d)
+        trap 'rm -rf "$tmp"' EXIT
+        curl -fsSL \
+          "https://github.com/cli/cli/releases/download/v${gh_version}/gh_${gh_version}_linux_${gh_arch}.tar.gz" \
+          | tar -xz -C "$tmp"
+        gh_bin="$tmp/gh_${gh_version}_linux_${gh_arch}/bin/gh"
+        if sudo install -m 755 "$gh_bin" /usr/local/bin/gh 2>/dev/null; then
+          echo "gh ${gh_version} installed to /usr/local/bin" >&2
+        else
+          mkdir -p "$HOME/.local/bin"
+          install -m 755 "$gh_bin" "$HOME/.local/bin/gh"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "gh ${gh_version} installed to $HOME/.local/bin" >&2
+        fi
+
     - name: Install Copilot CLI
       shell: bash
       run: |
@@ -117,6 +158,10 @@ runs:
           ${{ inputs.allow-all-tools }}
         INPUT_MIN_PROMPT_LENGTH: >-
           ${{ inputs.min-prompt-length }}
+        INPUT_FAIL_ON_ERROR: >-
+          ${{ inputs.fail-on-error }}
+        GITHUB_BASE_SHA: >-
+          ${{ github.event.pull_request.base.sha }}
       run: |
         "${{ github.action_path }}/scripts/run-reviews.sh"
 

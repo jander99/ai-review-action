@@ -154,7 +154,7 @@ fi
 
 # Step 4 — PR diff length check
 set +e
-pr_diff_len=$(git diff "origin/${GITHUB_BASE_REF:-main}...HEAD" 2>/dev/null | wc -c)
+pr_diff_len=$(git diff "${GITHUB_BASE_SHA:-origin/${GITHUB_BASE_REF:-main}}...HEAD" 2>/dev/null | wc -c)
 _git_rc=${PIPESTATUS[0]}
 set -e
 if [[ "$_git_rc" -ne 0 ]]; then
@@ -210,6 +210,10 @@ done
 if [[ -z "$LAST_REVIEW_FILE" ]]; then
   echo "WARNING: All reviews failed; no output generated." >&2
   write_empty_outputs
+  if [[ "${INPUT_FAIL_ON_ERROR:-false}" == "true" ]]; then
+    echo "ERROR: fail-on-error is true; exiting with failure." >&2
+    exit 1
+  fi
   exit 0
 fi
 
@@ -256,10 +260,6 @@ fi
   cat "$LAST_REVIEW_FILE"
   echo "${_delim}"
 } >> "$GITHUB_OUTPUT"
-
-models_csv=$(IFS=','; echo "${SUCCEEDED_MODELS[*]}")
-echo "models-used=${models_csv}" >> "$GITHUB_OUTPUT"
-echo "REVIEW_FILE=${LAST_REVIEW_FILE}" >> "$GITHUB_ENV"
 
 models_csv=$(IFS=','; echo "${SUCCEEDED_MODELS[*]}")
 echo "models-used=${models_csv}" >> "$GITHUB_OUTPUT"

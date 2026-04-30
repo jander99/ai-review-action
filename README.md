@@ -61,6 +61,7 @@ jobs:
 | `post-comment` | Boolean | No | `true` | Post the review as a PR comment. |
 | `allow-all-tools` | Boolean | No | `false` | Pass `--yolo` to the Copilot CLI, granting full tool access. Use with caution. |
 | `min-prompt-length` | Number | No | `50` | Minimum character length for the PR diff. Reviews are skipped when the diff is smaller than this value. |
+| `fail-on-error` | Boolean | No | `false` | When `true`, exits with a non-zero status if all reviews fail. When `false` (default), the action always exits successfully even if no reviews ran. |
 | `max-comment-chars` | Number | No | `65000` | Truncate the PR comment at this many characters. GitHub hard-limits comments to 65,536 characters. |
 
 ## Outputs
