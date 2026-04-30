@@ -19814,7 +19814,13 @@ function appendUniqueModel(models, candidate) {
   }
 }
 function isWithinWorkspace(filePath, workspace) {
-  return filePath === workspace || filePath.startsWith(`${workspace}${path.sep}`);
+  try {
+    const realFile = fs.realpathSync(filePath);
+    const realWorkspace = fs.realpathSync(workspace);
+    return realFile === realWorkspace || realFile.startsWith(`${realWorkspace}${path.sep}`);
+  } catch {
+    return false;
+  }
 }
 (async () => {
   try {
@@ -19885,7 +19891,14 @@ function isWithinWorkspace(filePath, workspace) {
   if (promptFiles.length === 0) {
     promptFiles.push(path.join(actionPath, "prompts", "code-review.md"));
   }
-  const baseSha = process.env.GITHUB_BASE_SHA;
+  let baseSha = process.env.GITHUB_BASE_SHA;
+  if (!baseSha && process.env.GITHUB_EVENT_PATH) {
+    try {
+      const event = JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, "utf8"));
+      baseSha = event?.pull_request?.base?.sha;
+    } catch {
+    }
+  }
   const baseRef = process.env.GITHUB_BASE_REF || "main";
   const gitRef = baseSha || `origin/${baseRef}`;
   let prDiffLen = 0;
@@ -19907,18 +19920,13 @@ function isWithinWorkspace(filePath, workspace) {
     process.exit(0);
   }
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "copilot-"));
-  const cleanupFiles = [];
   let lastReviewFile = "";
   const allReviewFiles = [];
   const succeededModels = [];
   process.on("exit", () => {
-    for (const file of cleanupFiles) {
-      if (file && file !== lastReviewFile && fs.existsSync(file)) {
-        try {
-          fs.unlinkSync(file);
-        } catch {
-        }
-      }
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {
     }
   });
   for (const promptFile of promptFiles) {
@@ -19926,7 +19934,6 @@ function isWithinWorkspace(filePath, workspace) {
     const promptContent = fs.readFileSync(promptFile, "utf8");
     for (const model of modelsList) {
       const outputFile = path.join(tmpDir, `review-${crypto.randomBytes(4).toString("hex")}.txt`);
-      cleanupFiles.push(outputFile);
       const modelSlug = model.replace(/\//g, "-");
       core.info(`Running review: model=${model} prompt=${promptSlug} output=${modelSlug}`);
       const args = ["-p", promptContent, "-s", "--no-ask-user", ...toolFlags, "--model", model];
@@ -19934,16 +19941,20 @@ function isWithinWorkspace(filePath, workspace) {
         args.push(noCustomFlag);
       }
       try {
-        const result = (0, import_child_process.execSync)(`copilot ${args.map((arg) => JSON.stringify(arg)).join(" ")}`, {
+        const result = (0, import_child_process.spawnSync)("copilot", args, {
           env: {
             ...process.env,
             COPILOT_AUTO_UPDATE: "false",
             COPILOT_GITHUB_TOKEN: copilotToken
           },
           stdio: ["pipe", "pipe", "pipe"],
-          maxBuffer: 50 * 1024 * 1024
+          maxBuffer: 50 * 1024 * 1024,
+          encoding: "buffer"
         });
-        fs.writeFileSync(outputFile, result);
+        if (result.error || result.status !== 0) {
+          throw result.error || new Error(`exit ${result.status}`);
+        }
+        fs.writeFileSync(outputFile, result.stdout);
         appendUniqueModel(succeededModels, model);
         allReviewFiles.push(outputFile);
         lastReviewFile = outputFile;
@@ -19965,7 +19976,6 @@ function isWithinWorkspace(filePath, workspace) {
   if (core.getInput("fusion") === "true" && succeededModels.length > 0) {
     const fusionInputFile = path.join(tmpDir, "fusion-prompt.txt");
     const fusionOutputFile = path.join(tmpDir, "fusion-output.txt");
-    cleanupFiles.push(fusionInputFile, fusionOutputFile);
     let fusionPrompt = "You are synthesizing multiple AI code reviews into one coherent review.\nDeduplicate findings, prioritize by severity, and write a clear summary.\n\n";
     for (const file of allReviewFiles) {
       fusionPrompt += `---
@@ -19979,16 +19989,20 @@ ${fs.readFileSync(file, "utf8")}
       fusionArgs.push(noCustomFlag);
     }
     try {
-      const fusionResult = (0, import_child_process.execSync)(`copilot ${fusionArgs.map((arg) => JSON.stringify(arg)).join(" ")}`, {
+      const fusionResult = (0, import_child_process.spawnSync)("copilot", fusionArgs, {
         env: {
           ...process.env,
           COPILOT_AUTO_UPDATE: "false",
           COPILOT_GITHUB_TOKEN: copilotToken
         },
         stdio: ["pipe", "pipe", "pipe"],
-        maxBuffer: 50 * 1024 * 1024
+        maxBuffer: 50 * 1024 * 1024,
+        encoding: "buffer"
       });
-      fs.writeFileSync(fusionOutputFile, fusionResult);
+      if (fusionResult.error || fusionResult.status !== 0) {
+        throw fusionResult.error || new Error(`exit ${fusionResult.status}`);
+      }
+      fs.writeFileSync(fusionOutputFile, fusionResult.stdout);
       lastReviewFile = fusionOutputFile;
     } catch {
       core.warning("Fusion pass failed; using last individual review.");
