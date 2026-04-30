@@ -11,7 +11,7 @@
       "options": {
         "main": "packages/run-reviews/src/main.ts",
         "outputPath": "packages/run-reviews/dist",
-        "outputFileName": "main.js",
+        "outputFileName": "main.cjs",
         "tsConfig": "packages/run-reviews/tsconfig.json",
         "bundle": true,
         "platform": "node",

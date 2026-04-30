@@ -11,7 +11,7 @@
       "options": {
         "main": "packages/post-comment/src/main.ts",
         "outputPath": "packages/post-comment/dist",
-        "outputFileName": "main.js",
+        "outputFileName": "main.cjs",
         "tsConfig": "packages/post-comment/tsconfig.json",
         "bundle": true,
         "platform": "node",
