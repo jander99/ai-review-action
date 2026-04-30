@@ -12,11 +12,11 @@
     "@octokit/rest": "^20.1.1"
   },
   "devDependencies": {
-    "@nx/esbuild": "^19.0.0",
-    "@nx/js": "^19.0.0",
+    "@nx/esbuild": "^22.7.1",
+    "@nx/js": "^22.7.1",
     "@types/node": "^20.0.0",
     "esbuild": "^0.21.0",
-    "nx": "^19.0.0",
+    "nx": "^22.7.1",
     "typescript": "^5.4.0"
   }
 }
