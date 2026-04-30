@@ -144,6 +144,40 @@ Enable every built-in review strategy in one pass.
 - **Classic PAT not supported**: If you see authentication errors, ensure
   `copilot-token` is a fine-grained PAT with "Copilot Requests" permission.
 
+## Development
+
+This is an NX monorepo with two TypeScript packages compiled via esbuild.
+
+### Structure
+
+```
+copilot-action/
+├── action.yml                  # Composite action entrypoint
+├── packages/
+│   ├── run-reviews/            # Drives Copilot CLI and collects reviews
+│   │   ├── src/main.ts
+│   │   ├── prompts/            # Built-in prompt files
+│   │   └── dist/main.cjs       # Compiled artifact (committed)
+│   └── post-comment/           # Posts the review as a PR comment
+│       ├── src/main.ts
+│       └── dist/main.cjs       # Compiled artifact (committed)
+├── tsconfig.base.json
+└── nx.json
+```
+
+### Building
+
+```bash
+npm install
+npm run build          # equivalent to: npx nx run-many --target=build
+```
+
+Each package compiles to `dist/main.cjs` inside its own directory. These artifacts are committed so the action can run without a build step in consuming workflows.
+
+### Adding or Editing Prompts
+
+Built-in prompts live in `packages/run-reviews/prompts/`. Add a `.md` file there and it will be available by name (without the `.md` extension) via the `prompts` input.
+
 ## License
 
 MIT
