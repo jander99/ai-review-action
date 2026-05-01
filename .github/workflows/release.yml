@@ -48,7 +48,15 @@ jobs:
           }
 
       - name: Verify dist is current
-        run: git diff --exit-code packages/run-reviews/dist/ packages/post-comment/dist/
+        run: |
+          if ! git diff --exit-code packages/run-reviews/dist/ packages/post-comment/dist/; then
+            echo "::error::dist/ is out of sync. Rebuild locally and commit before releasing."
+            exit 1
+          fi
+          if git status --porcelain -- packages/run-reviews/dist/ packages/post-comment/dist/ | grep -q .; then
+            echo "::error::Untracked files in dist/. Commit all dist outputs before releasing."
+            exit 1
+          fi
 
       - name: Configure git
         run: |
