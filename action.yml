@@ -99,7 +99,7 @@ runs:
     - name: Install Copilot CLI
       shell: bash
       run: |
-        npm install -g @github/copilot@1.0.37
+        yarn global add @github/copilot@1.0.37
 
     - name: Run reviews
       id: run

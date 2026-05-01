@@ -168,8 +168,8 @@ copilot-action/
 ### Building
 
 ```bash
-npm install
-npm run build          # equivalent to: npx nx run-many --target=build
+yarn install
+yarn build             # equivalent to: yarn nx run-many --target=build
 ```
 
 Each package compiles to `dist/main.cjs` inside its own directory. These artifacts are committed so the action can run without a build step in consuming workflows.

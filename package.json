@@ -1,9 +1,10 @@
 {
   "name": "copilot-action-monorepo",
   "private": true,
+  "packageManager": "yarn@1.22.22",
   "workspaces": ["packages/*"],
   "scripts": {
-    "build": "npx nx run-many --target=build"
+    "build": "yarn nx run-many --target=build"
   },
   "dependencies": {
     "@actions/core": "^1.10.1",
@@ -12,11 +13,22 @@
     "@octokit/rest": "^20.1.1"
   },
   "devDependencies": {
-    "@nx/esbuild": "^19.0.0",
-    "@nx/js": "^19.0.0",
+    "@nx/esbuild": "19.8.14",
+    "@nx/js": "19.8.14",
     "@types/node": "^20.0.0",
     "esbuild": "^0.21.0",
-    "nx": "^19.0.0",
+    "nx": "19.8.14",
     "typescript": "^5.4.0"
+  },
+  "resolutions": {
+    "@nx/esbuild": "19.8.14",
+    "@nx/js": "19.8.14",
+    "@nx/devkit": "19.8.14",
+    "nx": "19.8.14",
+    "@nrwl/esbuild": "19.8.14",
+    "@nrwl/js": "19.8.14",
+    "@nrwl/devkit": "19.8.14",
+    "@nrwl/workspace": "19.8.14",
+    "@nrwl/tao": "19.8.14"
   }
 }
