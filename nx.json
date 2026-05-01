@@ -3,7 +3,9 @@
   "targetDefaults": {
     "build": {
       "dependsOn": [],
-      "outputs": ["{options.outputPath}"]
+      "outputs": [
+        "{options.outputPath}"
+      ]
     }
   }
 }

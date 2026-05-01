@@ -15,22 +15,11 @@
     "@octokit/rest": "^20.1.1"
   },
   "devDependencies": {
-    "@nx/esbuild": "19.8.14",
-    "@nx/js": "19.8.14",
+    "@nx/esbuild": "22.7.1",
+    "@nx/js": "22.7.1",
     "@types/node": "^20.0.0",
     "esbuild": "^0.21.0",
-    "nx": "19.8.14",
+    "nx": "22.7.1",
     "typescript": "^5.4.0"
-  },
-  "resolutions": {
-    "@nx/esbuild": "19.8.14",
-    "@nx/js": "19.8.14",
-    "@nx/devkit": "19.8.14",
-    "nx": "19.8.14",
-    "@nrwl/esbuild": "19.8.14",
-    "@nrwl/js": "19.8.14",
-    "@nrwl/devkit": "19.8.14",
-    "@nrwl/workspace": "19.8.14",
-    "@nrwl/tao": "19.8.14"
   }
 }
