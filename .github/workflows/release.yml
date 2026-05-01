@@ -1,0 +1,78 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.2.3 — no v prefix, no pre-release suffix)'
+        required: true
+        type: string
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Build
+        run: yarn nx run-many --target=build --skip-nx-cache
+
+      - name: Validate version format
+        run: |
+          echo '${{ inputs.version }}' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' || {
+            echo '::error::Version must be X.Y.Z format (no v prefix, no pre-release suffix)'
+            exit 1
+          }
+
+      - name: Verify dist is current
+        run: git diff --exit-code packages/run-reviews/dist/ packages/post-comment/dist/
+
+      - name: Configure git
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+      - name: Tag release
+        run: |
+          VERSION="v${{ inputs.version }}"
+          MAJOR="v$(echo '${{ inputs.version }}' | cut -d. -f1)"
+          MINOR="v$(echo '${{ inputs.version }}' | cut -d. -f1-2)"
+
+          git tag "$VERSION"
+          git tag -fa "$MAJOR" -m "Update $MAJOR to $VERSION"
+          git tag -fa "$MINOR" -m "Update $MINOR to $VERSION"
+
+          git push origin "refs/tags/$VERSION"
+          git push --force origin "refs/tags/$MAJOR"
+          git push --force origin "refs/tags/$MINOR"
+
+      - name: Create GitHub Release
+        # Note: --generate-notes with no prior tag covers full commit history (expected for first release)
+        # Note: --latest always set; multi-major latest logic is future work
+        run: |
+          gh release create "v${{ inputs.version }}" \
+            --title "v${{ inputs.version }}" \
+            --generate-notes \
+            --latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
