@@ -58,7 +58,8 @@ inputs:
   min-prompt-length:
     description: >-
       Minimum character length for the PR diff. Reviews are skipped when the
-      diff is smaller than this value.
+      diff is smaller than this value. On workflow_dispatch events with an empty
+      diff the check is bypassed and the full codebase is reviewed instead.
     required: false
     default: '50'
   fail-on-error:

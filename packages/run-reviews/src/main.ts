@@ -129,10 +129,16 @@ function isWithinWorkspace(filePath: string, workspace: string): boolean {
   }
 
   if (prDiffLen < minLen) {
-    core.info(`PR diff (${prDiffLen} chars) is smaller than min-prompt-length (${minLen}); skipping review.`);
-    core.setOutput('review', '');
-    core.setOutput('models-used', '');
-    process.exit(0);
+    if (process.env.GITHUB_EVENT_NAME === 'workflow_dispatch') {
+      core.info(
+        `PR diff (${prDiffLen} chars) is below min-prompt-length (${minLen}); running full-codebase review for workflow_dispatch event.`,
+      );
+    } else {
+      core.info(`PR diff (${prDiffLen} chars) is smaller than min-prompt-length (${minLen}); skipping review.`);
+      core.setOutput('review', '');
+      core.setOutput('models-used', '');
+      process.exit(0);
+    }
   }
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'copilot-'));
