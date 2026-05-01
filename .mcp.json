@@ -2,7 +2,7 @@
   "mcpServers": {
     "nx": {
       "command": "npx",
-      "args": ["nx-mcp@latest"]
+      "args": ["-y", "nx-mcp@19"]
     }
   }
 }
