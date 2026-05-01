@@ -19914,10 +19914,16 @@ function isWithinWorkspace(filePath, workspace) {
     core.warning(`min-prompt-length '${rawMin}' is not a valid integer; using default 50.`);
   }
   if (prDiffLen < minLen) {
-    core.info(`PR diff (${prDiffLen} chars) is smaller than min-prompt-length (${minLen}); skipping review.`);
-    core.setOutput("review", "");
-    core.setOutput("models-used", "");
-    process.exit(0);
+    if (process.env.GITHUB_EVENT_NAME === "workflow_dispatch") {
+      core.info(
+        `PR diff (${prDiffLen} chars) is below min-prompt-length (${minLen}); bypassing guard for workflow_dispatch event. Note: prompts referencing git diff may yield limited output.`
+      );
+    } else {
+      core.info(`PR diff (${prDiffLen} chars) is smaller than min-prompt-length (${minLen}); skipping review.`);
+      core.setOutput("review", "");
+      core.setOutput("models-used", "");
+      process.exit(0);
+    }
   }
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "copilot-"));
   let lastReviewFile = "";
