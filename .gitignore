@@ -2,3 +2,5 @@
 .nx/
 node_modules/
 .yarn/install-state.gz
+
+.claude/worktrees
