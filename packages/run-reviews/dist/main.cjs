@@ -19916,7 +19916,7 @@ function isWithinWorkspace(filePath, workspace) {
   if (prDiffLen < minLen) {
     if (process.env.GITHUB_EVENT_NAME === "workflow_dispatch") {
       core.info(
-        `PR diff (${prDiffLen} chars) is below min-prompt-length (${minLen}); running full-codebase review for workflow_dispatch event.`
+        `PR diff (${prDiffLen} chars) is below min-prompt-length (${minLen}); bypassing guard for workflow_dispatch event. Note: prompts referencing git diff may yield limited output.`
       );
     } else {
       core.info(`PR diff (${prDiffLen} chars) is smaller than min-prompt-length (${minLen}); skipping review.`);

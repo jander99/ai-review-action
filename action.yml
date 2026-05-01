@@ -58,8 +58,10 @@ inputs:
   min-prompt-length:
     description: >-
       Minimum character length for the PR diff. Reviews are skipped when the
-      diff is smaller than this value. On workflow_dispatch events with an empty
-      diff the check is bypassed and the full codebase is reviewed instead.
+      diff is smaller than this value. On workflow_dispatch events this guard
+      is bypassed regardless of diff size, so the prompts still run (note:
+      built-in prompts that reference git diff may yield limited output when
+      the diff is empty).
     required: false
     default: '50'
   fail-on-error:
