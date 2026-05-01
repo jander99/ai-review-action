@@ -1,11 +1,28 @@
 name: Copilot Review
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
-
-# SECURITY NOTE: Do NOT change this trigger to a base-branch privileged event.
-# That would run with elevated permissions and could expose your copilot-token to untrusted fork PR code.
+  workflow_dispatch:
+    inputs:
+      models:
+        description: 'Model(s) to use (comma-separated, e.g. claude-sonnet-4.6)'
+        required: false
+        default: 'claude-sonnet-4.6'
+        type: string
+      prompts:
+        description: 'Prompt(s) to use (comma-separated, e.g. code-review,security-review)'
+        required: false
+        default: 'code-review,security-review'
+        type: string
+      allow-all-tools:
+        description: 'Allow all tools'
+        required: false
+        default: false
+        type: boolean
+      post-comment:
+        description: 'Post comments on PR'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -27,7 +44,7 @@ jobs:
           # COPILOT_TOKEN must be a fine-grained PAT with "Copilot Requests" permission.
           # Classic PATs (ghp_...) are NOT supported by the Copilot CLI.
           copilot-token: ${{ secrets.COPILOT_TOKEN }}
-          models: claude-sonnet-4.6
-          prompts: code-review,security-review
-          allow-all-tools: false
-          post-comment: true
+          models: ${{ inputs.models }}
+          prompts: ${{ inputs.prompts }}
+          allow-all-tools: ${{ inputs['allow-all-tools'] }}
+          post-comment: ${{ inputs['post-comment'] }}
