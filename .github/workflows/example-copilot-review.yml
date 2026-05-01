@@ -21,7 +21,7 @@ on:
       post-comment:
         description: 'Post comments on PR'
         required: false
-        default: true
+        default: false
         type: boolean
 
 permissions:
@@ -46,5 +46,5 @@ jobs:
           copilot-token: ${{ secrets.COPILOT_TOKEN }}
           models: ${{ inputs.models }}
           prompts: ${{ inputs.prompts }}
-          allow-all-tools: ${{ inputs.allow-all-tools }}
-          post-comment: ${{ inputs.post-comment }}
+          allow-all-tools: ${{ inputs['allow-all-tools'] }}
+          post-comment: ${{ inputs['post-comment'] }}
