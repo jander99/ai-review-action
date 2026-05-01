@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+jobs:
+  build-check:
+    name: Build Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Build
+        run: yarn nx run-many --target=build --skip-nx-cache
+
+      - name: Check dist is up to date
+        run: |
+          if ! git diff --exit-code packages/run-reviews/dist/ packages/post-comment/dist/; then
+            echo "::error::dist/ is out of sync. Run 'yarn build' locally and commit the result."
+            exit 1
+          fi
+          if git status --porcelain -- packages/run-reviews/dist/ packages/post-comment/dist/ | grep -q .; then
+            echo "::error::Untracked files in dist/. Run 'yarn build' locally and commit all dist outputs."
+            exit 1
+          fi
