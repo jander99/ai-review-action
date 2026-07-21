@@ -1,6 +1,6 @@
-# copilot-review
+# ai-review-action
 
-[![CI](https://github.com/jander99/copilot-action/actions/workflows/example-copilot-review.yml/badge.svg)](https://github.com/jander99/copilot-action/actions/workflows/example-copilot-review.yml)
+[![CI](https://github.com/jander99/ai-review-action/actions/workflows/example-ai-review.yml/badge.svg)](https://github.com/jander99/ai-review-action/actions/workflows/example-ai-review.yml)
 
 ## Overview
 
@@ -43,7 +43,7 @@ jobs:
       - uses: actions/checkout@v6.0.2
         with:
           fetch-depth: 0
-      - uses: jander99/copilot-action@v1
+      - uses: jander99/ai-review-action@v1
         with:
           copilot-token: ${{ secrets.COPILOT_PAT }}
 ```
@@ -79,7 +79,7 @@ jobs:
 Run the same review prompt through multiple models and post the results.
 
 ```yaml
-- uses: jander99/copilot-action@v1
+- uses: jander99/ai-review-action@v1
   with:
     copilot-token: ${{ secrets.COPILOT_PAT }}
     # Models run sequentially — each model reviews the PR once per prompt.
@@ -91,7 +91,7 @@ Run the same review prompt through multiple models and post the results.
 Use a specialized prompt stored in your repository.
 
 ```yaml
-- uses: jander99/copilot-action@v1
+- uses: jander99/ai-review-action@v1
   with:
     copilot-token: ${{ secrets.COPILOT_PAT }}
     prompts: ".github/prompts/performance-review.md"
@@ -102,7 +102,7 @@ Use a specialized prompt stored in your repository.
 Synthesize findings from multiple models into one cohesive summary.
 
 ```yaml
-- uses: jander99/copilot-action@v1
+- uses: jander99/ai-review-action@v1
   with:
     copilot-token: ${{ secrets.COPILOT_PAT }}
     models: "claude-sonnet-4.6, gpt-4o"
@@ -114,7 +114,7 @@ Synthesize findings from multiple models into one cohesive summary.
 Enable every built-in review strategy in one pass.
 
 ```yaml
-- uses: jander99/copilot-action@v1
+- uses: jander99/ai-review-action@v1
   with:
     copilot-token: ${{ secrets.COPILOT_PAT }}
     prompts: "code-review, security-review, dependency-review, test-coverage"
@@ -151,7 +151,7 @@ This is an NX monorepo with two TypeScript packages compiled via esbuild.
 ### Structure
 
 ```
-copilot-action/
+ai-review-action/
 ├── action.yml                  # Composite action entrypoint
 ├── packages/
 │   ├── run-reviews/            # Drives Copilot CLI and collects reviews
