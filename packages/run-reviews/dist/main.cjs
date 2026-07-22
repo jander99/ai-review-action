@@ -19941,7 +19941,7 @@ function isWithinWorkspace(filePath, workspace) {
       process.exit(0);
     }
   }
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "copilot-"));
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ai-review-"));
   let lastReviewFile = "";
   const allReviewFiles = [];
   const succeededModels = [];

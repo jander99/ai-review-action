@@ -1,4 +1,4 @@
-name: Copilot Review
+name: AI Review
 
 on:
   workflow_dispatch:
@@ -29,7 +29,7 @@ permissions:
   pull-requests: write
 
 jobs:
-  copilot-review:
+  ai-review:
     name: AI Code Review
     runs-on: ubuntu-latest
     steps:
@@ -38,7 +38,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Copilot Review
+      - name: AI Review
         uses: ./
         with:
           # COPILOT_TOKEN must be a fine-grained PAT with "Copilot Requests" permission.

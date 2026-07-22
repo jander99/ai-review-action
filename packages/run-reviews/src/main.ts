@@ -141,7 +141,7 @@ function isWithinWorkspace(filePath: string, workspace: string): boolean {
     }
   }
 
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'copilot-'));
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-review-'));
   let lastReviewFile = '';
   const allReviewFiles: string[] = [];
   const succeededModels: string[] = [];
