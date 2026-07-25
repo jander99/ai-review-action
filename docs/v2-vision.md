@@ -190,6 +190,82 @@ generates one from its inputs).
 
 Unchanged from v1.
 
+### 5.4 Prompt Composition
+
+The action composes prompts in two layers — a **baked-in system prompt**
+the action owns and a **user input** the workflow provides. The model
+never sees the user's input in isolation; it sees the composed prompt.
+
+```
+┌─────────────────────────────────────────┐
+│  System Prompt (action-owned, fixed)    │
+│  · Environment description              │
+│  · Output format rules                  │
+│  · Severity legend                      │
+│  · Boilerplate / defaults               │
+└─────────────────────────────────────────┘
+                  +
+┌─────────────────────────────────────────┐
+│  User Input (user-provided)             │
+│  · File path in repo, or                │
+│  · String in action input               │
+└─────────────────────────────────────────┘
+                  ↓
+        [ Composed Prompt ]
+                  ↓
+            opencode run
+```
+
+**System prompt** (action-owned, not overridable):
+- Explains the runtime environment (GitHub Actions runner, OpenCode CLI,
+  available MCP tools / plugins / skills)
+- **Context hints** that steer the model toward the right tool calls:
+  - Pull-request context: `target: diff`, base/head refs, "use `git diff
+    origin/$BASE_REF...HEAD` to see the changes"
+  - Full-code context: `target: full`, "use file reads (`read`, `glob`,
+    `grep`) to inspect the codebase"
+- Defines the output format (markdown structure, severity legend, length
+  guidance, no-preamble rule)
+- Sets behavior defaults (what to do when no issues are found, how to
+  handle ambiguity)
+
+The system prompt is **parameterized** with runtime context the action
+detects from `github.event_name`, `github.event.*`, and resolved `target`.
+The action renders the system prompt with the appropriate context before
+appending the user input.
+
+The system prompt is exposed via the `AI_REVIEW_SYSTEM_PROMPT` environment
+variable for advanced users to inspect before invoking the action.
+
+**User input** (user-provided, via `prompts:`):
+- A workspace-relative path (e.g., `.github/prompts/code-review.md`) — the
+  action reads the file at runtime
+- An inline string in the action input — the action uses it directly
+- Comma-separated lists for multi-prompt runs
+
+**Build prompt step pattern** (recommended): the workflow composes the
+substantive prompt content in a pre-step (read files, generate context,
+substitute variables), then passes the resulting path to the action. This
+keeps the action's prompt-handling logic simple and lets users do
+arbitrary pre-processing.
+
+```yaml
+- name: Build prompt
+  run: |
+    {
+      echo "# Code Review"
+      echo ""
+      echo "Review the changes in this PR."
+      # ... compose content ...
+    } > /tmp/prompt.md
+- uses: jander99/ai-review-action@v1
+  with:
+    prompts: /tmp/prompt.md
+```
+
+The action's `prompts:` input accepts both repo-relative paths and
+absolute paths in the runner filesystem.
+
 ## 6. OpenCode Runtime Contract
 
 The action shells out to `opencode run <prompt> --model <provider/model>
@@ -402,20 +478,39 @@ steps:
 
 ## 10. Open Questions
 
-1. **Default prompt target on the default branch.** v1 had no specific
-   handling — `pull_request` always used the diff. v2 should decide
-   whether `main`-branch pushes (a) run full-code review, (b) skip review,
-   or (c) emit a different "release review" prompt.
-2. **Prompt authoring story.** v1 ships built-in prompts in the action.
-   v2 may want a separate registry (or rely on the user to write them).
-3. **opencode-config validation.** The action should validate the user's
-   `opencode.json` early (the `$schema` URL is available) and fail with a
-   useful error before shelling out.
-4. **Diff resolution.** v1 reads the diff via `copilot --allow-tool=shell(git:*)`.
-   v2 with `bash: allow` does the same. v2 with `bash: deny` needs the
-   action to pre-compute the diff and inline it in the prompt.
+*(none — all open questions resolved)*
 
-## 11. Future Work
+## 11. Resolved Decisions
+
+1. **Default prompt target on the default branch** *(resolved: full-code review)*.
+   On push to the default branch, the action treats `target` as `full` and
+   runs the same prompt against the full repo instead of a diff. Same prompt,
+   different resolution. The `target` input still overrides this if the user
+   explicitly sets `target: diff`.
+2. **Prompt authoring** *(resolved: hybrid — action-owned system prompt + user-authored input)*.
+   The action ships a baked-in system prompt that handles environment description,
+   output format, and severity legend. Users provide the substantive content via
+   `prompts:` (workspace path or inline string). The action composes the final
+   prompt as `[system prompt] + [user input]`. The system prompt is exposed via
+   the `AI_REVIEW_SYSTEM_PROMPT` env var for inspection. See section 5.4 for the
+   full composition model.
+3. **opencode-config validation** *(resolved: strict schema validation)*.
+   When the user provides `opencode.json` via `opencode-config:`, the action
+   fetches the `$schema` URL declared in the file and validates the user's
+   config against it. Catches field errors and version mismatches early with
+   clear error messages. Falls back to a clear error if the schema cannot be
+   fetched (network failure). The action does NOT validate the auto-generated
+   `opencode.json` (it controls that path).
+4. **Diff resolution** *(resolved: model computes via tool call)*.
+   The action does NOT pre-compute the diff — `git diff` as a string in the
+   prompt doesn't scale. The system prompt steers the model toward the right
+   tool calls (`git diff` for `target: diff`, file reads for `target: full`),
+   and the model fetches the diff (or reads the repo) itself. Implication:
+   `bash: allow` is required for diff mode; `bash: deny` is not supported
+   for diff mode (the model can't fetch the diff). The action's system prompt
+   adjusts its hints based on the resolved `target`.
+
+## 12. Future Work
 
 ### 11.1 OpenCode-as-tests on Actions
 
@@ -442,7 +537,7 @@ OpenCode sessions support multi-turn. A future iteration could orchestrate
 a multi-agent review (one agent drafts, another critiques, a third
 synthesizes) entirely in `opencode` without the action owning the loop.
 
-## 12. References
+## 13. References
 
 - OpenCode CLI: https://opencode.ai/docs
 - OpenCode `opencode.json` schema: https://opencode.ai/config.json
