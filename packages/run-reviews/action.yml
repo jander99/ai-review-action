@@ -1,7 +1,14 @@
 name: 'Run Reviews'
 description: 'Run AI reviews with the OpenCode CLI'
 inputs:
-  # OpenCode version assertion and debug capture are deferred to Phase 4.
+  opencode-version:
+    description: 'Expected OpenCode version installed on PATH'
+    required: false
+    default: '1.18.4'
+  debug:
+    description: 'Capture, redact, and gzip OpenCode stdout and stderr'
+    required: false
+    default: 'false'
   model:
     description: 'OpenCode model in provider/model format'
     required: false
@@ -48,6 +55,8 @@ outputs:
     description: 'JSON object containing total input and output tokens'
   tokens-by-model:
     description: 'JSON object containing token usage by model'
+  debug-artifact-path:
+    description: 'Directory containing redacted, gzipped debug output when debug is enabled'
 runs:
   using: node24
   main: dist/main.cjs

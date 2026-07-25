@@ -1,0 +1,24 @@
+{
+  "name": "setup-opencode",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "root": "packages/setup-opencode",
+  "sourceRoot": "packages/setup-opencode/src",
+  "targets": {
+    "build": {
+      "executor": "@nx/esbuild:esbuild",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "main": "packages/setup-opencode/src/main.ts",
+        "outputPath": "packages/setup-opencode/dist",
+        "outputFileName": "main.cjs",
+        "tsConfig": "packages/setup-opencode/tsconfig.json",
+        "bundle": true,
+        "platform": "node",
+        "target": "node20",
+        "format": ["cjs"],
+        "thirdParty": true
+      }
+    }
+  }
+}

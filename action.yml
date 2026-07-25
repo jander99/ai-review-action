@@ -12,7 +12,21 @@ branding:
   color: blue
 
 inputs:
-  # OpenCode version assertion and debug capture are deferred to Phase 4.
+  opencode-version:
+    description: 'OpenCode version to install and assert.'
+    required: false
+    default: '1.18.4'
+  opencode-checksum:
+    description: 'Required SHA-256 checksum of the pinned OpenCode binary.'
+    required: true
+  opencode-install-dir:
+    description: 'Directory where the opencode binary will be installed.'
+    required: false
+    default: '~/.opencode'
+  debug:
+    description: 'Capture redacted, gzipped OpenCode stdout and stderr as an artifact.'
+    required: false
+    default: 'false'
   github-token:
     description: >-
       GITHUB_TOKEN or fine-grained PAT for posting results (falls back to
@@ -117,14 +131,27 @@ outputs:
   tokens-by-model:
     description: 'JSON object containing token usage by model.'
     value: ${{ steps.run.outputs.tokens-by-model }}
+  debug-artifact-path:
+    description: 'Directory containing redacted, gzipped debug output when debug is enabled.'
+    value: ${{ steps.run.outputs.debug-artifact-path }}
 
 runs:
   using: composite
   steps:
+    - name: Setup OpenCode
+      id: setup
+      uses: ./packages/setup-opencode
+      with:
+        version: ${{ inputs.opencode-version }}
+        checksum: ${{ inputs.opencode-checksum }}
+        install-dir: ${{ inputs.opencode-install-dir }}
+
     - name: Run reviews
       id: run
       uses: ./packages/run-reviews
       with:
+        opencode-version: ${{ inputs.opencode-version }}
+        debug: ${{ inputs.debug }}
         model: ${{ inputs.model }}
         models: ${{ inputs.models }}
         prompts: ${{ inputs.prompts }}
@@ -155,3 +182,12 @@ runs:
         name: ${{ inputs.check-name }}
         conclusion: ${{ inputs.check-conclusion }}
         details-url: ${{ inputs.check-details-url }}
+
+    - name: Upload debug artifact
+      if: always() && inputs.debug == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ai-review-debug
+        path: ${{ steps.run.outputs.debug-artifact-path }}
+        retention-days: 7
+        if-no-files-found: warn

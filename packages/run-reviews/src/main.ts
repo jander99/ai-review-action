@@ -1,11 +1,96 @@
 import * as core from '@actions/core';
+import { spawnSync } from 'child_process';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { gzipSync } from 'zlib';
 import { buildAgentDefinition, getEventContext } from './agent-definition';
 import { buildFusionConfig, buildMergedConfig } from './config-builder';
 import { composeFusionPrompt, composeLabeledReviews } from './fusion';
 import { invokeOpenCode } from './opencode';
+import type { DebugCapturePaths } from './opencode';
 import { DEFAULT_PERMISSION } from './permissions';
 import { composeTaskPrompt, parsePrompts } from './prompt-composer';
 import type { Permission, PromptEntry, ReviewResult } from './types';
+
+const DEFAULT_OPENCODE_VERSION = '1.18.4';
+const REDACTION_PATTERNS: ReadonlyArray<{ pattern: RegExp; replacement: string }> = [
+  { pattern: /sk-ant-[A-Za-z0-9._-]+/g, replacement: '[REDACTED]' },
+  { pattern: /sk-[A-Za-z0-9._-]+/g, replacement: '[REDACTED]' },
+  { pattern: /ghp_[A-Za-z0-9_]+/g, replacement: '[REDACTED]' },
+  { pattern: /Bearer\s+[^\s"'`\\]+/gi, replacement: 'Bearer [REDACTED]' },
+];
+
+function assertOpenCodeVersion(expectedVersion: string): void {
+  const result = spawnSync('opencode', ['--version'], {
+    encoding: 'utf8',
+    maxBuffer: 1024 * 1024,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 10_000,
+  });
+  const stdout = typeof result.stdout === 'string' ? result.stdout.trim() : '';
+  const stderr = typeof result.stderr === 'string' ? result.stderr.trim() : '';
+
+  if (result.error) {
+    throw new Error(`could not execute 'opencode --version': ${result.error.message}`);
+  }
+  if (result.status !== 0) {
+    throw new Error(
+      `'opencode --version' exited with status ${result.status}${stderr ? `: ${stderr}` : ''}`,
+    );
+  }
+
+  const reportedVersion = stdout || stderr;
+  const versionMatch = reportedVersion.match(/v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)/);
+  const installedVersion = (versionMatch?.[1] ?? reportedVersion.replace(/^v/, '')).trim();
+  const normalizedExpectedVersion = expectedVersion.replace(/^v/, '');
+  if (!installedVersion || installedVersion !== normalizedExpectedVersion) {
+    throw new Error(
+      `expected OpenCode ${normalizedExpectedVersion}, but 'opencode --version' reported '${reportedVersion || '<empty>'}'`,
+    );
+  }
+}
+
+function createDebugDirectory(): string {
+  const temporaryRoot = process.env.RUNNER_TEMP || os.tmpdir();
+  fs.mkdirSync(temporaryRoot, { recursive: true });
+  const debugDirectory = fs.mkdtempSync(path.join(temporaryRoot, 'ai-review-debug-'));
+  fs.chmodSync(debugDirectory, 0o700);
+  return debugDirectory;
+}
+
+function createDebugCapturePaths(
+  directory: string,
+  invocation: number,
+  kind: 'review' | 'fusion',
+  model: string,
+): DebugCapturePaths {
+  const safeModel = model.replace(/[^A-Za-z0-9._-]+/g, '-').slice(0, 80) || 'unknown-model';
+  const prefix = `${invocation.toString().padStart(3, '0')}-${kind}-${safeModel}`;
+  return {
+    stdoutPath: path.join(directory, `${prefix}.stdout.jsonl`),
+    stderrPath: path.join(directory, `${prefix}.stderr.log`),
+  };
+}
+
+function redactDebugOutput(output: string): string {
+  return REDACTION_PATTERNS.reduce(
+    (redacted, { pattern, replacement }) => redacted.replace(pattern, replacement),
+    output,
+  );
+}
+
+function finalizeDebugDirectory(directory: string): void {
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    if (!entry.isFile() || entry.name.endsWith('.gz')) {
+      continue;
+    }
+    const rawPath = path.join(directory, entry.name);
+    const redacted = redactDebugOutput(fs.readFileSync(rawPath, 'utf8'));
+    fs.writeFileSync(`${rawPath}.gz`, gzipSync(redacted), { mode: 0o600 });
+    fs.rmSync(rawPath, { force: true });
+  }
+}
 
 interface IndividualReviewResult extends ReviewResult {
   prompt: string;
@@ -38,10 +123,21 @@ function compareLexically(left: string, right: string): number {
 }
 
 function run(): void {
+  const expectedOpenCodeVersion = core.getInput('opencode-version') || DEFAULT_OPENCODE_VERSION;
+  try {
+    assertOpenCodeVersion(expectedOpenCodeVersion);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    setEmptyOutputs();
+    core.setFailed(`OpenCode version assertion failed: ${message}`);
+    return;
+  }
+
   const model = core.getInput('model') || 'anthropic/claude-sonnet-4.6';
   const modelsInput = core.getInput('models');
   const fusionEnabled = core.getBooleanInput('fusion');
   const failOnError = core.getBooleanInput('fail-on-error');
+  const debugEnabled = core.getBooleanInput('debug');
   const timeoutMinutes = Number.parseInt(core.getInput('timeout-minutes') || '30', 10);
   const userConfig = core.getInput('opencode-config') || undefined;
   const individualResults: IndividualReviewResult[] = [];
@@ -55,6 +151,8 @@ function run(): void {
   let homeDir: string;
   let fusionConfigPath = '';
   let fusionHomeDir = '';
+  let debugDirectory = '';
+  let debugInvocation = 0;
 
   try {
     if (!Number.isFinite(timeoutMinutes) || timeoutMinutes <= 0) {
@@ -87,6 +185,9 @@ function run(): void {
         model: fusionModel,
       }));
     }
+    if (debugEnabled) {
+      debugDirectory = createDebugDirectory();
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     setEmptyOutputs();
@@ -104,6 +205,9 @@ function run(): void {
         const result = invokeOpenCode(composeTaskPrompt([prompt]), currentModel, configPath, {
           homeDir,
           timeoutMinutes,
+          debugCapture: debugEnabled
+            ? createDebugCapturePaths(debugDirectory, ++debugInvocation, 'review', currentModel)
+            : undefined,
         });
         individualResults.push({ ...result, prompt: prompt.source });
         accountedResults.push(result);
@@ -128,6 +232,9 @@ function run(): void {
           homeDir: fusionHomeDir,
           timeoutMinutes,
           disableTools: true,
+          debugCapture: debugEnabled
+            ? createDebugCapturePaths(debugDirectory, ++debugInvocation, 'fusion', fusionModel)
+            : undefined,
         },
       );
       accountedResults.push(fusionResult);
@@ -166,6 +273,18 @@ function run(): void {
     core.setOutput('cost-by-model', JSON.stringify(costByModel));
     core.setOutput('tokens', JSON.stringify(totalTokens));
     core.setOutput('tokens-by-model', JSON.stringify(tokensByModel));
+  }
+
+  if (debugEnabled) {
+    try {
+      finalizeDebugDirectory(debugDirectory);
+      core.setOutput('debug-artifact-path', debugDirectory);
+    } catch (error) {
+      fs.rmSync(debugDirectory, { recursive: true, force: true });
+      const message = error instanceof Error ? error.message : String(error);
+      core.setFailed(`Failed to create redacted debug artifact: ${message}`);
+      return;
+    }
   }
 
   if (failures.length > 0 && failOnError) {

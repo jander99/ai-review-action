@@ -1,11 +1,18 @@
 import { spawnSync } from 'child_process';
 import * as fs from 'fs';
+import * as path from 'path';
 import type { ReviewResult } from './types';
+
+export interface DebugCapturePaths {
+  stdoutPath: string;
+  stderrPath: string;
+}
 
 export interface InvokeOpenCodeOptions {
   homeDir: string;
   timeoutMinutes?: number;
   disableTools?: boolean;
+  debugCapture?: DebugCapturePaths;
 }
 
 interface OpenCodeEvent {
@@ -59,12 +66,21 @@ export function invokeOpenCode(
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
+  const stdout = typeof result.stdout === 'string' ? result.stdout : '';
+  const stderr = typeof result.stderr === 'string' ? result.stderr : '';
+  if (options.debugCapture) {
+    fs.mkdirSync(path.dirname(options.debugCapture.stdoutPath), { recursive: true });
+    fs.mkdirSync(path.dirname(options.debugCapture.stderrPath), { recursive: true });
+    fs.writeFileSync(options.debugCapture.stdoutPath, stdout, { encoding: 'utf8', mode: 0o600 });
+    fs.writeFileSync(options.debugCapture.stderrPath, stderr, { encoding: 'utf8', mode: 0o600 });
+  }
+
   if (result.error) {
     throw result.error;
   }
   if (result.status !== 0) {
-    const stderr = result.stderr.trim();
-    throw new Error(`opencode exited with status ${result.status}${stderr ? `: ${stderr}` : ''}`);
+    const errorOutput = stderr.trim();
+    throw new Error(`opencode exited with status ${result.status}${errorOutput ? `: ${errorOutput}` : ''}`);
   }
 
   const text: string[] = [];
@@ -72,7 +88,7 @@ export function invokeOpenCode(
   let outputTokens = 0;
   let cost = 0;
 
-  for (const line of result.stdout.split(/\r?\n/).filter(Boolean)) {
+  for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
     const event = JSON.parse(line) as OpenCodeEvent;
     if (event.type === 'text') {
       const value = event.text ?? event.part?.text;
