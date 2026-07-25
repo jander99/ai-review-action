@@ -26620,6 +26620,21 @@ var core = __toESM(require_core());
 var import_github = __toESM(require_github());
 var import_rest = __toESM(require_dist_node14());
 var MAX_SUMMARY_CHARS = 65e3;
+var TRUNCATION_MARKER = `
+
+---
+*Review truncated at ${MAX_SUMMARY_CHARS} characters.*`;
+var TRUNCATION_MARKER_LENGTH = TRUNCATION_MARKER.length;
+var CHECK_CONCLUSIONS = [
+  "action_required",
+  "cancelled",
+  "failure",
+  "neutral",
+  "success",
+  "skipped",
+  "stale",
+  "timed_out"
+];
 (async () => {
   const review = core.getInput("review");
   if (!review) {
@@ -26628,7 +26643,11 @@ var MAX_SUMMARY_CHARS = 65e3;
     return;
   }
   const name = core.getInput("name") || "ai-review";
-  const conclusion = core.getInput("conclusion") || "neutral";
+  let conclusion = core.getInput("conclusion") || "neutral";
+  if (!CHECK_CONCLUSIONS.includes(conclusion)) {
+    core.warning(`Invalid check-conclusion '${conclusion}'; falling back to 'neutral'.`);
+    conclusion = "neutral";
+  }
   const detailsUrl = core.getInput("details-url") || "https://github.com";
   const headSha = process.env.GITHUB_SHA;
   if (!headSha) {
@@ -26638,10 +26657,8 @@ var MAX_SUMMARY_CHARS = 65e3;
   }
   let summary = review;
   if (summary.length > MAX_SUMMARY_CHARS) {
-    summary = summary.slice(0, MAX_SUMMARY_CHARS) + `
-
----
-*Review truncated at ${MAX_SUMMARY_CHARS} characters.*`;
+    const effectiveLimit = Math.max(0, MAX_SUMMARY_CHARS - TRUNCATION_MARKER_LENGTH);
+    summary = summary.slice(0, effectiveLimit) + TRUNCATION_MARKER;
   }
   const token = core.getInput("github-token") || process.env.GITHUB_TOKEN;
   const { owner, repo } = import_github.context.repo;
@@ -26653,8 +26670,6 @@ var MAX_SUMMARY_CHARS = 65e3;
       name,
       head_sha: headSha,
       status: "completed",
-      // The conclusion input is user-controlled but constrained to the
-      // GitHub Checks API allowed values via the action.yml description.
       conclusion,
       details_url: detailsUrl,
       output: {

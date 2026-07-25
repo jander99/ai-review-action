@@ -58,6 +58,12 @@ inputs:
       false to only expose outputs without commenting.
     required: false
     default: 'true'
+  post-check-run:
+    description: >-
+      Post the review as a check run (non-PR events only). Set to false
+      to only expose outputs without publishing.
+    required: false
+    default: 'true'
   max-comment-chars:
     description: >-
       Truncate the PR comment at this many characters. GitHub hard-limits
@@ -71,9 +77,9 @@ inputs:
   check-conclusion:
     description: >-
       Conclusion of the check run created on non-PR events. One of:
-      success, failure, neutral, cancelled, skipped, timed_out,
-      action_required. Future iterations may derive this from the review
-      severity (deferred).
+      action_required, cancelled, failure, neutral, success, skipped,
+      stale, timed_out. Default neutral. Future iterations may derive
+      this from the review severity (deferred).
     required: false
     default: 'neutral'
   check-details-url:
@@ -140,7 +146,7 @@ runs:
         max-comment-chars: ${{ inputs.max-comment-chars }}
 
     - name: Post check run
-      if: always() && github.event_name != 'pull_request'
+      if: always() && github.event_name != 'pull_request' && inputs.post-check-run == 'true'
       id: post-check-run
       uses: ./packages/post-check-run
       with:

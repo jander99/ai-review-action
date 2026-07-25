@@ -26635,10 +26635,12 @@ var import_rest = __toESM(require_dist_node14());
   const effectiveMax = isNaN(maxChars) ? 65e3 : maxChars;
   let body = review;
   if (body.length > effectiveMax) {
-    body = body.slice(0, effectiveMax) + `
+    const truncationMarker = `
 
 ---
 *Review truncated at ${effectiveMax} characters.*`;
+    const effectiveLimit = Math.max(0, effectiveMax - truncationMarker.length);
+    body = body.slice(0, effectiveLimit) + truncationMarker;
   }
   const token = core.getInput("github-token") || process.env.GITHUB_TOKEN;
   const { owner, repo } = import_github.context.repo;
