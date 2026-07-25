@@ -1,0 +1,24 @@
+{
+  "name": "post-check-run",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "root": "packages/post-check-run",
+  "sourceRoot": "packages/post-check-run/src",
+  "targets": {
+    "build": {
+      "executor": "@nx/esbuild:esbuild",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "main": "packages/post-check-run/src/main.ts",
+        "outputPath": "packages/post-check-run/dist",
+        "outputFileName": "main.cjs",
+        "tsConfig": "packages/post-check-run/tsconfig.json",
+        "bundle": true,
+        "platform": "node",
+        "target": "node20",
+        "format": ["cjs"],
+        "thirdParty": true
+      }
+    }
+  }
+}

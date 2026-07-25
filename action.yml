@@ -2,7 +2,9 @@
 name: AI Review
 description: >-
   AI-powered repository reviews using the OpenCode CLI with user-provided
-  models and prompts.
+  models and prompts. The action requires `pull-requests: write` for
+  pull_request events and `checks: write` for non-PR events (push,
+  workflow_dispatch).
 author: 'jander99'
 
 branding:
@@ -13,8 +15,9 @@ inputs:
   # OpenCode version assertion and debug capture are deferred to Phase 4.
   github-token:
     description: >-
-      GITHUB_TOKEN or fine-grained PAT for posting PR comments (falls back to
-      github.token when omitted; requires pull-requests: write permission).
+      GITHUB_TOKEN or fine-grained PAT for posting results (falls back to
+      github.token when omitted). Requires `pull-requests: write` for
+      pull_request events and `checks: write` for non-PR events.
     required: false
   model:
     description: 'OpenCode model in provider/model format.'
@@ -51,8 +54,8 @@ inputs:
     default: 'false'
   post-comment:
     description: >-
-      Post the review as a PR comment. Set to false to only expose outputs
-      without commenting.
+      Post the review as a PR comment (pull_request events only). Set to
+      false to only expose outputs without commenting.
     required: false
     default: 'true'
   max-comment-chars:
@@ -61,6 +64,22 @@ inputs:
       comments to 65536 characters.
     required: false
     default: '65000'
+  check-name:
+    description: 'Name of the check run created on non-PR events.'
+    required: false
+    default: 'ai-review'
+  check-conclusion:
+    description: >-
+      Conclusion of the check run created on non-PR events. One of:
+      success, failure, neutral, cancelled, skipped, timed_out,
+      action_required. Future iterations may derive this from the review
+      severity (deferred).
+    required: false
+    default: 'neutral'
+  check-details-url:
+    description: 'URL linked from the check run details on non-PR events.'
+    required: false
+    default: 'https://github.com'
 
 outputs:
   review:
@@ -68,9 +87,15 @@ outputs:
     value: ${{ steps.run.outputs.review }}
   comment-url:
     description: >-
-      URL of the posted PR comment. Empty when post-comment is false or when
-      permissions were insufficient.
-    value: ${{ steps.post.outputs.comment-url }}
+      URL of the posted PR comment (pull_request events). Empty when
+      post-comment is false, when permissions were insufficient, or on
+      non-PR events.
+    value: ${{ steps.post-comment.outputs.comment-url }}
+  check-run-url:
+    description: >-
+      URL of the created check run (push, workflow_dispatch, and other
+      non-pull_request events). Empty on pull_request events.
+    value: ${{ steps.post-check-run.outputs.check-run-url }}
   models-used:
     description: 'Comma-separated list of models that completed successfully.'
     value: ${{ steps.run.outputs.models-used }}
@@ -105,11 +130,22 @@ runs:
         fail-on-error: ${{ inputs.fail-on-error }}
 
     - name: Post comment
-      if: always()
-      id: post
+      if: always() && github.event_name == 'pull_request'
+      id: post-comment
       uses: ./packages/post-comment
       with:
         github-token: ${{ inputs.github-token || github.token }}
         review: ${{ steps.run.outputs.review }}
         post-comment: ${{ inputs.post-comment }}
         max-comment-chars: ${{ inputs.max-comment-chars }}
+
+    - name: Post check run
+      if: always() && github.event_name != 'pull_request'
+      id: post-check-run
+      uses: ./packages/post-check-run
+      with:
+        github-token: ${{ inputs.github-token || github.token }}
+        review: ${{ steps.run.outputs.review }}
+        name: ${{ inputs.check-name }}
+        conclusion: ${{ inputs.check-conclusion }}
+        details-url: ${{ inputs.check-details-url }}
