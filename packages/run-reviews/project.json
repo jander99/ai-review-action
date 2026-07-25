@@ -17,14 +17,7 @@
         "platform": "node",
         "target": "node20",
         "format": ["cjs"],
-        "thirdParty": true,
-        "assets": [
-          {
-            "input": "packages/run-reviews/prompts",
-            "output": "prompts",
-            "glob": "**/*.md"
-          }
-        ]
+        "thirdParty": true
       }
     }
   }

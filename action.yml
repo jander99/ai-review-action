@@ -1,8 +1,8 @@
 ---
-name: Copilot Review
+name: AI Review
 description: >-
-  AI-powered pull request reviews using the GitHub Copilot CLI, supporting
-  multiple models and prompt strategies.
+  AI-powered repository reviews using the OpenCode CLI with user-provided
+  models and prompts.
 author: 'jander99'
 
 branding:
@@ -10,66 +10,39 @@ branding:
   color: blue
 
 inputs:
+  # OpenCode version assertion and debug capture are deferred to Phase 4.
   github-token:
     description: >-
       GITHUB_TOKEN or fine-grained PAT for posting PR comments (falls back to
       github.token when omitted; requires pull-requests: write permission).
     required: false
-  copilot-token:
-    description: >-
-      Fine-grained PAT with "Copilot Requests" permission. Classic PATs
-      (ghp_) are NOT supported by the Copilot CLI.
-    required: true
-  models:
-    description: >-
-      Comma-separated list of models to run sequentially. Each model is called
-      once per prompt.
+  model:
+    description: 'OpenCode model in provider/model format.'
     required: false
-    default: 'claude-sonnet-4.6'
+    default: 'anthropic/claude-sonnet-4.6'
   prompts:
-    description: >-
-      Comma-separated list of built-in prompt names (code-review,
-      security-review, dependency-review, test-coverage) or workspace-relative
-      file paths to run sequentially.
+    description: 'Comma-separated prompt sources using file: or text: prefixes.'
+    required: true
+  opencode-config:
+    description: 'Path to a user-provided OpenCode config.'
     required: false
-    default: 'code-review'
-  fusion:
-    description: >-
-      Run a synthesis pass combining all individual reviews into one coherent
-      summary.
+  permission:
+    description: 'JSON object defining OpenCode tool permissions.'
+    required: false
+  timeout-minutes:
+    description: 'Timeout for each OpenCode invocation.'
+    required: false
+    default: '30'
+  fail-on-error:
+    description: 'Exit non-zero when any review fails.'
     required: false
     default: 'false'
-  fusion-model:
-    description: >-
-      Single model for the fusion synthesis pass. Inherits first entry of
-      models when empty. Must be a single model name, not a list.
-    required: false
-    default: ''
   post-comment:
     description: >-
       Post the review as a PR comment. Set to false to only expose outputs
       without commenting.
     required: false
     default: 'true'
-  allow-all-tools:
-    description: 'Pass --yolo to copilot CLI (grants full tool access). Default: false'
-    required: false
-    default: 'false'
-  min-prompt-length:
-    description: >-
-      Minimum character length for the PR diff. Reviews are skipped when the
-      diff is smaller than this value. On workflow_dispatch events this guard
-      is bypassed regardless of diff size, so the prompts still run (note:
-      built-in prompts that reference git diff may yield limited output when
-      the diff is empty).
-    required: false
-    default: '50'
-  fail-on-error:
-    description: >-
-      Exit with a non-zero status if all reviews fail. When false (default),
-      the action always exits successfully even if no reviews ran.
-    required: false
-    default: 'false'
   max-comment-chars:
     description: >-
       Truncate the PR comment at this many characters. GitHub hard-limits
@@ -79,9 +52,7 @@ inputs:
 
 outputs:
   review:
-    description: >-
-      Full review text from the last model/prompt combination, or the fusion
-      review if fusion is enabled.
+    description: 'Full review text from the last successful prompt.'
     value: ${{ steps.run.outputs.review }}
   comment-url:
     description: >-
@@ -89,29 +60,33 @@ outputs:
       permissions were insufficient.
     value: ${{ steps.post.outputs.comment-url }}
   models-used:
-    description: >-
-      Comma-separated list of models that completed their reviews successfully.
+    description: 'Comma-separated list of models that completed successfully.'
     value: ${{ steps.run.outputs.models-used }}
+  cost:
+    description: 'Total cost in USD.'
+    value: ${{ steps.run.outputs.cost }}
+  cost-by-model:
+    description: 'JSON object containing cost by model.'
+    value: ${{ steps.run.outputs.cost-by-model }}
+  tokens:
+    description: 'JSON object containing total input and output tokens.'
+    value: ${{ steps.run.outputs.tokens }}
+  tokens-by-model:
+    description: 'JSON object containing token usage by model.'
+    value: ${{ steps.run.outputs.tokens-by-model }}
 
 runs:
   using: composite
   steps:
-    - name: Install Copilot CLI
-      shell: bash
-      run: |
-        npm install -g @github/copilot@1.0.37
-
     - name: Run reviews
       id: run
       uses: ./packages/run-reviews
       with:
-        copilot-token: ${{ inputs.copilot-token }}
-        models: ${{ inputs.models }}
+        model: ${{ inputs.model }}
         prompts: ${{ inputs.prompts }}
-        fusion: ${{ inputs.fusion }}
-        fusion-model: ${{ inputs.fusion-model }}
-        allow-all-tools: ${{ inputs.allow-all-tools }}
-        min-prompt-length: ${{ inputs.min-prompt-length }}
+        opencode-config: ${{ inputs.opencode-config }}
+        permission: ${{ inputs.permission }}
+        timeout-minutes: ${{ inputs.timeout-minutes }}
         fail-on-error: ${{ inputs.fail-on-error }}
 
     - name: Post comment
