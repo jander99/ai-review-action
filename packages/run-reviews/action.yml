@@ -6,6 +6,10 @@ inputs:
     description: 'OpenCode model in provider/model format'
     required: false
     default: 'anthropic/claude-sonnet-4.6'
+  models:
+    description: 'Comma-separated OpenCode models; overrides model when set'
+    required: false
+    default: ''
   prompts:
     description: 'Comma-separated prompt sources using file: or text: prefixes'
     required: true
@@ -19,6 +23,14 @@ inputs:
     description: 'Timeout for each OpenCode invocation'
     required: false
     default: '30'
+  fusion:
+    description: 'Synthesize successful reviews into one result'
+    required: false
+    default: 'false'
+  fusion-model:
+    description: 'Model used for fusion; defaults to the first effective model'
+    required: false
+    default: ''
   fail-on-error:
     description: 'Fail the action when any review fails'
     required: false
@@ -27,7 +39,7 @@ outputs:
   review:
     description: 'The review text output'
   models-used:
-    description: 'Comma-separated list of models used'
+    description: 'Comma-separated list of models that completed successfully'
   cost:
     description: 'Total cost in USD'
   cost-by-model:

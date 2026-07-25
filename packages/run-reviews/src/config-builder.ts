@@ -17,6 +17,24 @@ export interface BuildMergedConfigResult {
   homeDir: string;
 }
 
+export interface BuildFusionConfigOptions {
+  agent: AgentDefinition;
+  model: string;
+  runnerTemp?: string;
+}
+
+const FUSION_PERMISSION: Permission = {
+  read: 'deny',
+  glob: 'deny',
+  grep: 'deny',
+  list: 'deny',
+  webfetch: 'deny',
+  edit: 'deny',
+  question: 'deny',
+  doom_loop: 'deny',
+  bash: 'deny',
+};
+
 function stripJsonComments(source: string): string {
   return source.replace(
     /("(?:\\.|[^"\\])*")|\/\*[\s\S]*?\*\/|\/\/[^\r\n]*/g,
@@ -193,5 +211,27 @@ export function buildMergedConfig(options: BuildMergedConfigOptions): BuildMerge
   const homeDir = path.join(runnerTemp, 'ai-review-opencode-home');
   fs.writeFileSync(configPath, serialized, 'utf8');
   core.info(`Wrote merged OpenCode config: ${configPath}`);
+  return { configPath, homeDir };
+}
+
+export function buildFusionConfig(options: BuildFusionConfigOptions): BuildMergedConfigResult {
+  const synthesisAgent = options.agent.synthesis;
+  if (!synthesisAgent) {
+    throw new Error('Synthesis agent definition is required');
+  }
+
+  const runnerTemp = path.resolve(options.runnerTemp || process.env.RUNNER_TEMP || process.cwd());
+  const configPath = path.join(runnerTemp, 'opencode-fusion.json');
+  const homeDir = path.join(runnerTemp, 'ai-review-opencode-home-fusion');
+  const config = {
+    permission: FUSION_PERMISSION,
+    agent: { synthesis: synthesisAgent },
+    default_agent: 'synthesis',
+    model: options.model,
+  };
+
+  fs.mkdirSync(runnerTemp, { recursive: true });
+  fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+  core.info(`Wrote isolated OpenCode fusion config: ${configPath}`);
   return { configPath, homeDir };
 }

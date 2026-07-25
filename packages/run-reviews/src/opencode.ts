@@ -5,6 +5,7 @@ import type { ReviewResult } from './types';
 export interface InvokeOpenCodeOptions {
   homeDir: string;
   timeoutMinutes?: number;
+  disableTools?: boolean;
 }
 
 interface OpenCodeEvent {
@@ -36,6 +37,19 @@ export function invokeOpenCode(
   }
   env.OPENCODE_CONFIG = configPath;
   env.HOME = options.homeDir;
+  if (options.disableTools) {
+    env.OPENCODE_PERMISSION = JSON.stringify({
+      read: 'deny',
+      glob: 'deny',
+      grep: 'deny',
+      list: 'deny',
+      webfetch: 'deny',
+      edit: 'deny',
+      question: 'deny',
+      doom_loop: 'deny',
+      bash: 'deny',
+    });
+  }
 
   const result = spawnSync('opencode', args, {
     env,

@@ -1,10 +1,15 @@
 import * as core from '@actions/core';
 import { buildAgentDefinition, getEventContext } from './agent-definition';
-import { buildMergedConfig } from './config-builder';
+import { buildFusionConfig, buildMergedConfig } from './config-builder';
+import { composeFusionPrompt, composeLabeledReviews } from './fusion';
 import { invokeOpenCode } from './opencode';
 import { DEFAULT_PERMISSION } from './permissions';
 import { composeTaskPrompt, parsePrompts } from './prompt-composer';
 import type { Permission, PromptEntry, ReviewResult } from './types';
+
+interface IndividualReviewResult extends ReviewResult {
+  prompt: string;
+}
 
 function readPermission(): Permission {
   const input = core.getInput('permission');
@@ -28,30 +33,60 @@ function setEmptyOutputs(): void {
   core.setOutput('tokens-by-model', '{}');
 }
 
+function compareLexically(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 function run(): void {
   const model = core.getInput('model') || 'anthropic/claude-sonnet-4.6';
+  const modelsInput = core.getInput('models');
+  const fusionEnabled = core.getBooleanInput('fusion');
   const failOnError = core.getBooleanInput('fail-on-error');
   const timeoutMinutes = Number.parseInt(core.getInput('timeout-minutes') || '30', 10);
   const userConfig = core.getInput('opencode-config') || undefined;
-  const results: ReviewResult[] = [];
+  const individualResults: IndividualReviewResult[] = [];
+  const accountedResults: ReviewResult[] = [];
+  const successfulModels = new Set<string>();
   const failures: string[] = [];
   let prompts: PromptEntry[];
+  let effectiveModels: string[];
+  let fusionModel: string;
   let configPath: string;
   let homeDir: string;
+  let fusionConfigPath = '';
+  let fusionHomeDir = '';
 
   try {
     if (!Number.isFinite(timeoutMinutes) || timeoutMinutes <= 0) {
       throw new Error('timeout-minutes must be a positive integer');
     }
 
+    const parsedModels = modelsInput
+      ? modelsInput
+          .split(',')
+          .map((entry) => entry.trim())
+          .filter(Boolean)
+      : [model];
+    effectiveModels = [...new Set(parsedModels)];
+    if (effectiveModels.length === 0) {
+      throw new Error('At least one model is required');
+    }
+
+    fusionModel = core.getInput('fusion-model') || effectiveModels[0];
     prompts = parsePrompts(core.getInput('prompts'));
     const agent = buildAgentDefinition(getEventContext());
     ({ configPath, homeDir } = buildMergedConfig({
       userConfig,
       permission: readPermission(),
       agent,
-      model,
+      model: effectiveModels[0],
     }));
+    if (fusionEnabled) {
+      ({ configPath: fusionConfigPath, homeDir: fusionHomeDir } = buildFusionConfig({
+        agent,
+        model: fusionModel,
+      }));
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     setEmptyOutputs();
@@ -59,40 +94,77 @@ function run(): void {
     return;
   }
 
-  for (const prompt of prompts) {
-    try {
-      results.push(
-        invokeOpenCode(composeTaskPrompt([prompt]), model, configPath, {
+  const orderedPrompts = [...prompts].sort((left, right) => compareLexically(left.source, right.source));
+  const orderedModels = [...effectiveModels].sort(compareLexically);
+
+  for (const prompt of orderedPrompts) {
+    for (const currentModel of orderedModels) {
+      core.info(`Running review: ${currentModel} :: ${prompt.source}`);
+      try {
+        const result = invokeOpenCode(composeTaskPrompt([prompt]), currentModel, configPath, {
           homeDir,
           timeoutMinutes,
-        }),
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      failures.push(`${prompt.source}: ${message}`);
-      core.warning(`Review failed for ${prompt.source}: ${message}`);
+        });
+        individualResults.push({ ...result, prompt: prompt.source });
+        accountedResults.push(result);
+        successfulModels.add(currentModel);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        failures.push(`${currentModel} :: ${prompt.source}: ${message}`);
+        core.warning(`Review failed for ${currentModel} :: ${prompt.source}: ${message}`);
+      }
     }
   }
 
-  if (results.length === 0) {
+  let reviewText = composeLabeledReviews(individualResults);
+  if (fusionEnabled && individualResults.length > 0) {
+    core.info(`Running fusion: ${fusionModel}`);
+    try {
+      const fusionResult = invokeOpenCode(
+        composeFusionPrompt(individualResults),
+        fusionModel,
+        fusionConfigPath,
+        {
+          homeDir: fusionHomeDir,
+          timeoutMinutes,
+          disableTools: true,
+        },
+      );
+      accountedResults.push(fusionResult);
+      successfulModels.add(fusionModel);
+      reviewText = fusionResult.text;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      failures.push(`fusion :: ${fusionModel}: ${message}`);
+      core.warning(`Fusion failed for ${fusionModel}; using all successful individual reviews: ${message}`);
+    }
+  }
+
+  if (individualResults.length === 0) {
+    core.warning('All review invocations failed; no review output was generated.');
     setEmptyOutputs();
   } else {
-    const cost = results.reduce((total, result) => total + result.cost, 0);
-    const tokens = results.reduce(
-      (total, result) => ({
-        input: total.input + result.tokens.input,
-        output: total.output + result.tokens.output,
-      }),
-      { input: 0, output: 0 },
-    );
-    const costByModel = { [model]: cost };
-    const tokensByModel = { [model]: tokens };
+    const costByModel: Record<string, number> = {};
+    const tokensByModel: Record<string, { input: number; output: number }> = {};
+    let totalCost = 0;
+    const totalTokens = { input: 0, output: 0 };
 
-    core.setOutput('review', results[results.length - 1].text);
-    core.setOutput('models-used', model);
-    core.setOutput('cost', cost);
+    for (const result of accountedResults) {
+      totalCost += result.cost;
+      totalTokens.input += result.tokens.input;
+      totalTokens.output += result.tokens.output;
+      costByModel[result.model] = (costByModel[result.model] ?? 0) + result.cost;
+      const modelTokens = tokensByModel[result.model] ?? { input: 0, output: 0 };
+      modelTokens.input += result.tokens.input;
+      modelTokens.output += result.tokens.output;
+      tokensByModel[result.model] = modelTokens;
+    }
+
+    core.setOutput('review', reviewText);
+    core.setOutput('models-used', [...successfulModels].join(','));
+    core.setOutput('cost', totalCost);
     core.setOutput('cost-by-model', JSON.stringify(costByModel));
-    core.setOutput('tokens', JSON.stringify(tokens));
+    core.setOutput('tokens', JSON.stringify(totalTokens));
     core.setOutput('tokens-by-model', JSON.stringify(tokensByModel));
   }
 
