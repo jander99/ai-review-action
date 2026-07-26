@@ -16,7 +16,7 @@ inputs:
   opencode-version:
     description: 'OpenCode version expected to already be installed on PATH.'
     required: false
-    default: '1.18.4'
+    default: '1.18.5'
   debug:
     description: 'Capture redacted, gzipped OpenCode stdout and stderr as an artifact.'
     required: false

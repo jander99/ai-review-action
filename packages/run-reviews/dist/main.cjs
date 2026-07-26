@@ -20247,7 +20247,7 @@ function composeTaskPrompt(prompts) {
 }
 
 // packages/run-reviews/src/main.ts
-var DEFAULT_OPENCODE_VERSION = "1.18.4";
+var DEFAULT_OPENCODE_VERSION = "1.18.5";
 var REDACTION_PATTERNS = [
   { pattern: /sk-ant-[A-Za-z0-9._-]+/g, replacement: "[REDACTED]" },
   { pattern: /sk-[A-Za-z0-9._-]+/g, replacement: "[REDACTED]" },

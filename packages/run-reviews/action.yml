@@ -4,7 +4,7 @@ inputs:
   opencode-version:
     description: 'Expected OpenCode version installed on PATH'
     required: false
-    default: '1.18.4'
+    default: '1.18.5'
   debug:
     description: 'Capture, redact, and gzip OpenCode stdout and stderr'
     required: false
