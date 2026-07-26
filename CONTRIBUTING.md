@@ -51,13 +51,17 @@ Use a real Linux x64 release archive and non-production credentials to verify th
 
 Never expose production provider credentials to untrusted pull-request code, and do not use `pull_request_target` as a workaround for fork secret restrictions.
 
+## Why there is no example workflow in this repository
+
+This repository is the action itself. Running the AI Review action in its own CI is a chicken-and-egg problem: the action under test would be reviewing the same workflow that invokes it. The repository ships its own `ci.yml` workflow, which builds every package, runs the type-checker against the workspace, and verifies that committed `dist` bundles match the workspace output. Sample workflows for end users are inlined in the README and copied into the repositories that consume the action.
+
 ## Updating OpenCode
 
 OpenCode behavior is a versioned ABI. To update the supported version:
 
 1. Select the Linux x64 `opencode-linux-x64.tar.gz` release asset from `anomalyco/opencode`.
 2. Download that exact asset and calculate its SHA-256 with `sha256sum opencode-linux-x64.tar.gz`.
-3. Add the new version, asset name, and concrete SHA-256 to the README's **Vetted OpenCode versions** table. Update every README sample and `.github/workflows/example-ai-review.yml` to use that same value.
+3. Add the new version, asset name, and concrete SHA-256 to the README's **Vetted OpenCode versions** table. Update every README sample to use that same value.
 4. Bump the `opencode-version` default in the root `action.yml` and the `version` default in `packages/setup-opencode/action.yml`. Keep the fallbacks and assertions in `packages/setup-opencode/src/main.ts`, `packages/run-reviews/action.yml`, and `packages/run-reviews/src/main.ts` aligned.
 5. Run the installer and ABI smoke tests with the new version and checksum.
 6. Run `yarn build`, type-check every package, and commit synchronized `dist` bundles.
