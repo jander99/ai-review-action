@@ -98,7 +98,10 @@ inputs:
 
 outputs:
   review:
-    description: 'Full review text from the last successful prompt.'
+    description: >-
+      Synthesized review text when fusion is enabled and successful; otherwise
+      all successful individual reviews labeled '<model> :: <prompt>' and
+      separated by '---'. Empty when no reviews succeeded.
     value: ${{ steps.run.outputs.review }}
   comment-url:
     description: >-

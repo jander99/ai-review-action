@@ -13,13 +13,7 @@ AI Review Action runs repository reviews through the OpenCode CLI using provider
 
 ## Quickstart
 
-Create `.github/prompts/code-review.md` in the repository being reviewed:
-
-```markdown
-Review the changes in this pull request. Report actionable findings with file and line references.
-```
-
-Add this workflow, set `ANTHROPIC_API_KEY` as an Actions secret, and set `OPENCODE_1_18_4_SHA256` as an Actions variable containing the SHA-256 of `opencode-linux-x64.tar.gz` from the OpenCode `v1.18.4` release:
+The repository includes a minimal prompt at `examples/prompts/code-review.md`. Configure `ANTHROPIC_API_KEY` as an Actions secret, then add this workflow. It uses the [vetted OpenCode 1.18.4 checksum](#vetted-opencode-versions):
 
 ```yaml
 name: AI Review
@@ -43,18 +37,26 @@ jobs:
       - uses: jander99/ai-review-action/setup-opencode@v1
         with:
           version: 1.18.4
-          checksum: ${{ vars.OPENCODE_1_18_4_SHA256 }}
+          checksum: bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174
 
       # Pin this to the same full commit SHA in production.
       - uses: jander99/ai-review-action@v1
         with:
           model: anthropic/claude-sonnet-4.6
-          prompts: file:.github/prompts/code-review.md
+          prompts: file:examples/prompts/code-review.md
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
 The examples use `@v1` for readability. In production, resolve the `v1` release or tag to its full commit SHA on the repository's Releases or Commits page and use that SHA for both action references, for example `jander99/ai-review-action@<full-commit-sha>`.
+
+### `setup-opencode` inputs
+
+| Input | Required | Default | Description |
+|---|---:|---|---|
+| `version` | No | `1.18.4` | OpenCode version to install. |
+| `checksum` | **Yes** | None | SHA-256 of the selected OpenCode tarball. Use a value from [Vetted OpenCode versions](#vetted-opencode-versions). |
+| `install-dir` | No | `~/.opencode` | Directory where the `opencode` binary is placed. |
 
 ## How it works
 
@@ -138,7 +140,7 @@ OpenCode does not currently provide reliable sub-command allow-lists. `bash: all
 
 | Output | Description |
 |---|---|
-| `review` | Fusion text when fusion succeeds; otherwise all successful individual reviews with model and prompt labels. Empty if every review fails. |
+| `review` | Synthesized text when fusion succeeds; otherwise all successful individual reviews labeled `<model> :: <prompt>` and separated by `---`. Empty when no reviews succeed. |
 | `comment-url` | URL of the posted PR comment. Empty for non-PR events, disabled posting, or unsuccessful posting. |
 | `check-run-url` | URL of the non-PR check run. Empty for PR events or when check-run posting is disabled. |
 | `models-used` | Comma-separated models that completed successfully. |
@@ -152,8 +154,8 @@ OpenCode does not currently provide reliable sub-command allow-lists. `bash: all
 
 The samples below correspond to the design vision's workflows 11.1–11.8. They assume:
 
-- `OPENCODE_1_18_4_SHA256` contains the checksum described in [OpenCode installation](#opencode-installation).
-- Referenced prompt and configuration files are committed to the consuming repository.
+- The vetted `1.18.4` checksum is embedded directly in each setup step.
+- Prompt and configuration files are available under this repository's `examples/` directory; copy them when adapting a sample elsewhere.
 - Referenced provider keys are configured as Actions secrets.
 - `@v1` is replaced with one full action commit SHA for production use.
 
@@ -181,12 +183,12 @@ jobs:
       - uses: jander99/ai-review-action/setup-opencode@v1
         with:
           version: 1.18.4
-          checksum: ${{ vars.OPENCODE_1_18_4_SHA256 }}
+          checksum: bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174
 
       - uses: jander99/ai-review-action@v1
         with:
           model: anthropic/claude-sonnet-4.6
-          prompts: file:.github/prompts/code-review.md
+          prompts: file:examples/prompts/code-review.md
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
@@ -211,12 +213,12 @@ jobs:
       - uses: jander99/ai-review-action/setup-opencode@v1
         with:
           version: 1.18.4
-          checksum: ${{ vars.OPENCODE_1_18_4_SHA256 }}
+          checksum: bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174
 
       - uses: jander99/ai-review-action@v1
         with:
           model: anthropic/claude-sonnet-4.6
-          prompts: file:.github/prompts/code-review.md
+          prompts: file:examples/prompts/code-review.md
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
@@ -245,12 +247,12 @@ jobs:
       - uses: jander99/ai-review-action/setup-opencode@v1
         with:
           version: 1.18.4
-          checksum: ${{ vars.OPENCODE_1_18_4_SHA256 }}
+          checksum: bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174
 
       - uses: jander99/ai-review-action@v1
         with:
           models: "anthropic/claude-sonnet-4.6, openai/gpt-4o"
-          prompts: "file:.github/prompts/code-review.md, file:.github/prompts/security-review.md"
+          prompts: "file:examples/prompts/code-review.md, file:examples/prompts/security-review.md"
           fusion: true
           fusion-model: anthropic/claude-sonnet-4.6
         env:
@@ -260,7 +262,7 @@ jobs:
 
 ### 11.4 User-provided `opencode.json`
 
-Merge a trusted workflow-selected OpenCode configuration while preserving action-required agent, model, provider, and permission settings.
+Merge the trusted `examples/opencode.json` configuration while preserving action-required agent, model, provider, and permission settings. The example uses OpenCode's `{env:GITHUB_TOKEN}` interpolation; the action does not expand `${VAR}` placeholders in user configuration.
 
 ```yaml
 name: AI Review (custom OpenCode config)
@@ -282,14 +284,15 @@ jobs:
       - uses: jander99/ai-review-action/setup-opencode@v1
         with:
           version: 1.18.4
-          checksum: ${{ vars.OPENCODE_1_18_4_SHA256 }}
+          checksum: bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174
 
       - uses: jander99/ai-review-action@v1
         with:
-          opencode-config: ./opencode.json
-          prompts: file:.github/prompts/code-review.md
+          opencode-config: examples/opencode.json
+          prompts: file:examples/prompts/code-review.md
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
 ```
 
 ### 11.5 With skills and MCPs
@@ -316,7 +319,7 @@ jobs:
       - uses: jander99/ai-review-action/setup-opencode@v1
         with:
           version: 1.18.4
-          checksum: ${{ vars.OPENCODE_1_18_4_SHA256 }}
+          checksum: bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174
 
       - name: Install skills
         run: npx -y skills@1 add vercel-labs/agent-skills --agent opencode --yes
@@ -324,9 +327,11 @@ jobs:
       - uses: jander99/ai-review-action@v1
         with:
           models: "anthropic/claude-sonnet-4.6"
-          prompts: file:.github/prompts/code-review.md
+          opencode-config: examples/opencode.json
+          prompts: file:examples/prompts/code-review.md
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
 ```
 
 ### 11.6 Custom provider (MiniMax)
@@ -353,12 +358,12 @@ jobs:
       - uses: jander99/ai-review-action/setup-opencode@v1
         with:
           version: 1.18.4
-          checksum: ${{ vars.OPENCODE_1_18_4_SHA256 }}
+          checksum: bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174
 
       - uses: jander99/ai-review-action@v1
         with:
           model: minimax/minimax-m3
-          prompts: file:.github/prompts/code-review.md
+          prompts: file:examples/prompts/code-review.md
         env:
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
 ```
@@ -387,12 +392,12 @@ jobs:
       - uses: jander99/ai-review-action/setup-opencode@v1
         with:
           version: 1.18.4
-          checksum: ${{ vars.OPENCODE_1_18_4_SHA256 }}
+          checksum: bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174
 
       - uses: jander99/ai-review-action@v1
         with:
           model: anthropic/claude-sonnet-4.6
-          prompts: file:.github/prompts/code-review.md
+          prompts: file:examples/prompts/code-review.md
           debug: true
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -423,12 +428,12 @@ jobs:
       - uses: jander99/ai-review-action/setup-opencode@v1
         with:
           version: 1.18.4
-          checksum: ${{ vars.OPENCODE_1_18_4_SHA256 }}
+          checksum: bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174
 
       - uses: jander99/ai-review-action@v1
         with:
           model: anthropic/claude-sonnet-4.6
-          prompts: file:.github/prompts/repo-review.md
+          prompts: file:examples/prompts/repo-review.md
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
@@ -473,17 +478,15 @@ The installation contract is deliberately explicit:
 4. It hashes the downloaded archive and stops before extraction if the value differs.
 5. After verification, it extracts the binary, installs it atomically, and adds the install directory to `PATH`.
 
-Obtain and independently verify the checksum for the exact archive selected by the workflow. For example, after downloading the `v1.18.4` Linux x64 release asset:
+### Vetted OpenCode versions
 
-```bash
-sha256sum opencode-linux-x64.tar.gz
-```
+Use the checksum below for the exact release asset named in the same row. Every workflow sample in this README pins this value directly.
 
-Store the resulting public value as an Actions variable such as `OPENCODE_1_18_4_SHA256`. Do not reuse a checksum for another version, platform, filename, or rebuilt archive.
+| OpenCode version | Asset | SHA-256 |
+|---|---|---|
+| `1.18.4` | `opencode-linux-x64.tar.gz` | `bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174` |
 
-| Action release line | Expected OpenCode version | Verified asset shape | Checksum contract |
-|---|---:|---|---|
-| `v1` | `1.18.4` | `opencode-linux-x64.tar.gz` | Workflow must supply the SHA-256 of this exact archive |
+This value was computed from the [`v1.18.4` Linux x64 release asset](https://github.com/anomalyco/opencode/releases/download/v1.18.4/opencode-linux-x64.tar.gz). An independent calculation of that exact archive must match the published value. Do not reuse a checksum for another version, platform, filename, or rebuilt archive.
 
 The action itself should also be pinned by full commit SHA in production. The OpenCode archive checksum protects the downloaded runtime; the action commit SHA protects the installer and review logic.
 

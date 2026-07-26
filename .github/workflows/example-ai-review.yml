@@ -23,12 +23,12 @@ jobs:
         uses: jander99/ai-review-action/setup-opencode@v1
         with:
           version: 1.18.4
-          checksum: ${{ vars.OPENCODE_1_18_4_SHA256 }}
+          checksum: bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174
 
       - name: Run reviews
         uses: jander99/ai-review-action@v1
         with:
           model: anthropic/claude-sonnet-4.6
-          prompts: file:.github/prompts/code-review.md
+          prompts: file:examples/prompts/code-review.md
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

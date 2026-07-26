@@ -57,11 +57,10 @@ OpenCode behavior is a versioned ABI. To update the supported version:
 
 1. Select the Linux x64 `opencode-linux-x64.tar.gz` release asset from `anomalyco/opencode`.
 2. Download that exact asset and calculate its SHA-256 with `sha256sum opencode-linux-x64.tar.gz`.
-3. Run the installer and ABI smoke tests with the new version and checksum.
-4. Update version defaults and assertions in the root `action.yml`, `packages/setup-opencode/action.yml`, `packages/setup-opencode/src/main.ts`, `packages/run-reviews/action.yml`, and `packages/run-reviews/src/main.ts`.
-5. Update the README compatibility table, checksum variable names, sample workflows, and `.github/workflows/example-ai-review.yml`.
-6. Add or refresh the versioned contract fixtures described below, recording the exact version, asset, checksum, command, and Linux x64 platform used to capture them.
-7. Run `yarn build`, type-check every package, and commit synchronized `dist` bundles.
+3. Add the new version, asset name, and concrete SHA-256 to the README's **Vetted OpenCode versions** table. Update every README sample and `.github/workflows/example-ai-review.yml` to use that same value.
+4. Bump the `opencode-version` default in the root `action.yml` and the `version` default in `packages/setup-opencode/action.yml`. Keep the fallbacks and assertions in `packages/setup-opencode/src/main.ts`, `packages/run-reviews/action.yml`, and `packages/run-reviews/src/main.ts` aligned.
+5. Run the installer and ABI smoke tests with the new version and checksum.
+6. Run `yarn build`, type-check every package, and commit synchronized `dist` bundles.
 
 A checksum is tied to one exact archive. Never copy a checksum between versions, platforms, filenames, or rebuilt assets.
 
