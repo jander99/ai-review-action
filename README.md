@@ -1,182 +1,534 @@
-# ai-review-action
+# AI Review Action
 
-[![CI](https://github.com/jander99/ai-review-action/actions/workflows/example-ai-review.yml/badge.svg)](https://github.com/jander99/ai-review-action/actions/workflows/example-ai-review.yml)
-
-## Overview
-
-AI-powered pull request reviews using the GitHub Copilot CLI. This action
-supports multi-model evaluations, multi-prompt strategies, and fusion synthesis
-to provide high-quality feedback directly on your pull requests.
-
-## Breaking Changes
-
-The following inputs were changed or removed. Update your workflows accordingly.
-
-| Old Input | New Input | Notes |
-| :--- | :--- | :--- |
-| `model` | `models` | Same value; now accepts comma-separated list for sequential runs. |
-| `prompt` | `prompts` | Inline text removed; use built-in names or workspace-relative file paths. |
-| `prompt-file` | `prompts` | Pass a workspace-relative path as a `prompts` entry. |
-| `allowed-tools` | `allow-all-tools` | Boolean; `true` enables `--yolo` (full tool access), `false` (default) restricts to `shell(git:*)`. |
-| `github-token` | *(optional)* | Now optional; falls back to `github.token` automatically. |
+AI Review Action runs repository reviews through the OpenCode CLI using provider API keys supplied by your workflow. It supports one or many models and prompts, optional fusion, cost and token reporting, PR comments, non-PR check runs, user-composed OpenCode configuration, and opt-in debug capture.
 
 ## Prerequisites
 
-- **GitHub Checkout**: Must use `actions/checkout` with `fetch-depth: 0`.
-  Shallow clones prevent git from generating the full diff needed for reviews.
-- **Fine-grained PAT**: A fine-grained Personal Access Token with
-  "Copilot Requests" permission is required for `copilot-token`. Classic PATs
-  (`ghp_`) are not supported by the Copilot CLI.
-- **Active Subscription**: The user account associated with the PAT must have
-  an active GitHub Copilot subscription.
+- A **Linux x64** runner. macOS, Windows, Linux arm64, and other platforms are not supported.
+- `actions/checkout@v6` with `fetch-depth: 0` so the model can inspect the complete Git history and base ref.
+- `git`, `bash`, `tar`, and Node/npm tooling on `PATH`. `ubuntu-latest` provides these; Node 22+ is recommended when installing skills with `npx`.
+- OpenCode installed by the standalone [`setup-opencode`](#opencode-installation) action with the SHA-256 checksum of the exact release archive.
+- At least one provider credential exposed as an environment variable.
+- A prompt using the `file:` or `text:` prefix.
 
-## Quick Start
+## Quickstart
+
+Create `.github/prompts/code-review.md` in the repository being reviewed:
+
+```markdown
+Review the changes in this pull request. Report actionable findings with file and line references.
+```
+
+Add this workflow, set `ANTHROPIC_API_KEY` as an Actions secret, and set `OPENCODE_1_18_4_SHA256` as an Actions variable containing the SHA-256 of `opencode-linux-x64.tar.gz` from the OpenCode `v1.18.4` release:
 
 ```yaml
-name: Review
-on: [pull_request]
+name: AI Review
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
 
 jobs:
   review:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      # For production, replace v1 with a full ai-review-action commit SHA.
+      - uses: jander99/ai-review-action/setup-opencode@v1
+        with:
+          version: 1.18.4
+          checksum: ${{ vars.OPENCODE_1_18_4_SHA256 }}
+
+      # Pin this to the same full commit SHA in production.
       - uses: jander99/ai-review-action@v1
         with:
-          copilot-token: ${{ secrets.COPILOT_PAT }}
+          model: anthropic/claude-sonnet-4.6
+          prompts: file:.github/prompts/code-review.md
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
+
+The examples use `@v1` for readability. In production, resolve the `v1` release or tag to its full commit SHA on the repository's Releases or Commits page and use that SHA for both action references, for example `jander99/ai-review-action@<full-commit-sha>`.
+
+## How it works
+
+```text
+┌──────────────────────────────────────────────┐
+│ 1. Workflow                                 │
+│ checkout, provider secrets, prompts/config  │
+└──────────────────────┬───────────────────────┘
+                       ▼
+┌──────────────────────────────────────────────┐
+│ 2. setup-opencode                           │
+│ download pinned Linux-x64 archive           │
+│ → verify workflow-supplied SHA-256 → install│
+└──────────────────────┬───────────────────────┘
+                       ▼
+┌──────────────────────────────────────────────┐
+│ 3. AI Review Action                         │
+│ run-reviews                                 │
+│ → post-comment (pull_request)               │
+│ → post-check-run (other events)             │
+└──────────────────────────────────────────────┘
+```
+
+1. The workflow owns checkout, credentials, prompts, skills, MCPs, plugins, and optional user configuration.
+2. `setup-opencode` installs the exact requested OpenCode version only after the supplied archive checksum matches.
+3. `run-reviews` creates an isolated merged configuration and invokes OpenCode for the stable lexical cross-product of prompts and models. The root action then posts a PR comment or check run.
+
+The action does not materialize a diff. It injects event and ref context into the action-owned agent definition, and the model uses Git to decide what to review.
 
 ## Inputs
 
-| Name | Type | Required | Default | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `github-token` | String | No | `github.token` | `GITHUB_TOKEN` or fine-grained PAT for posting PR comments. Falls back to `github.token` when omitted; requires `pull-requests: write` permission. |
-| `copilot-token` | String | Yes | | Fine-grained PAT with "Copilot Requests" permission. Classic PATs (`ghp_`) are NOT supported. |
-| `models` | String | No | `claude-sonnet-4.6` | Comma-separated list of models to run sequentially. Each model is called once per prompt. |
-| `prompts` | String | No | `code-review` | Comma-separated list of built-in prompt names (`code-review`, `security-review`, `dependency-review`, `test-coverage`) or workspace-relative file paths. Runs sequentially. |
-| `fusion` | Boolean | No | `false` | Run a synthesis pass combining all individual reviews into one summary. |
-| `fusion-model` | String | No | first entry of `models` | Single model for the fusion synthesis pass. Must be a single model name, not a list. |
-| `post-comment` | Boolean | No | `true` | Post the review as a PR comment. |
-| `allow-all-tools` | Boolean | No | `false` | Pass `--yolo` to the Copilot CLI, granting full tool access. Use with caution. |
-| `min-prompt-length` | Number | No | `50` | Minimum character length for the PR diff. Reviews are skipped when the diff is smaller than this value. |
-| `fail-on-error` | Boolean | No | `false` | When `true`, exits with a non-zero status if all reviews fail. When `false` (default), the action always exits successfully even if no reviews ran. |
-| `max-comment-chars` | Number | No | `65000` | Truncate the PR comment at this many characters. GitHub hard-limits comments to 65,536 characters. |
+These are all inputs accepted by the root `jander99/ai-review-action` action.
+
+| Input | Required | Default | Description |
+|---|---:|---|---|
+| `opencode-version` | No | `1.18.4` | Exact version expected from `opencode --version`. Installation remains the workflow's responsibility. |
+| `debug` | No | `false` | Capture OpenCode stdout/stderr, apply best-effort redaction, gzip the files, and upload the `ai-review-debug` artifact for 7 days. |
+| `github-token` | No | `${{ github.token }}` | Token used to publish a PR comment or check run. Its permissions must match the event. |
+| `model` | No | `anthropic/claude-sonnet-4.6` | Single OpenCode model in `provider/model` form. Used when `models` is empty. |
+| `models` | No | Empty | Comma-separated OpenCode models. When set, this overrides `model`. |
+| `prompts` | **Yes** | None | Comma-separated prompt sources. Each entry must begin with `file:` or `text:`. |
+| `opencode-config` | No | None | Path to a user-provided `opencode.json` or `opencode.jsonc` to merge into the isolated action configuration. |
+| `permission` | No | [Explicit per-tool defaults](#default-tool-permissions) | JSON object replacing the OpenCode permission block. |
+| `timeout-minutes` | No | `30` | Timeout for each review or fusion invocation. Must be a positive integer. |
+| `fusion` | No | `false` | Run a tool-disabled synthesis pass over successful individual reviews. |
+| `fusion-model` | No | First effective model | Model used for the fusion pass. |
+| `fail-on-error` | No | `false` | Fail the step when any review or fusion operation fails. Setup and validation failures always fail. |
+| `post-comment` | No | `true` | Publish on `pull_request` events. Set to `false` to consume outputs without commenting. |
+| `post-check-run` | No | `true` | Publish on non-PR events. Set to `false` to consume outputs without creating a check run. |
+| `max-comment-chars` | No | `65000` | Maximum PR comment length before truncation. |
+| `check-name` | No | `ai-review` | Name of the check run created for non-PR events. |
+| `check-conclusion` | No | `neutral` | Check conclusion: `action_required`, `cancelled`, `failure`, `neutral`, `success`, `skipped`, `stale`, or `timed_out`. |
+| `check-details-url` | No | `https://github.com` | URL linked from a non-PR check run. |
+
+Prompt entries are parsed prefix-first:
+
+- `file:path` reads a workspace-relative or absolute file.
+- `text:content` uses the literal content after `text:`.
+
+### Default tool permissions
+
+Unless `permission` is supplied, the generated OpenCode configuration uses:
+
+```json
+{
+  "read": "allow",
+  "glob": "allow",
+  "grep": "allow",
+  "list": "allow",
+  "webfetch": "allow",
+  "edit": "ask",
+  "question": "ask",
+  "doom_loop": "ask",
+  "bash": "allow"
+}
+```
+
+OpenCode does not currently provide reliable sub-command allow-lists. `bash: allow` is therefore broad runner access, not a sandbox boundary.
 
 ## Outputs
 
-| Name | Description |
-| :--- | :--- |
-| `review` | Full review text from the last model/prompt or the fusion review. |
-| `comment-url` | URL of the posted PR comment. |
-| `models-used` | Comma-separated list of successful models. |
+| Output | Description |
+|---|---|
+| `review` | Fusion text when fusion succeeds; otherwise all successful individual reviews with model and prompt labels. Empty if every review fails. |
+| `comment-url` | URL of the posted PR comment. Empty for non-PR events, disabled posting, or unsuccessful posting. |
+| `check-run-url` | URL of the non-PR check run. Empty for PR events or when check-run posting is disabled. |
+| `models-used` | Comma-separated models that completed successfully. |
+| `cost` | Total reported cost in USD across successful review and fusion calls. |
+| `cost-by-model` | JSON object mapping each model to its reported USD cost. |
+| `tokens` | JSON object with total `input` and `output` token counts. |
+| `tokens-by-model` | JSON object mapping each model to its `input` and `output` token counts. |
+| `debug-artifact-path` | Runner directory containing redacted, gzipped debug files when `debug: true`. The root action uploads this directory automatically. |
 
-## Examples
+## Sample workflows
 
-### Multi-Model Review
+The samples below correspond to the design vision's workflows 11.1–11.8. They assume:
 
-Run the same review prompt through multiple models and post the results.
+- `OPENCODE_1_18_4_SHA256` contains the checksum described in [OpenCode installation](#opencode-installation).
+- Referenced prompt and configuration files are committed to the consuming repository.
+- Referenced provider keys are configured as Actions secrets.
+- `@v1` is replaced with one full action commit SHA for production use.
 
-```yaml
-- uses: jander99/ai-review-action@v1
-  with:
-    copilot-token: ${{ secrets.COPILOT_PAT }}
-    # Models run sequentially — each model reviews the PR once per prompt.
-    models: "claude-sonnet-4.6, gpt-4o"
-```
+### 11.1 Quickstart (with standalone setup step)
 
-### Custom Prompt File
-
-Use a specialized prompt stored in your repository.
-
-```yaml
-- uses: jander99/ai-review-action@v1
-  with:
-    copilot-token: ${{ secrets.COPILOT_PAT }}
-    prompts: ".github/prompts/performance-review.md"
-```
-
-### Fusion Mode
-
-Synthesize findings from multiple models into one cohesive summary.
+Run one prompt with one Anthropic model and publish the result as a PR comment.
 
 ```yaml
-- uses: jander99/ai-review-action@v1
-  with:
-    copilot-token: ${{ secrets.COPILOT_PAT }}
-    models: "claude-sonnet-4.6, gpt-4o"
-    fusion: true
+name: AI Review
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: jander99/ai-review-action/setup-opencode@v1
+        with:
+          version: 1.18.4
+          checksum: ${{ vars.OPENCODE_1_18_4_SHA256 }}
+
+      - uses: jander99/ai-review-action@v1
+        with:
+          model: anthropic/claude-sonnet-4.6
+          prompts: file:.github/prompts/code-review.md
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
-### All Built-in Prompts
+### 11.2 Default workflow permissions
 
-Enable every built-in review strategy in one pass.
+Omit an explicit workflow `permissions` block and inherit the repository or organization token defaults; comment posting may be unavailable.
 
 ```yaml
-- uses: jander99/ai-review-action@v1
-  with:
-    copilot-token: ${{ secrets.COPILOT_PAT }}
-    prompts: "code-review, security-review, dependency-review, test-coverage"
+name: AI Review (default token permissions)
+on:
+  pull_request:
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: jander99/ai-review-action/setup-opencode@v1
+        with:
+          version: 1.18.4
+          checksum: ${{ vars.OPENCODE_1_18_4_SHA256 }}
+
+      - uses: jander99/ai-review-action@v1
+        with:
+          model: anthropic/claude-sonnet-4.6
+          prompts: file:.github/prompts/code-review.md
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
-## Security Considerations
+### 11.3 Multi-model with fusion
 
-- **Tool Access**: By default, the Copilot agent is restricted to `shell(git:*)`.
-  Setting `allow-all-tools: true` passes `--yolo` to the CLI, granting full tool access to your CI environment. Use with caution.
-- **Trigger Events**: This action **must** use the `pull_request` event. Using
-  `pull_request_target` is a serious security risk as it exposes the
-  `copilot-token` (a fine-grained PAT) to pull requests from forks.
-- **Instruction Injection**: The Copilot CLI automatically loads
-  `.copilot/instructions.md` and `AGENTS.md` from the repository.
-- **Fork Pull Requests**: Comment posting may fail because the default
-  `GITHUB_TOKEN` has read-only scope on pull requests from forks. The action
-  will exit gracefully (Exit 0) in these scenarios.
+Run every prompt against both models, then synthesize the successful results with Claude.
 
-## Troubleshooting
+```yaml
+name: AI Review (multi-model fusion)
+on:
+  pull_request:
 
-- **Copilot CLI not found**: Ensure you haven't overridden the action's internal
-  installation step. The action installs its own dependencies.
-- **403 on comment post**: Verify that your workflow has
-  `pull-requests: write` permission. If using a custom `github-token`, ensure it has that permission.
-- **Empty review output**: The PR diff might be smaller than
-  `min-prompt-length`. Check logs for "diff is smaller than min-prompt-length".
-- **Classic PAT not supported**: If you see authentication errors, ensure
-  `copilot-token` is a fine-grained PAT with "Copilot Requests" permission.
+permissions:
+  contents: read
+  pull-requests: write
 
-## Development
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
-This is an NX monorepo with two TypeScript packages compiled via esbuild.
+      - uses: jander99/ai-review-action/setup-opencode@v1
+        with:
+          version: 1.18.4
+          checksum: ${{ vars.OPENCODE_1_18_4_SHA256 }}
 
-### Structure
-
-```
-ai-review-action/
-├── action.yml                  # Composite action entrypoint
-├── packages/
-│   ├── run-reviews/            # Drives Copilot CLI and collects reviews
-│   │   ├── src/main.ts
-│   │   ├── prompts/            # Built-in prompt files
-│   │   └── dist/main.cjs       # Compiled artifact (committed)
-│   └── post-comment/           # Posts the review as a PR comment
-│       ├── src/main.ts
-│       └── dist/main.cjs       # Compiled artifact (committed)
-├── tsconfig.base.json
-└── nx.json
+      - uses: jander99/ai-review-action@v1
+        with:
+          models: "anthropic/claude-sonnet-4.6, openai/gpt-4o"
+          prompts: "file:.github/prompts/code-review.md, file:.github/prompts/security-review.md"
+          fusion: true
+          fusion-model: anthropic/claude-sonnet-4.6
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 ```
 
-### Building
+### 11.4 User-provided `opencode.json`
+
+Merge a trusted workflow-selected OpenCode configuration while preserving action-required agent, model, provider, and permission settings.
+
+```yaml
+name: AI Review (custom OpenCode config)
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: jander99/ai-review-action/setup-opencode@v1
+        with:
+          version: 1.18.4
+          checksum: ${{ vars.OPENCODE_1_18_4_SHA256 }}
+
+      - uses: jander99/ai-review-action@v1
+        with:
+          opencode-config: ./opencode.json
+          prompts: file:.github/prompts/code-review.md
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+### 11.5 With skills and MCPs
+
+Install a trusted skill before review; MCP servers and plugins can be declared in the file selected by `opencode-config`.
+
+```yaml
+name: AI Review (skills)
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: jander99/ai-review-action/setup-opencode@v1
+        with:
+          version: 1.18.4
+          checksum: ${{ vars.OPENCODE_1_18_4_SHA256 }}
+
+      - name: Install skills
+        run: npx -y skills@1 add vercel-labs/agent-skills --agent opencode --yes
+
+      - uses: jander99/ai-review-action@v1
+        with:
+          models: "anthropic/claude-sonnet-4.6"
+          prompts: file:.github/prompts/code-review.md
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+### 11.6 Custom provider (MiniMax)
+
+Use the built-in MiniMax provider definition by exposing `MINIMAX_API_KEY`.
+
+```yaml
+name: AI Review (MiniMax)
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: jander99/ai-review-action/setup-opencode@v1
+        with:
+          version: 1.18.4
+          checksum: ${{ vars.OPENCODE_1_18_4_SHA256 }}
+
+      - uses: jander99/ai-review-action@v1
+        with:
+          model: minimax/minimax-m3
+          prompts: file:.github/prompts/code-review.md
+        env:
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+```
+
+### 11.7 Debug mode
+
+Upload redacted and gzipped OpenCode JSONL/stderr streams as an `ai-review-debug` workflow artifact.
+
+```yaml
+name: AI Review (debug)
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: jander99/ai-review-action/setup-opencode@v1
+        with:
+          version: 1.18.4
+          checksum: ${{ vars.OPENCODE_1_18_4_SHA256 }}
+
+      - uses: jander99/ai-review-action@v1
+        with:
+          model: anthropic/claude-sonnet-4.6
+          prompts: file:.github/prompts/code-review.md
+          debug: true
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+### 11.8 Push to the default branch
+
+Publish the result as a check run named `ai-review` because no pull request is associated with the event.
+
+```yaml
+name: AI Review (default branch)
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: jander99/ai-review-action/setup-opencode@v1
+        with:
+          version: 1.18.4
+          checksum: ${{ vars.OPENCODE_1_18_4_SHA256 }}
+
+      - uses: jander99/ai-review-action@v1
+        with:
+          model: anthropic/claude-sonnet-4.6
+          prompts: file:.github/prompts/repo-review.md
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+## Required permissions
+
+| Event or mode | Minimum workflow permissions | Publication destination |
+|---|---|---|
+| `pull_request` with posting | `contents: read`, `pull-requests: write` | PR comment |
+| `push`, `workflow_dispatch`, or another non-PR event with posting | `contents: read`, `checks: write` | Check run |
+| Outputs only (`post-comment: false` or `post-check-run: false`) | `contents: read` | None |
+
+Provider API keys are separate from `GITHUB_TOKEN` permissions. Fork pull requests do not receive repository secrets, and GitHub may reduce `GITHUB_TOKEN` to read-only; see [Limitations](#limitations).
+
+## Supported providers
+
+Credentials are environment variables, not action inputs. Native providers are discovered by OpenCode. The action adds built-in configuration for the listed custom providers when their credential environment is present.
+
+| Provider | Integration | Environment variables |
+|---|---|---|
+| Anthropic | OpenCode native | `ANTHROPIC_API_KEY` |
+| OpenAI | OpenCode native | `OPENAI_API_KEY` |
+| Google Gemini | OpenCode native | `GEMINI_API_KEY` |
+| GitHub Copilot through OpenCode | OpenCode native | `GITHUB_TOKEN` with the required Copilot access |
+| MiniMax | Built-in custom provider | `MINIMAX_API_KEY` |
+| Kimi / Moonshot | Built-in custom provider | `KIMI_API_KEY` or `MOONSHOT_API_KEY` |
+| AWS Bedrock | Built-in custom provider | `AWS_BEARER_TOKEN_BEDROCK`, or standard AWS variables such as `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_PROFILE`, or `AWS_WEB_IDENTITY_TOKEN_FILE`; region from `AWS_REGION`/`AWS_DEFAULT_REGION` |
+| Google Vertex Anthropic | Built-in custom provider | `GOOGLE_APPLICATION_CREDENTIALS`; project from `GOOGLE_CLOUD_PROJECT`, `GCLOUD_PROJECT`, or `GCP_PROJECT`; location from `GOOGLE_CLOUD_LOCATION` |
+| Other providers | User-defined through `opencode-config` | Any `{env:USER_DEFINED_VAR}` referenced by that configuration |
+
+For built-in providers, the merged configuration references secrets with OpenCode's `{env:VAR}` syntax rather than embedding key values.
+
+## OpenCode installation
+
+`setup-opencode` is a standalone action and must run before the root action. The root action's `opencode-version` input only asserts the version already installed on `PATH`.
+
+The installation contract is deliberately explicit:
+
+1. The workflow selects an OpenCode version and supplies the SHA-256 checksum.
+2. `setup-opencode` supports **Linux x64 only** and downloads `opencode-linux-x64.tar.gz` from that exact GitHub release.
+3. The action rejects a checksum that is not 64 hexadecimal characters.
+4. It hashes the downloaded archive and stops before extraction if the value differs.
+5. After verification, it extracts the binary, installs it atomically, and adds the install directory to `PATH`.
+
+Obtain and independently verify the checksum for the exact archive selected by the workflow. For example, after downloading the `v1.18.4` Linux x64 release asset:
 
 ```bash
-yarn install
-yarn build             # equivalent to: yarn nx run-many --target=build
+sha256sum opencode-linux-x64.tar.gz
 ```
 
-Each package compiles to `dist/main.cjs` inside its own directory. These artifacts are committed so the action can run without a build step in consuming workflows.
+Store the resulting public value as an Actions variable such as `OPENCODE_1_18_4_SHA256`. Do not reuse a checksum for another version, platform, filename, or rebuilt archive.
 
-### Adding or Editing Prompts
+| Action release line | Expected OpenCode version | Verified asset shape | Checksum contract |
+|---|---:|---|---|
+| `v1` | `1.18.4` | `opencode-linux-x64.tar.gz` | Workflow must supply the SHA-256 of this exact archive |
 
-Built-in prompts live in `packages/run-reviews/prompts/`. Add a `.md` file there and it will be available by name (without the `.md` extension) via the `prompts` input.
+The action itself should also be pinned by full commit SHA in production. The OpenCode archive checksum protects the downloaded runtime; the action commit SHA protects the installer and review logic.
+
+## Security model
+
+There is no application-level sandbox. The workflow author is the trust boundary and decides which code, models, prompts, skills, plugins, MCPs, credentials, and permissions enter the run.
+
+The action's safety posture includes:
+
+- deleting workspace-root `opencode.json` and `opencode.jsonc` before OpenCode starts;
+- placing privileged review instructions in an action-owned agent definition;
+- creating the merged config and isolated OpenCode home under the runner's temporary directory;
+- using explicit per-tool permission defaults and a tool-disabled fusion pass;
+- keeping provider credentials in environment variables rather than action inputs;
+- exposing model-reported cost and token usage;
+- asserting the installed OpenCode version;
+- requiring checksum verification in the standalone installer; and
+- making debug capture opt-in, compressed, short-lived, and redacted on a best-effort basis.
+
+See [SECURITY.md](SECURITY.md) for reporting instructions and the full operational guidance. Detailed design rationale remains in the [design vision](docs/design-vision.md).
+
+## Limitations
+
+- **Environment-key exfiltration:** a model with `bash: allow` can read runner environment variables and may exfiltrate provider keys. Use narrowly scoped credentials and only trusted workflow composition.
+- **No sub-command allow-lists:** OpenCode's permission engine cannot reliably limit Bash to selected commands. The choice is broad Bash access or disabling Bash through the `permission` input.
+- **Fork pull requests:** GitHub does not pass repository secrets to workflows from forks, so provider authentication normally fails. Do not switch to `pull_request_target` to expose secrets to untrusted fork code.
+- Repository instructions such as `AGENTS.md` and skill directories remain visible to the model and can influence it.
+- Debug redaction recognizes known credential patterns only; artifacts can still contain sensitive content.
+- The model decides what Git history and files to review. The action does not verify that a complete or correct review occurred.
+- The bundled installer supports Linux x64 only.
+
+## Documentation
+
+- [Design vision](docs/design-vision.md) — architecture, safety model, runtime contract, and detailed design decisions.
+- [Implementation plan](docs/implementation-plan.md) — phased delivery scope and risk register.
+- [Review questions](docs/review-questions.md) — resolved design questions and the decisions log.
+- [Contributing](CONTRIBUTING.md) — local development, smoke testing, provider changes, and contract-test guidance.
+- [Security policy](SECURITY.md) — trust model, known limitations, supply-chain guarantees, and private reporting.
+
+## Links
+
+- [OpenCode documentation](https://opencode.ai/docs)
+- [OpenCode configuration schema](https://opencode.ai/config.json)
+- [OpenCode releases](https://github.com/anomalyco/opencode/releases)
+- [AI Review Action repository](https://github.com/jander99/ai-review-action)
 
 ## License
 
