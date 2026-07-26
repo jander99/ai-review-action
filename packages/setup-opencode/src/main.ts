@@ -1,4 +1,5 @@
 import * as core from '@actions/core';
+import { spawnSync } from 'child_process';
 import { createHash } from 'crypto';
 import * as fs from 'fs';
 import type { IncomingMessage } from 'http';
@@ -90,21 +91,48 @@ async function run(): Promise<void> {
       throw new Error('checksum must be exactly 64 hexadecimal SHA-256 characters');
     }
 
+    const assetName = 'opencode-linux-x64.tar.gz';
     const downloadUrl =
-      `https://github.com/sst/opencode/releases/download/v${version}/opencode-linux-x64`;
+      `https://github.com/anomalyco/opencode/releases/download/v${version}/${assetName}`;
     const temporaryRoot = process.env.RUNNER_TEMP || os.tmpdir();
     fs.mkdirSync(temporaryRoot, { recursive: true });
     temporaryDirectory = fs.mkdtempSync(path.join(temporaryRoot, 'setup-opencode-'));
-    const downloadedBinary = path.join(temporaryDirectory, 'opencode.download');
+    const downloadedArchive = path.join(temporaryDirectory, assetName);
 
     core.info(`Downloading OpenCode ${version} from ${downloadUrl}`);
-    await downloadFile(downloadUrl, downloadedBinary);
+    await downloadFile(downloadUrl, downloadedArchive);
 
-    const actualChecksum = await calculateSha256(downloadedBinary);
+    const actualChecksum = await calculateSha256(downloadedArchive);
     if (actualChecksum !== expectedChecksum) {
       throw new Error(
         `OpenCode checksum mismatch: expected ${expectedChecksum}, received ${actualChecksum}`,
       );
+    }
+
+    const extractionDirectory = path.join(temporaryDirectory, 'extracted');
+    fs.mkdirSync(extractionDirectory, { mode: 0o700 });
+    const extraction = spawnSync(
+      'tar',
+      ['-xzf', downloadedArchive, '-C', extractionDirectory],
+      {
+        encoding: 'utf8',
+        maxBuffer: 1024 * 1024,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    );
+    if (extraction.error) {
+      throw new Error(`Could not extract OpenCode archive: ${extraction.error.message}`);
+    }
+    if (extraction.status !== 0) {
+      const stderr = typeof extraction.stderr === 'string' ? extraction.stderr.trim() : '';
+      throw new Error(
+        `OpenCode archive extraction failed with status ${extraction.status}${stderr ? `: ${stderr}` : ''}`,
+      );
+    }
+
+    const extractedBinary = path.join(extractionDirectory, 'opencode');
+    if (!fs.existsSync(extractedBinary) || !fs.statSync(extractedBinary).isFile()) {
+      throw new Error("OpenCode archive did not contain the expected 'opencode' binary");
     }
 
     fs.mkdirSync(installDirectory, { recursive: true, mode: 0o755 });
@@ -113,7 +141,7 @@ async function run(): Promise<void> {
       installDirectory,
       `.opencode-${process.pid}-${Date.now().toString(36)}.tmp`,
     );
-    fs.copyFileSync(downloadedBinary, stagedBinary, fs.constants.COPYFILE_EXCL);
+    fs.copyFileSync(extractedBinary, stagedBinary, fs.constants.COPYFILE_EXCL);
     fs.chmodSync(stagedBinary, 0o755);
     fs.renameSync(stagedBinary, installedBinary);
     stagedBinary = undefined;

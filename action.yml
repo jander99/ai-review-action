@@ -2,7 +2,8 @@
 name: AI Review
 description: >-
   AI-powered repository reviews using the OpenCode CLI with user-provided
-  models and prompts. The action requires `pull-requests: write` for
+  models and prompts. OpenCode must be installed first with the standalone
+  setup-opencode action. This action requires `pull-requests: write` for
   pull_request events and `checks: write` for non-PR events (push,
   workflow_dispatch).
 author: 'jander99'
@@ -13,16 +14,9 @@ branding:
 
 inputs:
   opencode-version:
-    description: 'OpenCode version to install and assert.'
+    description: 'OpenCode version expected to already be installed on PATH.'
     required: false
     default: '1.18.4'
-  opencode-checksum:
-    description: 'Required SHA-256 checksum of the pinned OpenCode binary.'
-    required: true
-  opencode-install-dir:
-    description: 'Directory where the opencode binary will be installed.'
-    required: false
-    default: '~/.opencode'
   debug:
     description: 'Capture redacted, gzipped OpenCode stdout and stderr as an artifact.'
     required: false
@@ -30,7 +24,8 @@ inputs:
   github-token:
     description: >-
       GITHUB_TOKEN or fine-grained PAT for posting results (falls back to
-      github.token when omitted). Requires `pull-requests: write` for
+      github.token when omitted). Run setup-opencode as a separate workflow
+      step before this action. Requires `pull-requests: write` for
       pull_request events and `checks: write` for non-PR events.
     required: false
   model:
@@ -138,14 +133,6 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Setup OpenCode
-      id: setup
-      uses: ./packages/setup-opencode
-      with:
-        version: ${{ inputs.opencode-version }}
-        checksum: ${{ inputs.opencode-checksum }}
-        install-dir: ${{ inputs.opencode-install-dir }}
-
     - name: Run reviews
       id: run
       uses: ./packages/run-reviews
@@ -185,7 +172,7 @@ runs:
 
     - name: Upload debug artifact
       if: always() && inputs.debug == 'true'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       with:
         name: ai-review-debug
         path: ${{ steps.run.outputs.debug-artifact-path }}

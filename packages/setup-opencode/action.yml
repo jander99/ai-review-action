@@ -1,12 +1,12 @@
 name: 'Setup OpenCode'
-description: 'Install a pinned OpenCode binary after verifying its SHA-256 checksum'
+description: 'Install a pinned OpenCode release after verifying its SHA-256 checksum'
 inputs:
   version:
     description: 'OpenCode version to install'
     required: false
     default: '1.18.4'
   checksum:
-    description: 'SHA-256 checksum of the OpenCode binary'
+    description: 'SHA-256 checksum of the OpenCode release tarball'
     required: true
   install-dir:
     description: 'Directory where the opencode binary will be installed'

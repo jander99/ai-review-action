@@ -14,10 +14,19 @@ import { composeTaskPrompt, parsePrompts } from './prompt-composer';
 import type { Permission, PromptEntry, ReviewResult } from './types';
 
 const DEFAULT_OPENCODE_VERSION = '1.18.4';
+// Best-effort only: debug artifacts may still contain sensitive data. AWS secret
+// access keys have no tight identifying prefix and cannot be safely pattern-matched.
 const REDACTION_PATTERNS: ReadonlyArray<{ pattern: RegExp; replacement: string }> = [
   { pattern: /sk-ant-[A-Za-z0-9._-]+/g, replacement: '[REDACTED]' },
   { pattern: /sk-[A-Za-z0-9._-]+/g, replacement: '[REDACTED]' },
+  { pattern: /github_pat_[A-Za-z0-9_]+/g, replacement: '[REDACTED]' },
   { pattern: /ghp_[A-Za-z0-9_]+/g, replacement: '[REDACTED]' },
+  { pattern: /ghs_[A-Za-z0-9_]+/g, replacement: '[REDACTED]' },
+  { pattern: /gho_[A-Za-z0-9_]+/g, replacement: '[REDACTED]' },
+  { pattern: /ghr_[A-Za-z0-9_]+/g, replacement: '[REDACTED]' },
+  { pattern: /ghu_[A-Za-z0-9_]+/g, replacement: '[REDACTED]' },
+  { pattern: /AIza[A-Za-z0-9_-]{35}/g, replacement: '[REDACTED]' },
+  { pattern: /AKIA[A-Z0-9]{16}/g, replacement: '[REDACTED]' },
   { pattern: /Bearer\s+[^\s"'`\\]+/gi, replacement: 'Bearer [REDACTED]' },
 ];
 
