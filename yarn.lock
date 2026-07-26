@@ -3618,6 +3618,12 @@ __metadata:
   languageName: node
   linkType: hard
 
+"setup-opencode@workspace:packages/setup-opencode":
+  version: 0.0.0-use.local
+  resolution: "setup-opencode@workspace:packages/setup-opencode"
+  languageName: unknown
+  linkType: soft
+
 "signal-exit@npm:3.0.7, signal-exit@npm:^3.0.2":
   version: 3.0.7
   resolution: "signal-exit@npm:3.0.7"

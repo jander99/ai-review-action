@@ -1,44 +1,62 @@
 name: 'Run Reviews'
-description: 'Run Copilot code reviews on a pull request'
+description: 'Run AI reviews with the OpenCode CLI'
 inputs:
-  copilot-token:
-    description: 'GitHub Copilot token for authentication'
-    required: true
+  opencode-version:
+    description: 'Expected OpenCode version installed on PATH'
+    required: false
+    default: '1.18.4'
+  debug:
+    description: 'Capture, redact, and gzip OpenCode stdout and stderr'
+    required: false
+    default: 'false'
+  model:
+    description: 'OpenCode model in provider/model format'
+    required: false
+    default: 'anthropic/claude-sonnet-4.6'
   models:
-    description: 'Comma-separated list of models to use'
+    description: 'Comma-separated OpenCode models; overrides model when set'
     required: false
-    default: 'claude-sonnet-4.6'
+    default: ''
   prompts:
-    description: 'Comma-separated list of prompts to use'
+    description: 'Comma-separated prompt sources using file: or text: prefixes'
+    required: true
+  opencode-config:
+    description: 'Path to a user-provided OpenCode config'
     required: false
-    default: 'code-review'
+  permission:
+    description: 'JSON object defining OpenCode tool permissions'
+    required: false
+  timeout-minutes:
+    description: 'Timeout for each OpenCode invocation'
+    required: false
+    default: '30'
   fusion:
-    description: 'Whether to run fusion synthesis'
+    description: 'Synthesize successful reviews into one result'
     required: false
     default: 'false'
   fusion-model:
-    description: 'Model to use for fusion synthesis'
+    description: 'Model used for fusion; defaults to the first effective model'
     required: false
     default: ''
-  allow-all-tools:
-    description: 'Whether to allow all tools (--yolo flag)'
-    required: false
-    default: 'false'
-  min-prompt-length:
-    description: 'Minimum diff length to trigger review'
-    required: false
-    default: '50'
   fail-on-error:
-    description: 'Whether to fail if review errors occur'
+    description: 'Fail the action when any review fails'
     required: false
     default: 'false'
 outputs:
   review:
     description: 'The review text output'
-    value: ${{ steps.run.outputs.review }}
   models-used:
-    description: 'Comma-separated list of models used'
-    value: ${{ steps.run.outputs.models-used }}
+    description: 'Comma-separated list of models that completed successfully'
+  cost:
+    description: 'Total cost in USD'
+  cost-by-model:
+    description: 'JSON object containing cost by model'
+  tokens:
+    description: 'JSON object containing total input and output tokens'
+  tokens-by-model:
+    description: 'JSON object containing token usage by model'
+  debug-artifact-path:
+    description: 'Directory containing redacted, gzipped debug output when debug is enabled'
 runs:
   using: node24
   main: dist/main.cjs

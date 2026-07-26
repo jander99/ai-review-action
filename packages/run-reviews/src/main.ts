@@ -1,249 +1,304 @@
 import * as core from '@actions/core';
+import { spawnSync } from 'child_process';
 import * as fs from 'fs';
-import * as path from 'path';
 import * as os from 'os';
-import * as crypto from 'crypto';
-import { execSync, spawnSync } from 'child_process';
+import * as path from 'path';
+import { gzipSync } from 'zlib';
+import { buildAgentDefinition, getEventContext } from './agent-definition';
+import { buildFusionConfig, buildMergedConfig } from './config-builder';
+import { composeFusionPrompt, composeLabeledReviews } from './fusion';
+import { invokeOpenCode } from './opencode';
+import type { DebugCapturePaths } from './opencode';
+import { DEFAULT_PERMISSION } from './permissions';
+import { composeTaskPrompt, parsePrompts } from './prompt-composer';
+import type { Permission, PromptEntry, ReviewResult } from './types';
 
-function appendUniqueModel(models: string[], candidate: string): void {
-  if (!models.includes(candidate)) {
-    models.push(candidate);
-  }
-}
+const DEFAULT_OPENCODE_VERSION = '1.18.4';
+// Best-effort only: debug artifacts may still contain sensitive data. AWS secret
+// access keys have no tight identifying prefix and cannot be safely pattern-matched.
+const REDACTION_PATTERNS: ReadonlyArray<{ pattern: RegExp; replacement: string }> = [
+  { pattern: /sk-ant-[A-Za-z0-9._-]+/g, replacement: '[REDACTED]' },
+  { pattern: /sk-[A-Za-z0-9._-]+/g, replacement: '[REDACTED]' },
+  { pattern: /github_pat_[A-Za-z0-9_]+/g, replacement: '[REDACTED]' },
+  { pattern: /ghp_[A-Za-z0-9_]+/g, replacement: '[REDACTED]' },
+  { pattern: /ghs_[A-Za-z0-9_]+/g, replacement: '[REDACTED]' },
+  { pattern: /gho_[A-Za-z0-9_]+/g, replacement: '[REDACTED]' },
+  { pattern: /ghr_[A-Za-z0-9_]+/g, replacement: '[REDACTED]' },
+  { pattern: /ghu_[A-Za-z0-9_]+/g, replacement: '[REDACTED]' },
+  { pattern: /AIza[A-Za-z0-9_-]{35}/g, replacement: '[REDACTED]' },
+  { pattern: /AKIA[A-Z0-9]{16}/g, replacement: '[REDACTED]' },
+  { pattern: /Bearer\s+[^\s"'`\\]+/gi, replacement: 'Bearer [REDACTED]' },
+];
 
-function isWithinWorkspace(filePath: string, workspace: string): boolean {
-  try {
-    const realFile = fs.realpathSync(filePath);
-    const realWorkspace = fs.realpathSync(workspace);
-    return realFile === realWorkspace || realFile.startsWith(`${realWorkspace}${path.sep}`);
-  } catch {
-    return false;
-  }
-}
-
-(async () => {
-  try {
-    execSync('copilot --version', { stdio: 'pipe' });
-  } catch {
-    core.setFailed('copilot CLI not found');
-    process.exit(1);
-  }
-
-  let noCustomFlag = '';
-  try {
-    const helpOut = execSync('copilot help', { stdio: 'pipe' }).toString();
-    if (helpOut.includes('no-custom-instructions')) {
-      noCustomFlag = '--no-custom-instructions';
-    } else {
-      core.warning('--no-custom-instructions flag not found; AGENTS.md injection protection unavailable');
-    }
-  } catch {
-    // ignore
-  }
-
-  let yoloSupported = false;
-  try {
-    const helpOut = execSync('copilot help', { stdio: ['pipe', 'pipe', 'pipe'] }).toString();
-    if (helpOut.includes('--yolo')) {
-      yoloSupported = true;
-    }
-  } catch {
-    // ignore
-  }
-
-  const allowAllTools = core.getInput('allow-all-tools') === 'true';
-  const copilotToken = core.getInput('copilot-token');
-  let toolFlags: string[];
-  if (allowAllTools) {
-    if (yoloSupported) {
-      toolFlags = ['--yolo'];
-    } else {
-      core.warning('--yolo not supported; falling back to --allow-tool="shell(git:*)"');
-      toolFlags = ['--allow-tool=shell(git:*)'];
-    }
-  } else {
-    toolFlags = ['--allow-tool=shell(git:*)'];
-  }
-
-  const rawModels = core.getInput('models') || 'claude-sonnet-4.6';
-  const modelsList = rawModels
-    .split(',')
-    .map((model) => model.trim())
-    .filter(Boolean);
-  if (modelsList.length === 0) {
-    core.setFailed('No models specified');
-    process.exit(1);
-  }
-
-  const actionPath = path.resolve(__dirname, '..');
-  const workspaceRoot = path.resolve(process.env.GITHUB_WORKSPACE || '/github/workspace');
-  const rawPrompts = core.getInput('prompts') || 'code-review';
-  const promptFiles: string[] = [];
-
-  for (const entry of rawPrompts.split(',').map((value) => value.trim()).filter(Boolean)) {
-    const name = entry.replace(/\.md$/, '');
-    const builtinPath = path.join(actionPath, 'prompts', `${name}.md`);
-    if (fs.existsSync(builtinPath)) {
-      promptFiles.push(builtinPath);
-    } else {
-      const resolved = path.resolve(workspaceRoot, entry);
-      if (!isWithinWorkspace(resolved, workspaceRoot)) {
-        core.warning(`prompt path '${entry}' is outside workspace`);
-        continue;
-      }
-      if (!fs.existsSync(resolved)) {
-        core.warning(`prompt '${entry}' is neither a built-in nor an existing file; skipping`);
-        continue;
-      }
-      promptFiles.push(resolved);
-    }
-  }
-
-  if (promptFiles.length === 0) {
-    promptFiles.push(path.join(actionPath, 'prompts', 'code-review.md'));
-  }
-
-  let baseSha = process.env.GITHUB_BASE_SHA;
-  if (!baseSha && process.env.GITHUB_EVENT_PATH) {
-    try {
-      const event = JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
-      baseSha = event?.pull_request?.base?.sha;
-    } catch {
-      // ignore
-    }
-  }
-  const baseRef = process.env.GITHUB_BASE_REF || 'main';
-  const gitRef = baseSha || `origin/${baseRef}`;
-  let prDiffLen = 0;
-  try {
-    const diff = execSync(`git diff ${gitRef}...HEAD`, { stdio: ['pipe', 'pipe', 'pipe'] });
-    prDiffLen = diff.length;
-  } catch {
-    core.warning('git diff failed; check that fetch-depth: 0 is set in actions/checkout.');
-  }
-
-  const rawMin = core.getInput('min-prompt-length') || '50';
-  const minLen = /^\d+$/.test(rawMin) ? parseInt(rawMin, 10) : 50;
-  if (!/^\d+$/.test(rawMin)) {
-    core.warning(`min-prompt-length '${rawMin}' is not a valid integer; using default 50.`);
-  }
-
-  if (prDiffLen < minLen) {
-    if (process.env.GITHUB_EVENT_NAME === 'workflow_dispatch') {
-      core.info(
-        `PR diff (${prDiffLen} chars) is below min-prompt-length (${minLen}); bypassing guard for workflow_dispatch event. Note: prompts referencing git diff may yield limited output.`,
-      );
-    } else {
-      core.info(`PR diff (${prDiffLen} chars) is smaller than min-prompt-length (${minLen}); skipping review.`);
-      core.setOutput('review', '');
-      core.setOutput('models-used', '');
-      process.exit(0);
-    }
-  }
-
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-review-'));
-  let lastReviewFile = '';
-  const allReviewFiles: string[] = [];
-  const succeededModels: string[] = [];
-
-  process.on('exit', () => {
-    try {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    } catch {
-      // ignore
-    }
+function assertOpenCodeVersion(expectedVersion: string): void {
+  const result = spawnSync('opencode', ['--version'], {
+    encoding: 'utf8',
+    maxBuffer: 1024 * 1024,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 10_000,
   });
+  const stdout = typeof result.stdout === 'string' ? result.stdout.trim() : '';
+  const stderr = typeof result.stderr === 'string' ? result.stderr.trim() : '';
 
-  for (const promptFile of promptFiles) {
-    const promptSlug = path.basename(promptFile).replace(/\.md$/, '');
-    const promptContent = fs.readFileSync(promptFile, 'utf8');
+  if (result.error) {
+    throw new Error(`could not execute 'opencode --version': ${result.error.message}`);
+  }
+  if (result.status !== 0) {
+    throw new Error(
+      `'opencode --version' exited with status ${result.status}${stderr ? `: ${stderr}` : ''}`,
+    );
+  }
 
-    for (const model of modelsList) {
-      const outputFile = path.join(tmpDir, `review-${crypto.randomBytes(4).toString('hex')}.txt`);
-      const modelSlug = model.replace(/\//g, '-');
+  const reportedVersion = stdout || stderr;
+  const versionMatch = reportedVersion.match(/v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)/);
+  const installedVersion = (versionMatch?.[1] ?? reportedVersion.replace(/^v/, '')).trim();
+  const normalizedExpectedVersion = expectedVersion.replace(/^v/, '');
+  if (!installedVersion || installedVersion !== normalizedExpectedVersion) {
+    throw new Error(
+      `expected OpenCode ${normalizedExpectedVersion}, but 'opencode --version' reported '${reportedVersion || '<empty>'}'`,
+    );
+  }
+}
 
-      core.info(`Running review: model=${model} prompt=${promptSlug} output=${modelSlug}`);
+function createDebugDirectory(): string {
+  const temporaryRoot = process.env.RUNNER_TEMP || os.tmpdir();
+  fs.mkdirSync(temporaryRoot, { recursive: true });
+  const debugDirectory = fs.mkdtempSync(path.join(temporaryRoot, 'ai-review-debug-'));
+  fs.chmodSync(debugDirectory, 0o700);
+  return debugDirectory;
+}
 
-      const args = ['-p', promptContent, '-s', '--no-ask-user', ...toolFlags, '--model', model];
-      if (noCustomFlag) {
-        args.push(noCustomFlag);
-      }
+function createDebugCapturePaths(
+  directory: string,
+  invocation: number,
+  kind: 'review' | 'fusion',
+  model: string,
+): DebugCapturePaths {
+  const safeModel = model.replace(/[^A-Za-z0-9._-]+/g, '-').slice(0, 80) || 'unknown-model';
+  const prefix = `${invocation.toString().padStart(3, '0')}-${kind}-${safeModel}`;
+  return {
+    stdoutPath: path.join(directory, `${prefix}.stdout.jsonl`),
+    stderrPath: path.join(directory, `${prefix}.stderr.log`),
+  };
+}
 
+function redactDebugOutput(output: string): string {
+  return REDACTION_PATTERNS.reduce(
+    (redacted, { pattern, replacement }) => redacted.replace(pattern, replacement),
+    output,
+  );
+}
+
+function finalizeDebugDirectory(directory: string): void {
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    if (!entry.isFile() || entry.name.endsWith('.gz')) {
+      continue;
+    }
+    const rawPath = path.join(directory, entry.name);
+    const redacted = redactDebugOutput(fs.readFileSync(rawPath, 'utf8'));
+    fs.writeFileSync(`${rawPath}.gz`, gzipSync(redacted), { mode: 0o600 });
+    fs.rmSync(rawPath, { force: true });
+  }
+}
+
+interface IndividualReviewResult extends ReviewResult {
+  prompt: string;
+}
+
+function readPermission(): Permission {
+  const input = core.getInput('permission');
+  if (!input) {
+    return { ...DEFAULT_PERMISSION };
+  }
+
+  const parsed = JSON.parse(input) as unknown;
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('permission must be a JSON object');
+  }
+  return parsed as Permission;
+}
+
+function setEmptyOutputs(): void {
+  core.setOutput('review', '');
+  core.setOutput('models-used', '');
+  core.setOutput('cost', 0);
+  core.setOutput('cost-by-model', '{}');
+  core.setOutput('tokens', JSON.stringify({ input: 0, output: 0 }));
+  core.setOutput('tokens-by-model', '{}');
+}
+
+function compareLexically(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function run(): void {
+  const expectedOpenCodeVersion = core.getInput('opencode-version') || DEFAULT_OPENCODE_VERSION;
+  try {
+    assertOpenCodeVersion(expectedOpenCodeVersion);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    setEmptyOutputs();
+    core.setFailed(`OpenCode version assertion failed: ${message}`);
+    return;
+  }
+
+  const model = core.getInput('model') || 'anthropic/claude-sonnet-4.6';
+  const modelsInput = core.getInput('models');
+  const fusionEnabled = core.getBooleanInput('fusion');
+  const failOnError = core.getBooleanInput('fail-on-error');
+  const debugEnabled = core.getBooleanInput('debug');
+  const timeoutMinutes = Number.parseInt(core.getInput('timeout-minutes') || '30', 10);
+  const userConfig = core.getInput('opencode-config') || undefined;
+  const individualResults: IndividualReviewResult[] = [];
+  const accountedResults: ReviewResult[] = [];
+  const successfulModels = new Set<string>();
+  const failures: string[] = [];
+  let prompts: PromptEntry[];
+  let effectiveModels: string[];
+  let fusionModel: string;
+  let configPath: string;
+  let homeDir: string;
+  let fusionConfigPath = '';
+  let fusionHomeDir = '';
+  let debugDirectory = '';
+  let debugInvocation = 0;
+
+  try {
+    if (!Number.isFinite(timeoutMinutes) || timeoutMinutes <= 0) {
+      throw new Error('timeout-minutes must be a positive integer');
+    }
+
+    const parsedModels = modelsInput
+      ? modelsInput
+          .split(',')
+          .map((entry) => entry.trim())
+          .filter(Boolean)
+      : [model];
+    effectiveModels = [...new Set(parsedModels)];
+    if (effectiveModels.length === 0) {
+      throw new Error('At least one model is required');
+    }
+
+    fusionModel = core.getInput('fusion-model') || effectiveModels[0];
+    prompts = parsePrompts(core.getInput('prompts'));
+    const agent = buildAgentDefinition(getEventContext());
+    ({ configPath, homeDir } = buildMergedConfig({
+      userConfig,
+      permission: readPermission(),
+      agent,
+      model: effectiveModels[0],
+    }));
+    if (fusionEnabled) {
+      ({ configPath: fusionConfigPath, homeDir: fusionHomeDir } = buildFusionConfig({
+        agent,
+        model: fusionModel,
+      }));
+    }
+    if (debugEnabled) {
+      debugDirectory = createDebugDirectory();
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    setEmptyOutputs();
+    core.setFailed(`Review setup failed: ${message}`);
+    return;
+  }
+
+  const orderedPrompts = [...prompts].sort((left, right) => compareLexically(left.source, right.source));
+  const orderedModels = [...effectiveModels].sort(compareLexically);
+
+  for (const prompt of orderedPrompts) {
+    for (const currentModel of orderedModels) {
+      core.info(`Running review: ${currentModel} :: ${prompt.source}`);
       try {
-        const result = spawnSync('copilot', args, {
-          env: {
-            ...process.env,
-            COPILOT_AUTO_UPDATE: 'false',
-            COPILOT_GITHUB_TOKEN: copilotToken,
-          },
-          stdio: ['pipe', 'pipe', 'pipe'],
-          maxBuffer: 50 * 1024 * 1024,
-          encoding: 'buffer',
+        const result = invokeOpenCode(composeTaskPrompt([prompt]), currentModel, configPath, {
+          homeDir,
+          timeoutMinutes,
+          debugCapture: debugEnabled
+            ? createDebugCapturePaths(debugDirectory, ++debugInvocation, 'review', currentModel)
+            : undefined,
         });
-        if (result.error || result.status !== 0) {
-          throw result.error || new Error(`exit ${result.status}`);
-        }
-        fs.writeFileSync(outputFile, result.stdout);
-        appendUniqueModel(succeededModels, model);
-        allReviewFiles.push(outputFile);
-        lastReviewFile = outputFile;
-      } catch {
-        core.warning(`Review failed for model=${model} prompt=${promptSlug}`);
+        individualResults.push({ ...result, prompt: prompt.source });
+        accountedResults.push(result);
+        successfulModels.add(currentModel);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        failures.push(`${currentModel} :: ${prompt.source}: ${message}`);
+        core.warning(`Review failed for ${currentModel} :: ${prompt.source}: ${message}`);
       }
     }
   }
 
-  if (!lastReviewFile) {
-    core.warning('All reviews failed; no output generated.');
-    core.setOutput('review', '');
-    core.setOutput('models-used', '');
-    if (core.getInput('fail-on-error') === 'true') {
-      core.setFailed('fail-on-error is true');
-      process.exit(1);
-    }
-    process.exit(0);
-  }
-
-  if (core.getInput('fusion') === 'true' && succeededModels.length > 0) {
-    const fusionInputFile = path.join(tmpDir, 'fusion-prompt.txt');
-    const fusionOutputFile = path.join(tmpDir, 'fusion-output.txt');
-
-    let fusionPrompt =
-      'You are synthesizing multiple AI code reviews into one coherent review.\nDeduplicate findings, prioritize by severity, and write a clear summary.\n\n';
-    for (const file of allReviewFiles) {
-      fusionPrompt += `---\n${fs.readFileSync(file, 'utf8')}\n`;
-    }
-    fs.writeFileSync(fusionInputFile, fusionPrompt);
-
-    const fusionModel = core.getInput('fusion-model') || modelsList[0];
-    const fusionArgs = ['-p', fusionPrompt, '-s', '--no-ask-user', ...toolFlags, '--model', fusionModel];
-    if (noCustomFlag) {
-      fusionArgs.push(noCustomFlag);
-    }
-
+  let reviewText = composeLabeledReviews(individualResults);
+  if (fusionEnabled && individualResults.length > 0) {
+    core.info(`Running fusion: ${fusionModel}`);
     try {
-      const fusionResult = spawnSync('copilot', fusionArgs, {
-        env: {
-          ...process.env,
-          COPILOT_AUTO_UPDATE: 'false',
-          COPILOT_GITHUB_TOKEN: copilotToken,
+      const fusionResult = invokeOpenCode(
+        composeFusionPrompt(individualResults),
+        fusionModel,
+        fusionConfigPath,
+        {
+          homeDir: fusionHomeDir,
+          timeoutMinutes,
+          disableTools: true,
+          debugCapture: debugEnabled
+            ? createDebugCapturePaths(debugDirectory, ++debugInvocation, 'fusion', fusionModel)
+            : undefined,
         },
-        stdio: ['pipe', 'pipe', 'pipe'],
-        maxBuffer: 50 * 1024 * 1024,
-        encoding: 'buffer',
-      });
-      if (fusionResult.error || fusionResult.status !== 0) {
-        throw fusionResult.error || new Error(`exit ${fusionResult.status}`);
-      }
-      fs.writeFileSync(fusionOutputFile, fusionResult.stdout);
-      lastReviewFile = fusionOutputFile;
-    } catch {
-      core.warning('Fusion pass failed; using last individual review.');
+      );
+      accountedResults.push(fusionResult);
+      successfulModels.add(fusionModel);
+      reviewText = fusionResult.text;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      failures.push(`fusion :: ${fusionModel}: ${message}`);
+      core.warning(`Fusion failed for ${fusionModel}; using all successful individual reviews: ${message}`);
     }
   }
 
-  const reviewText = fs.readFileSync(lastReviewFile, 'utf8');
-  core.setOutput('review', reviewText);
-  core.setOutput('models-used', succeededModels.join(','));
-  core.exportVariable('REVIEW_FILE', lastReviewFile);
-})();
+  if (individualResults.length === 0) {
+    core.warning('All review invocations failed; no review output was generated.');
+    setEmptyOutputs();
+  } else {
+    const costByModel: Record<string, number> = {};
+    const tokensByModel: Record<string, { input: number; output: number }> = {};
+    let totalCost = 0;
+    const totalTokens = { input: 0, output: 0 };
+
+    for (const result of accountedResults) {
+      totalCost += result.cost;
+      totalTokens.input += result.tokens.input;
+      totalTokens.output += result.tokens.output;
+      costByModel[result.model] = (costByModel[result.model] ?? 0) + result.cost;
+      const modelTokens = tokensByModel[result.model] ?? { input: 0, output: 0 };
+      modelTokens.input += result.tokens.input;
+      modelTokens.output += result.tokens.output;
+      tokensByModel[result.model] = modelTokens;
+    }
+
+    core.setOutput('review', reviewText);
+    core.setOutput('models-used', [...successfulModels].join(','));
+    core.setOutput('cost', totalCost);
+    core.setOutput('cost-by-model', JSON.stringify(costByModel));
+    core.setOutput('tokens', JSON.stringify(totalTokens));
+    core.setOutput('tokens-by-model', JSON.stringify(tokensByModel));
+  }
+
+  if (debugEnabled) {
+    try {
+      finalizeDebugDirectory(debugDirectory);
+      core.setOutput('debug-artifact-path', debugDirectory);
+    } catch (error) {
+      fs.rmSync(debugDirectory, { recursive: true, force: true });
+      const message = error instanceof Error ? error.message : String(error);
+      core.setFailed(`Failed to create redacted debug artifact: ${message}`);
+      return;
+    }
+  }
+
+  if (failures.length > 0 && failOnError) {
+    core.setFailed(`${failures.length} review operation(s) failed`);
+  }
+}
+
+run();

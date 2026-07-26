@@ -21,7 +21,9 @@ import { Octokit } from '@octokit/rest';
 
   let body = review;
   if (body.length > effectiveMax) {
-    body = body.slice(0, effectiveMax) + `\n\n---\n*Review truncated at ${effectiveMax} characters.*`;
+    const truncationMarker = `\n\n---\n*Review truncated at ${effectiveMax} characters.*`;
+    const effectiveLimit = Math.max(0, effectiveMax - truncationMarker.length);
+    body = body.slice(0, effectiveLimit) + truncationMarker;
   }
 
   const token = core.getInput('github-token') || process.env.GITHUB_TOKEN;

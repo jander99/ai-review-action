@@ -1,0 +1,29 @@
+name: 'Post Check Run'
+description: 'Create a check run with the review text as the summary'
+inputs:
+  github-token:
+    description: 'GitHub token with checks: write permission'
+    required: true
+    default: ${{ github.token }}
+  review:
+    description: 'Review text to include as the check run summary'
+    required: true
+  name:
+    description: 'Name of the check run'
+    required: false
+    default: 'ai-review'
+  conclusion:
+    description: 'Conclusion of the check run (success, failure, neutral, cancelled, skipped, timed_out, action_required)'
+    required: false
+    default: 'neutral'
+  details-url:
+    description: 'URL to link from the check run details'
+    required: false
+    default: 'https://github.com'
+outputs:
+  check-run-url:
+    description: 'URL of the created check run'
+    value: ${{ steps.post.outputs.check-run-url }}
+runs:
+  using: node24
+  main: dist/main.cjs
