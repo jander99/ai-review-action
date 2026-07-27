@@ -19890,7 +19890,7 @@ async function run() {
         `setup-opencode supports only linux-x64 runners; received ${process.platform}-${process.arch}`
       );
     }
-    const version = core.getInput("version") || "1.18.4";
+    const version = core.getInput("version") || "1.18.5";
     const expectedChecksum = core.getInput("checksum", { required: true }).toLowerCase();
     const installDirectory = resolveInstallDirectory(
       core.getInput("install-dir") || "~/.opencode"

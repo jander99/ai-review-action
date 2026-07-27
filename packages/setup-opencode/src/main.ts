@@ -78,7 +78,7 @@ async function run(): Promise<void> {
       );
     }
 
-    const version = core.getInput('version') || '1.18.4';
+    const version = core.getInput('version') || '1.18.5';
     const expectedChecksum = core.getInput('checksum', { required: true }).toLowerCase();
     const installDirectory = resolveInstallDirectory(
       core.getInput('install-dir') || '~/.opencode',

@@ -13,7 +13,7 @@ AI Review Action runs repository reviews through the OpenCode CLI using provider
 
 ## Quickstart
 
-The repository includes a minimal prompt at `examples/prompts/code-review.md`. Configure `ANTHROPIC_API_KEY` as an Actions secret, then add this workflow. It uses the [vetted OpenCode 1.18.4 checksum](#vetted-opencode-versions):
+The repository includes a minimal prompt at `examples/prompts/code-review.md`. Configure `ANTHROPIC_API_KEY` as an Actions secret, then add this workflow. It uses the [vetted OpenCode 1.18.5 checksum](#vetted-opencode-versions):
 
 ```yaml
 name: AI Review
@@ -36,8 +36,8 @@ jobs:
       # For production, replace v1 with a full ai-review-action commit SHA.
       - uses: jander99/ai-review-action/setup-opencode@v1
         with:
-          version: 1.18.4
-          checksum: bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174
+          version: 1.18.5
+          checksum: cd4a2557a3d6550f27cb5c0257ebe8d73388bb34beda8b6121e6428a74c1eae2
 
       # Pin this to the same full commit SHA in production.
       - uses: jander99/ai-review-action@v1
@@ -54,7 +54,7 @@ The examples use `@v1` for readability. In production, resolve the `v1` release 
 
 | Input | Required | Default | Description |
 |---|---:|---|---|
-| `version` | No | `1.18.4` | OpenCode version to install. |
+| `version` | No | `1.18.5` | OpenCode version to install. |
 | `checksum` | **Yes** | None | SHA-256 of the selected OpenCode tarball. Use a value from [Vetted OpenCode versions](#vetted-opencode-versions). |
 | `install-dir` | No | `~/.opencode` | Directory where the `opencode` binary is placed. |
 
@@ -92,7 +92,7 @@ These are all inputs accepted by the root `jander99/ai-review-action` action.
 
 | Input | Required | Default | Description |
 |---|---:|---|---|
-| `opencode-version` | No | `1.18.4` | Exact version expected from `opencode --version`. Installation remains the workflow's responsibility. |
+| `opencode-version` | No | `1.18.5` | Exact version expected from `opencode --version`. Installation remains the workflow's responsibility. |
 | `debug` | No | `false` | Capture OpenCode stdout/stderr, apply best-effort redaction, gzip the files, and upload the `ai-review-debug` artifact for 7 days. |
 | `github-token` | No | `${{ github.token }}` | Token used to publish a PR comment or check run. Its permissions must match the event. |
 | `model` | No | `anthropic/claude-sonnet-4.6` | Single OpenCode model in `provider/model` form. Used when `models` is empty. |
@@ -154,7 +154,7 @@ OpenCode does not currently provide reliable sub-command allow-lists. `bash: all
 
 The samples below correspond to the design vision's workflows 11.1–11.8. They assume:
 
-- The vetted `1.18.4` checksum is embedded directly in each setup step.
+- The vetted `1.18.5` checksum is embedded directly in each setup step.
 - Prompt and configuration files are available under this repository's `examples/` directory; copy them when adapting a sample elsewhere.
 - Referenced provider keys are configured as Actions secrets.
 - `@v1` is replaced with one full action commit SHA for production use.
@@ -182,8 +182,8 @@ jobs:
 
       - uses: jander99/ai-review-action/setup-opencode@v1
         with:
-          version: 1.18.4
-          checksum: bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174
+          version: 1.18.5
+          checksum: cd4a2557a3d6550f27cb5c0257ebe8d73388bb34beda8b6121e6428a74c1eae2
 
       - uses: jander99/ai-review-action@v1
         with:
@@ -212,8 +212,8 @@ jobs:
 
       - uses: jander99/ai-review-action/setup-opencode@v1
         with:
-          version: 1.18.4
-          checksum: bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174
+          version: 1.18.5
+          checksum: cd4a2557a3d6550f27cb5c0257ebe8d73388bb34beda8b6121e6428a74c1eae2
 
       - uses: jander99/ai-review-action@v1
         with:
@@ -246,8 +246,8 @@ jobs:
 
       - uses: jander99/ai-review-action/setup-opencode@v1
         with:
-          version: 1.18.4
-          checksum: bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174
+          version: 1.18.5
+          checksum: cd4a2557a3d6550f27cb5c0257ebe8d73388bb34beda8b6121e6428a74c1eae2
 
       - uses: jander99/ai-review-action@v1
         with:
@@ -283,8 +283,8 @@ jobs:
 
       - uses: jander99/ai-review-action/setup-opencode@v1
         with:
-          version: 1.18.4
-          checksum: bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174
+          version: 1.18.5
+          checksum: cd4a2557a3d6550f27cb5c0257ebe8d73388bb34beda8b6121e6428a74c1eae2
 
       - uses: jander99/ai-review-action@v1
         with:
@@ -318,8 +318,8 @@ jobs:
 
       - uses: jander99/ai-review-action/setup-opencode@v1
         with:
-          version: 1.18.4
-          checksum: bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174
+          version: 1.18.5
+          checksum: cd4a2557a3d6550f27cb5c0257ebe8d73388bb34beda8b6121e6428a74c1eae2
 
       - name: Install skills
         run: npx -y skills@1 add vercel-labs/agent-skills --agent opencode --yes
@@ -357,8 +357,8 @@ jobs:
 
       - uses: jander99/ai-review-action/setup-opencode@v1
         with:
-          version: 1.18.4
-          checksum: bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174
+          version: 1.18.5
+          checksum: cd4a2557a3d6550f27cb5c0257ebe8d73388bb34beda8b6121e6428a74c1eae2
 
       - uses: jander99/ai-review-action@v1
         with:
@@ -391,8 +391,8 @@ jobs:
 
       - uses: jander99/ai-review-action/setup-opencode@v1
         with:
-          version: 1.18.4
-          checksum: bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174
+          version: 1.18.5
+          checksum: cd4a2557a3d6550f27cb5c0257ebe8d73388bb34beda8b6121e6428a74c1eae2
 
       - uses: jander99/ai-review-action@v1
         with:
@@ -427,8 +427,8 @@ jobs:
 
       - uses: jander99/ai-review-action/setup-opencode@v1
         with:
-          version: 1.18.4
-          checksum: bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174
+          version: 1.18.5
+          checksum: cd4a2557a3d6550f27cb5c0257ebe8d73388bb34beda8b6121e6428a74c1eae2
 
       - uses: jander99/ai-review-action@v1
         with:
@@ -484,9 +484,9 @@ Use the checksum below for the exact release asset named in the same row. Every 
 
 | OpenCode version | Asset | SHA-256 |
 |---|---|---|
-| `1.18.4` | `opencode-linux-x64.tar.gz` | `bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174` |
+| `1.18.5` | `opencode-linux-x64.tar.gz` | `cd4a2557a3d6550f27cb5c0257ebe8d73388bb34beda8b6121e6428a74c1eae2` |
 
-This value was computed from the [`v1.18.4` Linux x64 release asset](https://github.com/anomalyco/opencode/releases/download/v1.18.4/opencode-linux-x64.tar.gz). An independent calculation of that exact archive must match the published value. Do not reuse a checksum for another version, platform, filename, or rebuilt archive.
+This value was computed from the [`v1.18.5` Linux x64 release asset](https://github.com/anomalyco/opencode/releases/download/v1.18.5/opencode-linux-x64.tar.gz). An independent calculation of that exact archive must match the published value. Do not reuse a checksum for another version, platform, filename, or rebuilt archive.
 
 The action itself should also be pinned by full commit SHA in production. The OpenCode archive checksum protects the downloaded runtime; the action commit SHA protects the installer and review logic.
 

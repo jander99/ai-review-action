@@ -13,7 +13,7 @@ import { DEFAULT_PERMISSION } from './permissions';
 import { composeTaskPrompt, parsePrompts } from './prompt-composer';
 import type { Permission, PromptEntry, ReviewResult } from './types';
 
-const DEFAULT_OPENCODE_VERSION = '1.18.4';
+const DEFAULT_OPENCODE_VERSION = '1.18.5';
 // Best-effort only: debug artifacts may still contain sensitive data. AWS secret
 // access keys have no tight identifying prefix and cannot be safely pattern-matched.
 const REDACTION_PATTERNS: ReadonlyArray<{ pattern: RegExp; replacement: string }> = [

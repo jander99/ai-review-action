@@ -66,7 +66,7 @@ jobs:
 
       - uses: jander99/ai-review-action/setup-opencode@v1
         with:
-          version: 1.18.4
+          version: 1.18.5
           checksum: <sha256-of-installer>
 
       - uses: jander99/ai-review-action@v1
@@ -170,7 +170,7 @@ The action has three pieces:
 OpenCode's permission engine is **all-or-nothing at the tool level**: the
 flat `{ "bash": "allow" }` shape works, but nested shapes like
 `{ "git *": "allow", "*": "deny" }` deny the tool entirely (verified on
-1.18.4). Sub-command allow-lists do not work.
+1.18.5). Sub-command allow-lists do not work.
 
 The action's generated `opencode.json` defaults to **explicit per-tool
 permissions**:
@@ -224,7 +224,7 @@ first, then models) so the same inputs always produce the same output.
 ### 6.4 Cost and tokens surfaced in outputs
 
 `opencode run --format json` emits `step_finish` events with `tokens` and
-`cost` per call (verified in OpenCode 1.18.4). The action parses JSONL,
+`cost` per call (verified in OpenCode 1.18.5). The action parses JSONL,
 aggregates, and surfaces cost and token usage in outputs (see 7.2).
 
 ### 6.5 Runtime responsibility split — workflow installs, action asserts
@@ -339,7 +339,7 @@ the review. Downstream workflows can gate on it.
 
 | Input | Default | Description |
 |---|---|---|
-| `version` | `1.18.4` | OpenCode version to install. The step fails if it can't install exactly this version. |
+| `version` | `1.18.5` | OpenCode version to install. The step fails if it can't install exactly this version. |
 | `checksum` | *(required)* | SHA-256 of the OpenCode installer. The step verifies the installer before running it. |
 | `install-dir` | `~/.opencode` | Where to place the `opencode` binary. |
 
@@ -359,7 +359,7 @@ README maintains a table of vetted versions and their checksums.
 | `prompts` | *(required)* | Comma-separated prompt sources with `file:` or `text:` prefix. See 7.4. |
 | `opencode-config` | *(none)* | Path to a user-provided `opencode.json`/`.jsonc`. Merged into the action's config. |
 | `permission` | *(see 6.1)* | JSON string for the `permission` block. |
-| `opencode-version` | `1.18.4` | Version assertion. The action fails fast if the installed binary doesn't match. |
+| `opencode-version` | `1.18.5` | Version assertion. The action fails fast if the installed binary doesn't match. |
 | `timeout-minutes` | `30` | Per-call timeout. |
 | `fusion` | `false` | Run a synthesis pass (see 6.9). |
 | `fusion-model` | *(first model)* | Single model for fusion. |
@@ -531,7 +531,7 @@ the JSONL output.
 | Prompt | Positional argument. Task prompt from `prompts:`. |
 | Agent | Loaded from the merged config (privileged instructions). |
 | Model | `--model provider/model` flag, one invocation per model × prompt. |
-| Format | `--format json` emits JSONL events. Verified in 1.18.4 — `step_finish` arrives with full `tokens` and `cost`. |
+| Format | `--format json` emits JSONL events. Verified in 1.18.5 — `step_finish` arrives with full `tokens` and `cost`. |
 | Config | `$RUNNER_TEMP/opencode.json` via `OPENCODE_CONFIG` env var. Built by the action (7.6). |
 | HOME | Set to a temp dir to isolate from `$HOME/.config/opencode/opencode.json`. |
 | Env vars | Per-provider API keys (see §9). |
@@ -700,7 +700,7 @@ jobs:
 
       - uses: jander99/ai-review-action/setup-opencode@v1
         with:
-          version: 1.18.4
+          version: 1.18.5
           checksum: <sha256>
 
       - uses: jander99/ai-review-action@v1
@@ -723,7 +723,7 @@ steps:
 
   - uses: jander99/ai-review-action/setup-opencode@v1
     with:
-      version: 1.18.4
+      version: 1.18.5
       checksum: <sha256>
 
   - uses: jander99/ai-review-action@v1
@@ -753,7 +753,7 @@ jobs:
 
       - uses: jander99/ai-review-action/setup-opencode@v1
         with:
-          version: 1.18.4
+          version: 1.18.5
           checksum: <sha256>
 
       - uses: jander99/ai-review-action@v1
@@ -783,7 +783,7 @@ jobs:
 
       - uses: jander99/ai-review-action/setup-opencode@v1
         with:
-          version: 1.18.4
+          version: 1.18.5
           checksum: <sha256>
 
       - uses: jander99/ai-review-action@v1
@@ -810,7 +810,7 @@ jobs:
 
       - uses: jander99/ai-review-action/setup-opencode@v1
         with:
-          version: 1.18.4
+          version: 1.18.5
           checksum: <sha256>
 
       - name: Install skills
@@ -840,7 +840,7 @@ jobs:
 
       - uses: jander99/ai-review-action/setup-opencode@v1
         with:
-          version: 1.18.4
+          version: 1.18.5
           checksum: <sha256>
 
       - uses: jander99/ai-review-action@v1
@@ -860,7 +860,7 @@ steps:
 
   - uses: jander99/ai-review-action/setup-opencode@v1
     with:
-      version: 1.18.4
+      version: 1.18.5
       checksum: <sha256>
 
   - uses: jander99/ai-review-action@v1
@@ -894,7 +894,7 @@ jobs:
 
       - uses: jander99/ai-review-action/setup-opencode@v1
         with:
-          version: 1.18.4
+          version: 1.18.5
           checksum: <sha256>
 
       - uses: jander99/ai-review-action@v1
@@ -941,7 +941,7 @@ public-model fallback) is an open design discussion.
 
 ### 12.6 Contract tests for "verified" ABI
 
-Every "verified in 1.18.4" claim in this document is the action's brittle
+Every "verified in 1.18.5" claim in this document is the action's brittle
 ABI. A pinned test fixture (CLI invocation → expected JSONL shape) per
 claim catches version drift. Implementation work, not design.
 
