@@ -28,6 +28,10 @@ interface OpenCodeEvent {
   };
 }
 
+function stripThinkBlocks(text: string): string {
+  return text.replace(/<think>[\s\S]*?<\/think>/g, '');
+}
+
 export function invokeOpenCode(
   prompt: string,
   model: string,
@@ -93,10 +97,16 @@ export function invokeOpenCode(
     if (event.type === 'text') {
       const value = event.text ?? event.part?.text;
       if (value) {
-        text.push(value);
+        const cleaned = stripThinkBlocks(value);
+        if (cleaned.trim()) {
+          text.push(cleaned);
+        }
       }
     } else if (event.part?.type === 'text' && event.part.text) {
-      text.push(event.part.text);
+      const cleaned = stripThinkBlocks(event.part.text);
+      if (cleaned.trim()) {
+        text.push(cleaned);
+      }
     }
 
     if (event.type === 'step_finish' || event.part?.type === 'step_finish') {

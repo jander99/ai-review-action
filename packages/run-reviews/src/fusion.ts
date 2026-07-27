@@ -23,7 +23,9 @@ function fusionSection(review: FusionReview): string {
 }
 
 export function sanitizeForFusion(text: string): string {
-  return text.replace(/```[\s\S]*?```/g, (block) => (INJECTION_PATTERN.test(block) ? '' : block));
+  return text
+    .replace(/<think>[\s\S]*?<\/think>/g, '')
+    .replace(/```[\s\S]*?```/g, (block) => (INJECTION_PATTERN.test(block) ? '' : block));
 }
 
 export function composeLabeledReviews(reviews: FusionReview[]): string {
