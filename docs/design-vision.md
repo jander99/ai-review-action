@@ -64,7 +64,7 @@ jobs:
       - uses: actions/checkout@v6
         with: { fetch-depth: 0 }
 
-      - uses: jander99/ai-review-action/setup-opencode@v1
+      - uses: jander99/ai-review-action/packages/setup-opencode@v1
         with:
           version: 1.18.5
           checksum: <sha256-of-installer>
@@ -698,7 +698,7 @@ jobs:
       - uses: actions/checkout@v6
         with: { fetch-depth: 0 }
 
-      - uses: jander99/ai-review-action/setup-opencode@v1
+      - uses: jander99/ai-review-action/packages/setup-opencode@v1
         with:
           version: 1.18.5
           checksum: <sha256>
@@ -721,7 +721,7 @@ steps:
   - uses: actions/checkout@v6
     with: { fetch-depth: 0 }
 
-  - uses: jander99/ai-review-action/setup-opencode@v1
+  - uses: jander99/ai-review-action/packages/setup-opencode@v1
     with:
       version: 1.18.5
       checksum: <sha256>
@@ -751,7 +751,7 @@ jobs:
       - uses: actions/checkout@v6
         with: { fetch-depth: 0 }
 
-      - uses: jander99/ai-review-action/setup-opencode@v1
+      - uses: jander99/ai-review-action/packages/setup-opencode@v1
         with:
           version: 1.18.5
           checksum: <sha256>
@@ -781,7 +781,7 @@ jobs:
       - uses: actions/checkout@v6
         with: { fetch-depth: 0 }
 
-      - uses: jander99/ai-review-action/setup-opencode@v1
+      - uses: jander99/ai-review-action/packages/setup-opencode@v1
         with:
           version: 1.18.5
           checksum: <sha256>
@@ -808,7 +808,7 @@ jobs:
       - uses: actions/checkout@v6
         with: { fetch-depth: 0 }
 
-      - uses: jander99/ai-review-action/setup-opencode@v1
+      - uses: jander99/ai-review-action/packages/setup-opencode@v1
         with:
           version: 1.18.5
           checksum: <sha256>
@@ -838,7 +838,7 @@ jobs:
       - uses: actions/checkout@v6
         with: { fetch-depth: 0 }
 
-      - uses: jander99/ai-review-action/setup-opencode@v1
+      - uses: jander99/ai-review-action/packages/setup-opencode@v1
         with:
           version: 1.18.5
           checksum: <sha256>
@@ -858,7 +858,7 @@ steps:
   - uses: actions/checkout@v6
     with: { fetch-depth: 0 }
 
-  - uses: jander99/ai-review-action/setup-opencode@v1
+  - uses: jander99/ai-review-action/packages/setup-opencode@v1
     with:
       version: 1.18.5
       checksum: <sha256>
@@ -892,7 +892,7 @@ jobs:
       - uses: actions/checkout@v6
         with: { fetch-depth: 0 }
 
-      - uses: jander99/ai-review-action/setup-opencode@v1
+      - uses: jander99/ai-review-action/packages/setup-opencode@v1
         with:
           version: 1.18.5
           checksum: <sha256>
