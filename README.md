@@ -34,7 +34,7 @@ jobs:
           fetch-depth: 0
 
       # For production, replace v1 with a full ai-review-action commit SHA.
-      - uses: jander99/ai-review-action/setup-opencode@v1
+      - uses: jander99/ai-review-action/packages/setup-opencode@v1
         with:
           version: 1.18.5
           checksum: cd4a2557a3d6550f27cb5c0257ebe8d73388bb34beda8b6121e6428a74c1eae2
@@ -180,7 +180,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: jander99/ai-review-action/setup-opencode@v1
+      - uses: jander99/ai-review-action/packages/setup-opencode@v1
         with:
           version: 1.18.5
           checksum: cd4a2557a3d6550f27cb5c0257ebe8d73388bb34beda8b6121e6428a74c1eae2
@@ -210,7 +210,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: jander99/ai-review-action/setup-opencode@v1
+      - uses: jander99/ai-review-action/packages/setup-opencode@v1
         with:
           version: 1.18.5
           checksum: cd4a2557a3d6550f27cb5c0257ebe8d73388bb34beda8b6121e6428a74c1eae2
@@ -244,7 +244,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: jander99/ai-review-action/setup-opencode@v1
+      - uses: jander99/ai-review-action/packages/setup-opencode@v1
         with:
           version: 1.18.5
           checksum: cd4a2557a3d6550f27cb5c0257ebe8d73388bb34beda8b6121e6428a74c1eae2
@@ -281,7 +281,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: jander99/ai-review-action/setup-opencode@v1
+      - uses: jander99/ai-review-action/packages/setup-opencode@v1
         with:
           version: 1.18.5
           checksum: cd4a2557a3d6550f27cb5c0257ebe8d73388bb34beda8b6121e6428a74c1eae2
@@ -316,7 +316,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: jander99/ai-review-action/setup-opencode@v1
+      - uses: jander99/ai-review-action/packages/setup-opencode@v1
         with:
           version: 1.18.5
           checksum: cd4a2557a3d6550f27cb5c0257ebe8d73388bb34beda8b6121e6428a74c1eae2
@@ -355,7 +355,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: jander99/ai-review-action/setup-opencode@v1
+      - uses: jander99/ai-review-action/packages/setup-opencode@v1
         with:
           version: 1.18.5
           checksum: cd4a2557a3d6550f27cb5c0257ebe8d73388bb34beda8b6121e6428a74c1eae2
@@ -389,7 +389,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: jander99/ai-review-action/setup-opencode@v1
+      - uses: jander99/ai-review-action/packages/setup-opencode@v1
         with:
           version: 1.18.5
           checksum: cd4a2557a3d6550f27cb5c0257ebe8d73388bb34beda8b6121e6428a74c1eae2
@@ -425,7 +425,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: jander99/ai-review-action/setup-opencode@v1
+      - uses: jander99/ai-review-action/packages/setup-opencode@v1
         with:
           version: 1.18.5
           checksum: cd4a2557a3d6550f27cb5c0257ebe8d73388bb34beda8b6121e6428a74c1eae2
