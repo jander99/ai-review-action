@@ -28,8 +28,54 @@ interface OpenCodeEvent {
   };
 }
 
-function stripThinkBlocks(text: string): string {
-  return text.replace(/<think>[\s\S]*?<\/think>/g, '');
+// The heading boundary (below) is the parser's primary defense: anything the
+// model emits before `# PR #N Review — <title>` is sliced off, so reasoning
+// blocks, tool-call XML, and other model-internal markup never reach the PR
+// comment. The orphan-tag regex is a small safety net for the cross-event
+// case where a closing tag (e.g. `</think>`) lands in the same text region
+// as the heading and ends up after the boundary slice. Keep the patterns in
+// sync with the equivalents in `fusion.ts`.
+const ORPHAN_TAG_PATTERN =
+  /<\/?(?:think|tool_call|tool_result|mm:think)>|<!--|-->/g;
+
+// Parser boundary: the prompt contract requires the review body to begin with
+// `# PR #N Review — <title>`. Walks the text line by line so we can skip any
+// heading that appears inside a fenced code block, then returns the heading
+// line and everything after. Returns `null` if no valid heading exists outside
+// a fence.
+const HEADING_LINE_PATTERN = /^# PR #\d+ Review\b/;
+const FENCE_LINE_PATTERN = /^```/;
+
+function findHeadingBoundary(text: string): string | null {
+  const lines = text.split('\n');
+  let fenceOpen = false;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (FENCE_LINE_PATTERN.test(line)) {
+      fenceOpen = !fenceOpen;
+      continue;
+    }
+    if (fenceOpen) {
+      continue;
+    }
+    if (HEADING_LINE_PATTERN.test(line)) {
+      return lines.slice(i).join('\n');
+    }
+  }
+  return null;
+}
+
+// Process the joined text from all stream events: strip orphan tags as a
+// safety net, then slice from the heading boundary if present. If no heading
+// is found, return the orphan-stripped text so a model that forgot the
+// contract still publishes something usable.
+function processReviewText(text: string): string {
+  const stripped = text.replace(ORPHAN_TAG_PATTERN, '');
+  const boundary = findHeadingBoundary(stripped);
+  if (boundary !== null) {
+    return boundary.replace(ORPHAN_TAG_PATTERN, '');
+  }
+  return stripped;
 }
 
 export function invokeOpenCode(
@@ -97,16 +143,10 @@ export function invokeOpenCode(
     if (event.type === 'text') {
       const value = event.text ?? event.part?.text;
       if (value) {
-        const cleaned = stripThinkBlocks(value);
-        if (cleaned.trim()) {
-          text.push(cleaned);
-        }
+        text.push(value);
       }
     } else if (event.part?.type === 'text' && event.part.text) {
-      const cleaned = stripThinkBlocks(event.part.text);
-      if (cleaned.trim()) {
-        text.push(cleaned);
-      }
+      text.push(event.part.text);
     }
 
     if (event.type === 'step_finish' || event.part?.type === 'step_finish') {
@@ -118,7 +158,7 @@ export function invokeOpenCode(
   }
 
   return {
-    text: text.join(''),
+    text: processReviewText(text.join('')),
     tokens: { input: inputTokens, output: outputTokens },
     cost,
     model,

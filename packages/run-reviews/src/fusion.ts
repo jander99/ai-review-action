@@ -14,6 +14,39 @@ const INJECTION_PATTERN =
 const REVIEW_SEPARATOR = '\n\n---\n\n';
 const LABEL_LIMIT = 200;
 
+// Keep in sync with `ORPHAN_TAG_PATTERN` in `opencode.ts` - the fusion
+// synthesizer must never see reasoning or tool-call XML. The heading
+// boundary (below) is the primary defense; the orphan-tag regex is a
+// safety net for tags that end up after the boundary slice.
+const FUSION_ORPHAN_TAG_PATTERN =
+  /<\/?(?:think|tool_call|tool_result|mm:think)>|<!--|-->/g;
+
+// Parser boundary: keep in sync with the helpers in `opencode.ts`. The line
+// walk lets us skip any heading that appears inside a fenced code block, and
+// the heading must use the literal word `Review` so it cannot be satisfied by
+// an attacker-controlled line.
+const FUSION_HEADING_LINE_PATTERN = /^# PR #\d+ Review\b/;
+const FUSION_FENCE_LINE_PATTERN = /^```/;
+
+function fusionFindHeadingBoundary(text: string): string | null {
+  const lines = text.split('\n');
+  let fenceOpen = false;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (FUSION_FENCE_LINE_PATTERN.test(line)) {
+      fenceOpen = !fenceOpen;
+      continue;
+    }
+    if (fenceOpen) {
+      continue;
+    }
+    if (FUSION_HEADING_LINE_PATTERN.test(line)) {
+      return lines.slice(i).join('\n');
+    }
+  }
+  return null;
+}
+
 function fusionLabel(review: FusionReview): string {
   return `${review.model} :: ${review.prompt}`.slice(0, LABEL_LIMIT);
 }
@@ -23,9 +56,18 @@ function fusionSection(review: FusionReview): string {
 }
 
 export function sanitizeForFusion(text: string): string {
-  return text
-    .replace(/<think>[\s\S]*?<\/think>/g, '')
-    .replace(/```[\s\S]*?```/g, (block) => (INJECTION_PATTERN.test(block) ? '' : block));
+  // Apply the heading boundary *before* the fence-injection check so a model
+  // that puts the heading inside a code fence does not get the fence (and
+  // the heading inside it) stripped before we have a chance to use the
+  // heading as an anchor.
+  const stripped = text.replace(FUSION_ORPHAN_TAG_PATTERN, '');
+  const boundary = fusionFindHeadingBoundary(stripped);
+  const anchored = boundary !== null
+    ? boundary.replace(FUSION_ORPHAN_TAG_PATTERN, '')
+    : stripped;
+  return anchored.replace(/```[\s\S]*?```/g, (block) =>
+    INJECTION_PATTERN.test(block) ? '' : block,
+  );
 }
 
 export function composeLabeledReviews(reviews: FusionReview[]): string {

@@ -229,7 +229,16 @@ function run(): void {
     }
   }
 
-  let reviewText = composeLabeledReviews(individualResults);
+  // When fusion is disabled, a single review path does not need the
+  // `## <model> :: <prompt>` wrapper — the prompt contract requires the
+  // review body to start with the `# PR #N Review — <title>` heading, and
+  // the wrapper would prepend metadata above it. Multi-review runs keep the
+  // wrapper so each section can be attributed to its source.
+  const reviewNeedsLabelWrapper =
+    fusionEnabled || individualResults.length !== 1;
+  let reviewText = reviewNeedsLabelWrapper
+    ? composeLabeledReviews(individualResults)
+    : individualResults[0].text;
   if (fusionEnabled && individualResults.length > 0) {
     core.info(`Running fusion: ${fusionModel}`);
     try {
