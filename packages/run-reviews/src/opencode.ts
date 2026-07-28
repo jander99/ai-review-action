@@ -49,12 +49,28 @@ const NOISE_BLOCK_PATTERNS: ReadonlyArray<RegExp> = [
 const ORPHON_TAG_PATTERN =
   /<\/?(?:think|tool_call|tool_result|mm:think)>|<!--|-->/g;
 
+// Parser boundary: the prompt contract requires the review body to begin with
+// `# PR #N Review — <title>`. Everything before that heading is internal
+// scratch (reasoning, tool calls, planning narration, verification steps) and
+// is discarded regardless of whether the noise-strip tags matched. This also
+// makes the per-event paired-block strip a safety net instead of a primary
+// defense — cross-event split blocks no longer leak reasoning payloads.
+const HEADING_BOUNDARY_PATTERN = /^# PR #\d+\b.*$/m;
+
 function stripNoiseBlocks(text: string): string {
   let result = text;
   for (const pattern of NOISE_BLOCK_PATTERNS) {
     result = result.replace(pattern, '');
   }
   return result.replace(ORPHON_TAG_PATTERN, '');
+}
+
+function findHeadingBoundary(text: string): string {
+  const match = HEADING_BOUNDARY_PATTERN.exec(text);
+  if (!match) {
+    return text;
+  }
+  return text.slice(match.index);
 }
 
 export function invokeOpenCode(
@@ -143,7 +159,7 @@ export function invokeOpenCode(
   }
 
   return {
-    text: text.join(''),
+    text: findHeadingBoundary(text.join('')),
     tokens: { input: inputTokens, output: outputTokens },
     cost,
     model,

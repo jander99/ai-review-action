@@ -20075,6 +20075,7 @@ var FUSION_NOISE_PATTERNS = [
   /<tool_result>[\s\S]*?<\/tool_result>/g
 ];
 var FUSION_ORPHON_TAG_PATTERN = /<\/?(?:think|tool_call|tool_result|mm:think)>|<!--|-->/g;
+var FUSION_HEADING_BOUNDARY_PATTERN = /^# PR #\d+\b.*$/m;
 function fusionLabel(review) {
   return `${review.model} :: ${review.prompt}`.slice(0, LABEL_LIMIT);
 }
@@ -20089,10 +20090,15 @@ function sanitizeForFusion(text) {
     sanitized = sanitized.replace(pattern, "");
   }
   sanitized = sanitized.replace(FUSION_ORPHON_TAG_PATTERN, "");
-  return sanitized.replace(
+  sanitized = sanitized.replace(
     /```[\s\S]*?```/g,
     (block) => INJECTION_PATTERN.test(block) ? "" : block
   );
+  const boundary = FUSION_HEADING_BOUNDARY_PATTERN.exec(sanitized);
+  if (boundary) {
+    sanitized = sanitized.slice(boundary.index);
+  }
+  return sanitized;
 }
 function composeLabeledReviews(reviews) {
   return reviews.map(fusionSection).join(REVIEW_SEPARATOR);
@@ -20144,12 +20150,20 @@ var NOISE_BLOCK_PATTERNS = [
   /<tool_result>[\s\S]*?<\/tool_result>/g
 ];
 var ORPHON_TAG_PATTERN = /<\/?(?:think|tool_call|tool_result|mm:think)>|<!--|-->/g;
+var HEADING_BOUNDARY_PATTERN = /^# PR #\d+\b.*$/m;
 function stripNoiseBlocks(text) {
   let result = text;
   for (const pattern of NOISE_BLOCK_PATTERNS) {
     result = result.replace(pattern, "");
   }
   return result.replace(ORPHON_TAG_PATTERN, "");
+}
+function findHeadingBoundary(text) {
+  const match = HEADING_BOUNDARY_PATTERN.exec(text);
+  if (!match) {
+    return text;
+  }
+  return text.slice(match.index);
 }
 function invokeOpenCode(prompt, model, configPath, options) {
   fs3.mkdirSync(options.homeDir, { recursive: true });
@@ -20225,7 +20239,7 @@ function invokeOpenCode(prompt, model, configPath, options) {
     }
   }
   return {
-    text: text.join(""),
+    text: findHeadingBoundary(text.join("")),
     tokens: { input: inputTokens, output: outputTokens },
     cost,
     model

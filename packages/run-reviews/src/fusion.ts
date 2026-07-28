@@ -28,6 +28,12 @@ const FUSION_NOISE_PATTERNS: ReadonlyArray<RegExp> = [
 const FUSION_ORPHON_TAG_PATTERN =
   /<\/?(?:think|tool_call|tool_result|mm:think)>|<!--|-->/g;
 
+// Parser boundary: keep in sync with `HEADING_BOUNDARY_PATTERN` in `opencode.ts`.
+// Applied to each review before fusion so the synthesizer never sees the
+// preamble (reasoning, tool calls, narration) — even if the per-invocation
+// boundary in `invokeOpenCode` was bypassed.
+const FUSION_HEADING_BOUNDARY_PATTERN = /^# PR #\d+\b.*$/m;
+
 function fusionLabel(review: FusionReview): string {
   return `${review.model} :: ${review.prompt}`.slice(0, LABEL_LIMIT);
 }
@@ -42,9 +48,14 @@ export function sanitizeForFusion(text: string): string {
     sanitized = sanitized.replace(pattern, '');
   }
   sanitized = sanitized.replace(FUSION_ORPHON_TAG_PATTERN, '');
-  return sanitized.replace(/```[\s\S]*?```/g, (block) =>
+  sanitized = sanitized.replace(/```[\s\S]*?```/g, (block) =>
     INJECTION_PATTERN.test(block) ? '' : block,
   );
+  const boundary = FUSION_HEADING_BOUNDARY_PATTERN.exec(sanitized);
+  if (boundary) {
+    sanitized = sanitized.slice(boundary.index);
+  }
+  return sanitized;
 }
 
 export function composeLabeledReviews(reviews: FusionReview[]): string {
