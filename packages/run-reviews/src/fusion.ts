@@ -14,6 +14,20 @@ const INJECTION_PATTERN =
 const REVIEW_SEPARATOR = '\n\n---\n\n';
 const LABEL_LIMIT = 200;
 
+// Keep in sync with `NOISE_BLOCK_PATTERNS` and `ORPHON_TAG_PATTERN` in
+// `opencode.ts` — the fusion synthesizer must never see reasoning or
+// tool-call XML, even when the individual-review strip step is skipped
+// (e.g. direct user-supplied input).
+const FUSION_NOISE_PATTERNS: ReadonlyArray<RegExp> = [
+  /<think>[\s\S]*?<\/think>/g,
+  /<!--[\s\S]*?-->/g,
+  /<tool_call>[\s\S]*?<\/tool_call>/g,
+  /<tool_result>[\s\S]*?<\/tool_result>/g,
+];
+
+const FUSION_ORPHON_TAG_PATTERN =
+  /<\/?(?:think|tool_call|tool_result|mm:think)>|<!--|-->/g;
+
 function fusionLabel(review: FusionReview): string {
   return `${review.model} :: ${review.prompt}`.slice(0, LABEL_LIMIT);
 }
@@ -23,9 +37,14 @@ function fusionSection(review: FusionReview): string {
 }
 
 export function sanitizeForFusion(text: string): string {
-  return text
-    .replace(/<think>[\s\S]*?<\/think>/g, '')
-    .replace(/```[\s\S]*?```/g, (block) => (INJECTION_PATTERN.test(block) ? '' : block));
+  let sanitized = text;
+  for (const pattern of FUSION_NOISE_PATTERNS) {
+    sanitized = sanitized.replace(pattern, '');
+  }
+  sanitized = sanitized.replace(FUSION_ORPHON_TAG_PATTERN, '');
+  return sanitized.replace(/```[\s\S]*?```/g, (block) =>
+    INJECTION_PATTERN.test(block) ? '' : block,
+  );
 }
 
 export function composeLabeledReviews(reviews: FusionReview[]): string {

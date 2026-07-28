@@ -28,8 +28,33 @@ interface OpenCodeEvent {
   };
 }
 
-function stripThinkBlocks(text: string): string {
-  return text.replace(/<think>[\s\S]*?<\/think>/g, '');
+// Strip model-emitted markup that must never reach the PR comment or the fusion
+// synthesizer input:
+//   - `<think>...</think>` (OpenCode-style reasoning)
+//   - `<!-- ... -->` (MiniMax-M3 reasoning)
+//   - `<tool_call>...</tool_call>` (tool-call XML, only the closing tag leaks when
+//     the opening tag was emitted as a separate non-text event)
+//   - `<tool_result>...</tool_result>` (tool-result XML)
+//
+// Pairs are stripped first; the orphan-tag pass then catches a stray opening or
+// closing tag that lands in a text event without its pair (common when the
+// OpenCode stream emits the matching tag as a non-text JSON event).
+const NOISE_BLOCK_PATTERNS: ReadonlyArray<RegExp> = [
+  /<think>[\s\S]*?<\/think>/g,
+  /<!--[\s\S]*?-->/g,
+  /<tool_call>[\s\S]*?<\/tool_call>/g,
+  /<tool_result>[\s\S]*?<\/tool_result>/g,
+];
+
+const ORPHON_TAG_PATTERN =
+  /<\/?(?:think|tool_call|tool_result|mm:think)>|<!--|-->/g;
+
+function stripNoiseBlocks(text: string): string {
+  let result = text;
+  for (const pattern of NOISE_BLOCK_PATTERNS) {
+    result = result.replace(pattern, '');
+  }
+  return result.replace(ORPHON_TAG_PATTERN, '');
 }
 
 export function invokeOpenCode(
@@ -97,13 +122,13 @@ export function invokeOpenCode(
     if (event.type === 'text') {
       const value = event.text ?? event.part?.text;
       if (value) {
-        const cleaned = stripThinkBlocks(value);
+        const cleaned = stripNoiseBlocks(value);
         if (cleaned.trim()) {
           text.push(cleaned);
         }
       }
     } else if (event.part?.type === 'text' && event.part.text) {
-      const cleaned = stripThinkBlocks(event.part.text);
+      const cleaned = stripNoiseBlocks(event.part.text);
       if (cleaned.trim()) {
         text.push(cleaned);
       }
