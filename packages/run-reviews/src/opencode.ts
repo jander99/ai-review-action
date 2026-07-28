@@ -28,27 +28,15 @@ interface OpenCodeEvent {
   };
 }
 
-// Strip model-emitted markup that must never reach the PR comment or the fusion
-// synthesizer input. Keep paired and orphan patterns in sync with the
-// equivalents in `fusion.ts`.
-const NOISE_BLOCK_PATTERNS: ReadonlyArray<RegExp> = [
-  /<think[\s\S]*?<\/think>/g,
-  /<!--[\s\S]*?-->/g,
-  /<tool_call>[\s\S]*?<\/tool_call>/g,
-  /<tool_result>[\s\S]*?<\/tool_result>/g,
-  /<mm:think[\s\S]*?<\/mm:think>/g,
-];
-
+// The heading boundary (below) is the parser's primary defense: anything the
+// model emits before `# PR #N Review — <title>` is sliced off, so reasoning
+// blocks, tool-call XML, and other model-internal markup never reach the PR
+// comment. The orphan-tag regex is a small safety net for the cross-event
+// case where a closing tag (e.g. `</think>`) lands in the same text region
+// as the heading and ends up after the boundary slice. Keep the patterns in
+// sync with the equivalents in `fusion.ts`.
 const ORPHAN_TAG_PATTERN =
   /<\/?(?:think|tool_call|tool_result|mm:think)>|<!--|-->/g;
-
-function stripNoiseBlocks(text: string): string {
-  let result = text;
-  for (const pattern of NOISE_BLOCK_PATTERNS) {
-    result = result.replace(pattern, '');
-  }
-  return result.replace(ORPHAN_TAG_PATTERN, '');
-}
 
 // Parser boundary: the prompt contract requires the review body to begin with
 // `# PR #N Review — <title>`. Walks the text line by line so we can skip any
@@ -77,14 +65,15 @@ function findHeadingBoundary(text: string): string | null {
   return null;
 }
 
-// Process the joined text from all stream events: strip noise, then slice from
-// the heading boundary if present, otherwise fall back to the stripped text so
-// a model that forgot the contract still publishes something usable.
+// Process the joined text from all stream events: strip orphan tags as a
+// safety net, then slice from the heading boundary if present. If no heading
+// is found, return the orphan-stripped text so a model that forgot the
+// contract still publishes something usable.
 function processReviewText(text: string): string {
-  const stripped = stripNoiseBlocks(text);
+  const stripped = text.replace(ORPHAN_TAG_PATTERN, '');
   const boundary = findHeadingBoundary(stripped);
   if (boundary !== null) {
-    return boundary;
+    return boundary.replace(ORPHAN_TAG_PATTERN, '');
   }
   return stripped;
 }

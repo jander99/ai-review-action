@@ -14,18 +14,10 @@ const INJECTION_PATTERN =
 const REVIEW_SEPARATOR = '\n\n---\n\n';
 const LABEL_LIMIT = 200;
 
-// Keep in sync with `NOISE_BLOCK_PATTERNS` and `ORPHAN_TAG_PATTERN` in
-// `opencode.ts` — the fusion synthesizer must never see reasoning or
-// tool-call XML, even when the individual-review strip step is skipped
-// (e.g. direct user-supplied input).
-const FUSION_NOISE_PATTERNS: ReadonlyArray<RegExp> = [
-  /<think[\s\S]*?<\/think>/g,
-  /<!--[\s\S]*?-->/g,
-  /<tool_call>[\s\S]*?<\/tool_call>/g,
-  /<tool_result>[\s\S]*?<\/tool_result>/g,
-  /<mm:think[\s\S]*?<\/mm:think>/g,
-];
-
+// Keep in sync with `ORPHAN_TAG_PATTERN` in `opencode.ts` - the fusion
+// synthesizer must never see reasoning or tool-call XML. The heading
+// boundary (below) is the primary defense; the orphan-tag regex is a
+// safety net for tags that end up after the boundary slice.
 const FUSION_ORPHAN_TAG_PATTERN =
   /<\/?(?:think|tool_call|tool_result|mm:think)>|<!--|-->/g;
 
@@ -55,14 +47,6 @@ function fusionFindHeadingBoundary(text: string): string | null {
   return null;
 }
 
-function fusionStripNoise(text: string): string {
-  let result = text;
-  for (const pattern of FUSION_NOISE_PATTERNS) {
-    result = result.replace(pattern, '');
-  }
-  return result.replace(FUSION_ORPHAN_TAG_PATTERN, '');
-}
-
 function fusionLabel(review: FusionReview): string {
   return `${review.model} :: ${review.prompt}`.slice(0, LABEL_LIMIT);
 }
@@ -76,20 +60,14 @@ export function sanitizeForFusion(text: string): string {
   // that puts the heading inside a code fence does not get the fence (and
   // the heading inside it) stripped before we have a chance to use the
   // heading as an anchor.
-  const stripped = fusionStripNoise(text);
+  const stripped = text.replace(FUSION_ORPHAN_TAG_PATTERN, '');
   const boundary = fusionFindHeadingBoundary(stripped);
-  const anchored = boundary ?? stripped;
+  const anchored = boundary !== null
+    ? boundary.replace(FUSION_ORPHAN_TAG_PATTERN, '')
+    : stripped;
   return anchored.replace(/```[\s\S]*?```/g, (block) =>
     INJECTION_PATTERN.test(block) ? '' : block,
   );
-}
-
-// Apply the heading boundary + fence-injection sweep to an already-composed
-// review string. Used by callers that want a clean output even when the
-// individual review texts were not pre-sanitized (e.g. the non-fusion
-// single-review path).
-export function sanitizeComposedReview(text: string): string {
-  return sanitizeForFusion(text);
 }
 
 export function composeLabeledReviews(reviews: FusionReview[]): string {
