@@ -51,10 +51,6 @@ Use a real Linux x64 release archive and non-production credentials to verify th
 
 Never expose production provider credentials to untrusted pull-request code, and do not use `pull_request_target` as a workaround for fork secret restrictions.
 
-## Why there is no example workflow in this repository
-
-This repository is the action itself. Running the AI Review action in its own CI is a chicken-and-egg problem: the action under test would be reviewing the same workflow that invokes it. The repository ships its own `ci.yml` workflow, which builds every package, runs the type-checker against the workspace, and verifies that committed `dist` bundles match the workspace output. Sample workflows for end users are inlined in the README and copied into the repositories that consume the action.
-
 ## Updating OpenCode
 
 OpenCode behavior is a versioned ABI. To update the supported version:

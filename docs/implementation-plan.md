@@ -4,8 +4,9 @@
 > a phased, executable build sequence with explicit ownership, scope, gates,
 > and Oracle review checkpoints.
 >
-> Status: **Phase 0 complete** (deepwork setup, plan draft). Awaiting
-> approval to begin Phase 1.
+> Status: **Phases 1–5 complete.** All action units shipped:
+> `setup-opencode` (Phase 4), `run-reviews` (Phases 1 & 2), `post-comment`
+> and `post-check-run` (Phase 3), and the documentation sweep (Phase 5).
 
 ## Architecture summary
 
@@ -28,10 +29,12 @@ The reimagined action has three units:
    review. Event-based routing: `pull_request` → PR comment, other events
    → check run.
 
-The current prototype lives in `packages/run-reviews/src/main.ts` (249
-lines, Copilot CLI shim) and `packages/post-comment/src/main.ts`. The plan
-replaces the run-reviews internals and adds `setup-opencode` and
-`post-check-run` as new units. `post-comment` is mostly kept and extended.
+During planning, the prototype lived in `packages/run-reviews/src/main.ts`
+(Copilot CLI shim) and `packages/post-comment/src/main.ts`. The shipped
+implementation replaces the run-reviews internals with the OpenCode-based
+shell-out, adds `setup-opencode` and `post-check-run` as new units, and
+keeps `post-comment` (extended with the `post-comment: false` opt-out
+and the existing `max-comment-chars` truncation).
 
 ## Phased plan
 
@@ -160,8 +163,10 @@ Phase 1 ─┬─ Phase 2 ─┐
   design docs; the implementation branch cherry-picks or has its own
   history.
 - **Examples directory**: vision doc references `examples/` in Phase 5
-  but the current repo has `.github/workflows/example-ai-review.yml`.
-  Phase 5 should consolidate or replace that with the new shape.
+  but the current repo has `.github/workflows/ai-review.yml` (the
+  self-review workflow pinned to a specific commit SHA on `main`).
+  Phase 5 consolidates with the new shape; prompt and config samples
+  now live under `examples/prompts/` and `examples/opencode.json`.
 - **Contract tests (D12)**: tracked under Phase 5 documentation as
   follow-up, but the test fixtures themselves need to be authored
   alongside the OpenCode CLI contract they verify. Treat as Phase 1
@@ -177,4 +182,6 @@ Phase 1 ─┬─ Phase 2 ─┐
 
 ## Next step
 
-Awaiting user approval to begin Phase 1 (Foundation).
+All planned phases shipped. Remaining work tracked as ad-hoc follow-ups
+and contract fixtures (D12); future revisions of this document are not
+expected unless the action's surface area changes materially.

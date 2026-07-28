@@ -45,7 +45,7 @@
 
 | # | Item | Type |
 |---|---|---|
-| D12 (#26) | Contract tests for verified ABI | Implementation work — each "verified in 1.18.4" claim needs a pinned test fixture |
+| D12 (#26) | Contract tests for verified ABI | Implementation work — each "verified in 1.18.5" claim needs a pinned test fixture |
 
 ## Composition of the final action
 

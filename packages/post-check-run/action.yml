@@ -13,7 +13,7 @@ inputs:
     required: false
     default: 'ai-review'
   conclusion:
-    description: 'Conclusion of the check run (success, failure, neutral, cancelled, skipped, timed_out, action_required)'
+    description: 'Conclusion of the check run (success, failure, neutral, cancelled, skipped, stale, timed_out, action_required)'
     required: false
     default: 'neutral'
   details-url:
