@@ -29,48 +29,64 @@ interface OpenCodeEvent {
 }
 
 // Strip model-emitted markup that must never reach the PR comment or the fusion
-// synthesizer input:
-//   - `<think>...</think>` (OpenCode-style reasoning)
-//   - `<!-- ... -->` (MiniMax-M3 reasoning)
-//   - `<tool_call>...</tool_call>` (tool-call XML, only the closing tag leaks when
-//     the opening tag was emitted as a separate non-text event)
-//   - `<tool_result>...</tool_result>` (tool-result XML)
-//
-// Pairs are stripped first; the orphan-tag pass then catches a stray opening or
-// closing tag that lands in a text event without its pair (common when the
-// OpenCode stream emits the matching tag as a non-text JSON event).
+// synthesizer input. Keep paired and orphan patterns in sync with the
+// equivalents in `fusion.ts`.
 const NOISE_BLOCK_PATTERNS: ReadonlyArray<RegExp> = [
-  /<think>[\s\S]*?<\/think>/g,
+  /<think[\s\S]*?<\/think>/g,
   /<!--[\s\S]*?-->/g,
   /<tool_call>[\s\S]*?<\/tool_call>/g,
   /<tool_result>[\s\S]*?<\/tool_result>/g,
+  /<mm:think[\s\S]*?<\/mm:think>/g,
 ];
 
-const ORPHON_TAG_PATTERN =
+const ORPHAN_TAG_PATTERN =
   /<\/?(?:think|tool_call|tool_result|mm:think)>|<!--|-->/g;
-
-// Parser boundary: the prompt contract requires the review body to begin with
-// `# PR #N Review — <title>`. Everything before that heading is internal
-// scratch (reasoning, tool calls, planning narration, verification steps) and
-// is discarded regardless of whether the noise-strip tags matched. This also
-// makes the per-event paired-block strip a safety net instead of a primary
-// defense — cross-event split blocks no longer leak reasoning payloads.
-const HEADING_BOUNDARY_PATTERN = /^# PR #\d+\b.*$/m;
 
 function stripNoiseBlocks(text: string): string {
   let result = text;
   for (const pattern of NOISE_BLOCK_PATTERNS) {
     result = result.replace(pattern, '');
   }
-  return result.replace(ORPHON_TAG_PATTERN, '');
+  return result.replace(ORPHAN_TAG_PATTERN, '');
 }
 
-function findHeadingBoundary(text: string): string {
-  const match = HEADING_BOUNDARY_PATTERN.exec(text);
-  if (!match) {
-    return text;
+// Parser boundary: the prompt contract requires the review body to begin with
+// `# PR #N Review — <title>`. Walks the text line by line so we can skip any
+// heading that appears inside a fenced code block, then returns the heading
+// line and everything after. Returns `null` if no valid heading exists outside
+// a fence.
+const HEADING_LINE_PATTERN = /^# PR #\d+ Review\b/;
+const FENCE_LINE_PATTERN = /^```/;
+
+function findHeadingBoundary(text: string): string | null {
+  const lines = text.split('\n');
+  let fenceOpen = false;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (FENCE_LINE_PATTERN.test(line)) {
+      fenceOpen = !fenceOpen;
+      continue;
+    }
+    if (fenceOpen) {
+      continue;
+    }
+    if (HEADING_LINE_PATTERN.test(line)) {
+      return lines.slice(i).join('\n');
+    }
   }
-  return text.slice(match.index);
+  return null;
+}
+
+// Process the joined text from all stream events: strip noise, then slice from
+// the heading boundary if present, otherwise fall back to the stripped text so
+// a model that forgot the contract still publishes something usable.
+function processReviewText(text: string): string {
+  const stripped = stripNoiseBlocks(text);
+  const boundary = findHeadingBoundary(stripped);
+  if (boundary !== null) {
+    return boundary;
+  }
+  return stripped;
 }
 
 export function invokeOpenCode(
@@ -138,16 +154,10 @@ export function invokeOpenCode(
     if (event.type === 'text') {
       const value = event.text ?? event.part?.text;
       if (value) {
-        const cleaned = stripNoiseBlocks(value);
-        if (cleaned.trim()) {
-          text.push(cleaned);
-        }
+        text.push(value);
       }
     } else if (event.part?.type === 'text' && event.part.text) {
-      const cleaned = stripNoiseBlocks(event.part.text);
-      if (cleaned.trim()) {
-        text.push(cleaned);
-      }
+      text.push(event.part.text);
     }
 
     if (event.type === 'step_finish' || event.part?.type === 'step_finish') {
@@ -159,7 +169,7 @@ export function invokeOpenCode(
   }
 
   return {
-    text: findHeadingBoundary(text.join('')),
+    text: processReviewText(text.join('')),
     tokens: { input: inputTokens, output: outputTokens },
     cost,
     model,

@@ -5,6 +5,7 @@ interface GitHubEvent {
   repository?: { full_name?: string };
   pull_request?: {
     number?: number;
+    title?: string;
     base?: { ref?: string; sha?: string };
     head?: { ref?: string; sha?: string };
   };
@@ -30,6 +31,7 @@ export function getEventContext(): EventContext {
 
   if (eventName === 'pull_request') {
     context.prNumber = event.pull_request?.number ?? event.number;
+    context.prTitle = event.pull_request?.title;
     context.baseRef = event.pull_request?.base?.ref || process.env.GITHUB_BASE_REF;
     context.headRef = event.pull_request?.head?.ref || process.env.GITHUB_HEAD_REF;
     context.baseSha = event.pull_request?.base?.sha;

@@ -19843,6 +19843,7 @@ function getEventContext() {
   };
   if (eventName === "pull_request") {
     context.prNumber = event.pull_request?.number ?? event.number;
+    context.prTitle = event.pull_request?.title;
     context.baseRef = event.pull_request?.base?.ref || process.env.GITHUB_BASE_REF;
     context.headRef = event.pull_request?.head?.ref || process.env.GITHUB_HEAD_REF;
     context.baseSha = event.pull_request?.base?.sha;
@@ -20069,13 +20070,40 @@ var INJECTION_PATTERN = /ignore\s+(?:all|previous|prior)(?:\s+instructions)?|dis
 var REVIEW_SEPARATOR = "\n\n---\n\n";
 var LABEL_LIMIT = 200;
 var FUSION_NOISE_PATTERNS = [
-  /<think>[\s\S]*?<\/think>/g,
+  /<think[\s\S]*?<\/think>/g,
   /<!--[\s\S]*?-->/g,
   /<tool_call>[\s\S]*?<\/tool_call>/g,
-  /<tool_result>[\s\S]*?<\/tool_result>/g
+  /<tool_result>[\s\S]*?<\/tool_result>/g,
+  /<mm:think[\s\S]*?<\/mm:think>/g
 ];
-var FUSION_ORPHON_TAG_PATTERN = /<\/?(?:think|tool_call|tool_result|mm:think)>|<!--|-->/g;
-var FUSION_HEADING_BOUNDARY_PATTERN = /^# PR #\d+\b.*$/m;
+var FUSION_ORPHAN_TAG_PATTERN = /<\/?(?:think|tool_call|tool_result|mm:think)>|<!--|-->/g;
+var FUSION_HEADING_LINE_PATTERN = /^# PR #\d+ Review\b/;
+var FUSION_FENCE_LINE_PATTERN = /^```/;
+function fusionFindHeadingBoundary(text) {
+  const lines = text.split("\n");
+  let fenceOpen = false;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (FUSION_FENCE_LINE_PATTERN.test(line)) {
+      fenceOpen = !fenceOpen;
+      continue;
+    }
+    if (fenceOpen) {
+      continue;
+    }
+    if (FUSION_HEADING_LINE_PATTERN.test(line)) {
+      return lines.slice(i).join("\n");
+    }
+  }
+  return null;
+}
+function fusionStripNoise(text) {
+  let result = text;
+  for (const pattern of FUSION_NOISE_PATTERNS) {
+    result = result.replace(pattern, "");
+  }
+  return result.replace(FUSION_ORPHAN_TAG_PATTERN, "");
+}
 function fusionLabel(review) {
   return `${review.model} :: ${review.prompt}`.slice(0, LABEL_LIMIT);
 }
@@ -20085,20 +20113,13 @@ function fusionSection(review) {
 ${review.text}`;
 }
 function sanitizeForFusion(text) {
-  let sanitized = text;
-  for (const pattern of FUSION_NOISE_PATTERNS) {
-    sanitized = sanitized.replace(pattern, "");
-  }
-  sanitized = sanitized.replace(FUSION_ORPHON_TAG_PATTERN, "");
-  sanitized = sanitized.replace(
+  const stripped = fusionStripNoise(text);
+  const boundary = fusionFindHeadingBoundary(stripped);
+  const anchored = boundary ?? stripped;
+  return anchored.replace(
     /```[\s\S]*?```/g,
     (block) => INJECTION_PATTERN.test(block) ? "" : block
   );
-  const boundary = FUSION_HEADING_BOUNDARY_PATTERN.exec(sanitized);
-  if (boundary) {
-    sanitized = sanitized.slice(boundary.index);
-  }
-  return sanitized;
 }
 function composeLabeledReviews(reviews) {
   return reviews.map(fusionSection).join(REVIEW_SEPARATOR);
@@ -20144,26 +20165,47 @@ var import_child_process = require("child_process");
 var fs3 = __toESM(require("fs"));
 var path2 = __toESM(require("path"));
 var NOISE_BLOCK_PATTERNS = [
-  /<think>[\s\S]*?<\/think>/g,
+  /<think[\s\S]*?<\/think>/g,
   /<!--[\s\S]*?-->/g,
   /<tool_call>[\s\S]*?<\/tool_call>/g,
-  /<tool_result>[\s\S]*?<\/tool_result>/g
+  /<tool_result>[\s\S]*?<\/tool_result>/g,
+  /<mm:think[\s\S]*?<\/mm:think>/g
 ];
-var ORPHON_TAG_PATTERN = /<\/?(?:think|tool_call|tool_result|mm:think)>|<!--|-->/g;
-var HEADING_BOUNDARY_PATTERN = /^# PR #\d+\b.*$/m;
+var ORPHAN_TAG_PATTERN = /<\/?(?:think|tool_call|tool_result|mm:think)>|<!--|-->/g;
 function stripNoiseBlocks(text) {
   let result = text;
   for (const pattern of NOISE_BLOCK_PATTERNS) {
     result = result.replace(pattern, "");
   }
-  return result.replace(ORPHON_TAG_PATTERN, "");
+  return result.replace(ORPHAN_TAG_PATTERN, "");
 }
+var HEADING_LINE_PATTERN = /^# PR #\d+ Review\b/;
+var FENCE_LINE_PATTERN = /^```/;
 function findHeadingBoundary(text) {
-  const match = HEADING_BOUNDARY_PATTERN.exec(text);
-  if (!match) {
-    return text;
+  const lines = text.split("\n");
+  let fenceOpen = false;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (FENCE_LINE_PATTERN.test(line)) {
+      fenceOpen = !fenceOpen;
+      continue;
+    }
+    if (fenceOpen) {
+      continue;
+    }
+    if (HEADING_LINE_PATTERN.test(line)) {
+      return lines.slice(i).join("\n");
+    }
   }
-  return text.slice(match.index);
+  return null;
+}
+function processReviewText(text) {
+  const stripped = stripNoiseBlocks(text);
+  const boundary = findHeadingBoundary(stripped);
+  if (boundary !== null) {
+    return boundary;
+  }
+  return stripped;
 }
 function invokeOpenCode(prompt, model, configPath, options) {
   fs3.mkdirSync(options.homeDir, { recursive: true });
@@ -20220,16 +20262,10 @@ function invokeOpenCode(prompt, model, configPath, options) {
     if (event.type === "text") {
       const value = event.text ?? event.part?.text;
       if (value) {
-        const cleaned = stripNoiseBlocks(value);
-        if (cleaned.trim()) {
-          text.push(cleaned);
-        }
+        text.push(value);
       }
     } else if (event.part?.type === "text" && event.part.text) {
-      const cleaned = stripNoiseBlocks(event.part.text);
-      if (cleaned.trim()) {
-        text.push(cleaned);
-      }
+      text.push(event.part.text);
     }
     if (event.type === "step_finish" || event.part?.type === "step_finish") {
       const tokens = event.tokens ?? event.part?.tokens;
@@ -20239,7 +20275,7 @@ function invokeOpenCode(prompt, model, configPath, options) {
     }
   }
   return {
-    text: findHeadingBoundary(text.join("")),
+    text: processReviewText(text.join("")),
     tokens: { input: inputTokens, output: outputTokens },
     cost,
     model
@@ -20475,7 +20511,8 @@ function run() {
       }
     }
   }
-  let reviewText = composeLabeledReviews(individualResults);
+  const reviewNeedsLabelWrapper = fusionEnabled || individualResults.length !== 1;
+  let reviewText = reviewNeedsLabelWrapper ? composeLabeledReviews(individualResults) : individualResults[0].text;
   if (fusionEnabled && individualResults.length > 0) {
     core2.info(`Running fusion: ${fusionModel}`);
     try {
