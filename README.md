@@ -6,7 +6,7 @@ AI Review Action runs repository reviews through the OpenCode CLI using provider
 
 - A **Linux x64** runner. macOS, Windows, Linux arm64, and other platforms are not supported.
 - `actions/checkout@v6` with `fetch-depth: 0` so the model can inspect the complete Git history and base ref.
-- `git`, `bash`, `tar`, and Node/npm tooling on `PATH`. `ubuntu-latest` provides these; Node 22+ is recommended when installing skills with `npx`.
+- `git`, `bash`, `tar`, `curl`, and Node/npm tooling on `PATH`. `ubuntu-latest` provides these; Node 22+ is recommended when installing skills with `npx`.
 - OpenCode installed by the standalone [`setup-opencode`](#opencode-installation) action with the SHA-256 checksum of the exact release archive.
 - At least one provider credential exposed as an environment variable.
 - A prompt using the `file:` or `text:` prefix.

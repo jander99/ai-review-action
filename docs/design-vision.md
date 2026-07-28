@@ -1,8 +1,7 @@
 # AI Review Action — Design Vision
 
-> Status: design / pre-implementation. The repo contains a Copilot-CLI-based
-> prototype (see `README.md`). This document describes the design of the
-> reimagined action built on the OpenCode CLI.
+> Status: design source of truth. The shipped action is built on the
+> OpenCode CLI; this document is the design record that produced it.
 
 ## 1. Goal
 
@@ -81,9 +80,10 @@ The prompt tells the model what to do. The action injects runtime context
 (event, refs, branch) into the **agent definition** so the model knows it
 is reviewing a pull request and can pull `git diff` itself.
 
-## 4. Problem
+## 4. Problem (prior prototype)
 
-The prototype in this repo is a thin wrapper around the **GitHub Copilot CLI**:
+The action's prior incarnation was a thin wrapper around the **GitHub
+Copilot CLI**:
 
 - Shells out to `copilot -p <prompt>` with a fine-grained PAT (`copilot-token`)
 - Models limited to whatever the user's GitHub Copilot subscription exposes
@@ -91,7 +91,8 @@ The prototype in this repo is a thin wrapper around the **GitHub Copilot CLI**:
 - Tool access restricted to `shell(git:*)` via `--allow-tool`
 - Multi-model runs and fusion are orchestrations the action owns
 
-That's the limitation. Three things are hard to express:
+That prior implementation is what this design replaces. Three things
+were hard to express in it:
 
 1. **API-key-only multi-provider**. No Claude-direct, OpenAI-direct, MiniMax,
    Kimi — only what GitHub Copilot routes.
@@ -347,8 +348,10 @@ The step downloads the OpenCode installer from a pinned URL, verifies the
 checksum, and runs it. The `opencode` binary ends up on `PATH` for the
 rest of the workflow.
 
-Sample workflows use `@<sha>` for the action reference, not `@v1`. The
-README maintains a table of vetted versions and their checksums.
+Sample workflows use `@v1` for readability; in production the workflow
+should pin the action and the installer to a full commit SHA on the
+repository's Releases or Commits page. The README maintains a table of
+vetted OpenCode versions and their checksums.
 
 ### 7.2 `run-reviews` inputs
 
@@ -394,8 +397,9 @@ The action exposes the relevant step based on the event. Both share the
 | Input | Default | Description |
 |---|---|---|
 | `github-token` | `${{ github.token }}` | Token with `pull-requests: write` (for comments) or `checks: write` (for check runs). |
-| `post` | `true` | Set `false` to skip publishing (useful for `workflow_dispatch` runs that consume outputs only). |
-| `max-comment-chars` | `65000` | Truncate the body if it exceeds this. |
+| `post-comment` | `true` | Post on `pull_request` events. Set `false` to only expose outputs without commenting. |
+| `post-check-run` | `true` | Post on non-PR events. Set `false` to only expose outputs without creating a check run. |
+| `max-comment-chars` | `65000` | Truncate the comment body if it exceeds this. |
 
 | Output | Description |
 |---|---|
@@ -484,8 +488,6 @@ The action builds the merged config at runtime. The flow:
    self-hosted runners with preconfigured global config)
 7. **Point OpenCode at it via `OPENCODE_CONFIG`** — the merged config is
    the only one OpenCode reads
-8. **Validate** — against the `$schema` URL it declares. Field errors and
-   version mismatches fail fast with a clear message before any model call.
 
 ### 7.7 Built-in provider registry
 
