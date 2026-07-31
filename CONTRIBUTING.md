@@ -1,6 +1,6 @@
 # Contributing
 
-Thank you for improving AI Review Action. The [design vision](docs/design-vision.md) is the source of truth for architecture, security boundaries, inputs, outputs, and runtime behavior. Review the [implementation plan](docs/implementation-plan.md) and [resolved questions](docs/review-questions.md) before changing a contract.
+Thank you for improving AI Review Action. The [design vision](docs/design-vision.md) is the source of truth for architecture, security boundaries, inputs, outputs, and runtime behavior. Review the design vision before changing a contract.
 
 ## Local development
 
