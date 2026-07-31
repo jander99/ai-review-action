@@ -111,11 +111,6 @@ These are all inputs accepted by the root `jander99/ai-review-action` action.
 | `check-conclusion` | No | `neutral` | Check conclusion: `action_required`, `cancelled`, `failure`, `neutral`, `success`, `skipped`, `stale`, or `timed_out`. |
 | `check-details-url` | No | `https://github.com` | URL linked from a non-PR check run. |
 
-Prompt entries are parsed prefix-first:
-
-- `file:path` reads a workspace-relative or absolute file.
-- `text:content` uses the literal content after `text:`.
-
 ### Default tool permissions
 
 Unless `permission` is supplied, the generated OpenCode configuration uses:
@@ -152,14 +147,14 @@ OpenCode does not currently provide reliable sub-command allow-lists. `bash: all
 
 ## Sample workflows
 
-The samples below correspond to the design vision's workflows 11.1–11.8. They assume:
+The samples below cover the main supported workflows. They assume:
 
 - The vetted `1.18.5` checksum is embedded directly in each setup step.
 - Prompt and configuration files are available under this repository's `examples/` directory; copy them when adapting a sample elsewhere.
 - Referenced provider keys are configured as Actions secrets.
 - `@v1` is replaced with one full action commit SHA for production use.
 
-### 11.1 Quickstart (with standalone setup step)
+### Quickstart (with standalone setup step)
 
 Run one prompt with one Anthropic model and publish the result as a PR comment.
 
@@ -193,7 +188,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
-### 11.2 Default workflow permissions
+### Default workflow permissions
 
 Omit an explicit workflow `permissions` block and inherit the repository or organization token defaults; comment posting may be unavailable.
 
@@ -223,7 +218,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
-### 11.3 Multi-model with fusion
+### Multi-model with fusion
 
 Run every prompt against both models, then synthesize the successful results with Claude.
 
@@ -260,7 +255,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 ```
 
-### 11.4 User-provided `opencode.json`
+### User-provided `opencode.json`
 
 Merge the trusted `examples/opencode.json` configuration while preserving action-required agent, model, provider, and permission settings. The example uses OpenCode's `{env:GITHUB_TOKEN}` interpolation; the action does not expand `${VAR}` placeholders in user configuration.
 
@@ -295,7 +290,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
 ```
 
-### 11.5 With skills and MCPs
+### With skills and MCPs
 
 Install a trusted skill before review; MCP servers and plugins can be declared in the file selected by `opencode-config`.
 
@@ -334,7 +329,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
 ```
 
-### 11.6 Custom provider (MiniMax)
+### Custom provider (MiniMax)
 
 Use the built-in MiniMax provider definition by exposing `MINIMAX_API_KEY`.
 
@@ -368,7 +363,7 @@ jobs:
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
 ```
 
-### 11.7 Debug mode
+### Debug mode
 
 Upload redacted and gzipped OpenCode JSONL/stderr streams as an `ai-review-debug` workflow artifact.
 
@@ -403,7 +398,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
-### 11.8 Push to the default branch
+### Push to the default branch
 
 Publish the result as a check run named `ai-review` because no pull request is associated with the event.
 
@@ -437,16 +432,6 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
-
-## Required permissions
-
-| Event or mode | Minimum workflow permissions | Publication destination |
-|---|---|---|
-| `pull_request` with posting | `contents: read`, `pull-requests: write` | PR comment |
-| `push`, `workflow_dispatch`, or another non-PR event with posting | `contents: read`, `checks: write` | Check run |
-| Outputs only (`post-comment: false` or `post-check-run: false`) | `contents: read` | None |
-
-Provider API keys are separate from `GITHUB_TOKEN` permissions. Fork pull requests do not receive repository secrets, and GitHub may reduce `GITHUB_TOKEN` to read-only; see [Limitations](#limitations).
 
 ## Supported providers
 
@@ -490,48 +475,9 @@ This value was computed from the [`v1.18.5` Linux x64 release asset](https://git
 
 The action itself should also be pinned by full commit SHA in production. The OpenCode archive checksum protects the downloaded runtime; the action commit SHA protects the installer and review logic.
 
-## Security model
+## Security
 
-There is no application-level sandbox. The workflow author is the trust boundary and decides which code, models, prompts, skills, plugins, MCPs, credentials, and permissions enter the run.
-
-The action's safety posture includes:
-
-- deleting workspace-root `opencode.json` and `opencode.jsonc` before OpenCode starts;
-- placing privileged review instructions in an action-owned agent definition;
-- creating the merged config and isolated OpenCode home under the runner's temporary directory;
-- using explicit per-tool permission defaults and a tool-disabled fusion pass;
-- keeping provider credentials in environment variables rather than action inputs;
-- exposing model-reported cost and token usage;
-- asserting the installed OpenCode version;
-- requiring checksum verification in the standalone installer; and
-- making debug capture opt-in, compressed, short-lived, and redacted on a best-effort basis.
-
-See [SECURITY.md](SECURITY.md) for reporting instructions and the full operational guidance. Detailed design rationale remains in the [design vision](docs/design-vision.md).
-
-## Limitations
-
-- **Environment-key exfiltration:** a model with `bash: allow` can read runner environment variables and may exfiltrate provider keys. Use narrowly scoped credentials and only trusted workflow composition.
-- **No sub-command allow-lists:** OpenCode's permission engine cannot reliably limit Bash to selected commands. The choice is broad Bash access or disabling Bash through the `permission` input.
-- **Fork pull requests:** GitHub does not pass repository secrets to workflows from forks, so provider authentication normally fails. Do not switch to `pull_request_target` to expose secrets to untrusted fork code.
-- Repository instructions such as `AGENTS.md` and skill directories remain visible to the model and can influence it.
-- Debug redaction recognizes known credential patterns only; artifacts can still contain sensitive content.
-- The model decides what Git history and files to review. The action does not verify that a complete or correct review occurred.
-- The bundled installer supports Linux x64 only.
-
-## Documentation
-
-- [Design vision](docs/design-vision.md) — architecture, safety model, runtime contract, and detailed design decisions.
-- [Implementation plan](docs/implementation-plan.md) — phased delivery scope and risk register.
-- [Review questions](docs/review-questions.md) — resolved design questions and the decisions log.
-- [Contributing](CONTRIBUTING.md) — local development, smoke testing, provider changes, and contract-test guidance.
-- [Security policy](SECURITY.md) — trust model, known limitations, supply-chain guarantees, and private reporting.
-
-## Links
-
-- [OpenCode documentation](https://opencode.ai/docs)
-- [OpenCode configuration schema](https://opencode.ai/config.json)
-- [OpenCode releases](https://github.com/anomalyco/opencode/releases)
-- [AI Review Action repository](https://github.com/jander99/ai-review-action)
+See [SECURITY.md](SECURITY.md) for the trust model, permissions, supply-chain guidance, and operational limitations.
 
 ## License
 
