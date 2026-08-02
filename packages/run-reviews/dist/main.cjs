@@ -19840,6 +19840,12 @@ function buildReviewOutputPath(eventContext) {
   const runnerTemp = process.env.RUNNER_TEMP ?? os.tmpdir();
   return path.join(runnerTemp, REVIEW_OUTPUT_DIRNAME, `review-${slug}-${sha}.md`);
 }
+function ensureReviewOutputDirExists(reviewOutputPath) {
+  const directory = path.dirname(reviewOutputPath);
+  if (!fs.existsSync(directory)) {
+    fs.mkdirSync(directory, { recursive: true, mode: 448 });
+  }
+}
 function getEventContext() {
   const eventName = process.env.GITHUB_EVENT_NAME || "unknown";
   let event = {};
@@ -19866,6 +19872,7 @@ function getEventContext() {
     context.inputs = event.inputs || {};
   }
   context.reviewOutputPath = buildReviewOutputPath(context);
+  ensureReviewOutputDirExists(context.reviewOutputPath);
   return context;
 }
 function buildAgentDefinition(eventContext) {
@@ -20293,6 +20300,7 @@ function invokeOpenCode(prompt, model, configPath, options) {
 // packages/run-reviews/src/permissions.ts
 var DEFAULT_PERMISSION = {
   read: "allow",
+  write: "allow",
   glob: "allow",
   grep: "allow",
   list: "allow",

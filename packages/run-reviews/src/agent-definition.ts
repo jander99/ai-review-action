@@ -21,15 +21,24 @@ interface GitHubEvent {
 const REVIEW_OUTPUT_DIRNAME = 'ai-review';
 
 function buildReviewOutputPath(eventContext: EventContext): string {
-  // The path is a coordination hint, not a contract. The action still
-  // captures the review from the model response; this gives the model a
-  // stable, ephemeral, runner-local location if it prefers to write the
-  // markdown to disk. RUNNER_TEMP is provided by GitHub Actions and is
+  // The action treats the file at this path as the authoritative review
+  // output. The model is contractually required to write the review
+  // markdown here. RUNNER_TEMP is provided by GitHub Actions and is
   // cleaned up after the job.
   const slug = eventContext.eventName === 'pull_request' ? 'pr' : 'push';
   const sha = (eventContext.headSha ?? eventContext.after ?? 'unknown').slice(0, 12);
   const runnerTemp = process.env.RUNNER_TEMP ?? os.tmpdir();
   return path.join(runnerTemp, REVIEW_OUTPUT_DIRNAME, `review-${slug}-${sha}.md`);
+}
+
+function ensureReviewOutputDirExists(reviewOutputPath: string): void {
+  // Create the directory so the model can write the file directly. The
+  // directory is runner-local and ephemeral; writable by the action's
+  // user only.
+  const directory = path.dirname(reviewOutputPath);
+  if (!fs.existsSync(directory)) {
+    fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+  }
 }
 
 export function getEventContext(): EventContext {
@@ -62,6 +71,7 @@ export function getEventContext(): EventContext {
   }
 
   context.reviewOutputPath = buildReviewOutputPath(context);
+  ensureReviewOutputDirExists(context.reviewOutputPath);
 
   return context;
 }
