@@ -5,5 +5,9 @@
     "rootDir": "../..",
     "noEmit": false
   },
-  "include": ["src/**/*", "../../packages/review-contract/src/**/*"]
+  "include": [
+    "src/**/*",
+    "../../packages/review-contract/src/**/*",
+    "../run-reviews/src/**/*"
+  ]
 }

@@ -3,20 +3,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { VALIDATOR_AGENT_PROMPT_TEMPLATE } from '@jander99/ai-review-review-contract';
+import { runOpenCodeServer } from '@jander99/ai-review-run-reviews';
 import { validateReviewDocument } from './structure';
-
-interface OpenCodeEvent {
-  type?: string;
-  text?: string;
-  tokens?: { input?: number; output?: number };
-  cost?: number;
-  part?: {
-    type?: string;
-    text?: string;
-    tokens?: { input?: number; output?: number };
-    cost?: number;
-  };
-}
 
 const DEFAULT_OPENCODE_VERSION = '1.18.5';
 const DEFAULT_TIMEOUT_MINUTES = 5;
@@ -97,7 +85,7 @@ interface InvokeValidatorResult {
   cost: number;
 }
 
-function invokeValidator(options: InvokeValidatorOptions): InvokeValidatorResult {
+function invokeValidator(options: InvokeValidatorOptions): Promise<InvokeValidatorResult> {
   const runnerTemp = process.env.RUNNER_TEMP ?? os.tmpdir();
   const homeDir = fs.mkdtempSync(path.join(runnerTemp, 'ai-review-validate-'));
   fs.chmodSync(homeDir, 0o700);
@@ -147,63 +135,19 @@ function invokeValidator(options: InvokeValidatorOptions): InvokeValidatorResult
   const configPath = path.join(homeDir, 'opencode.json');
   fs.writeFileSync(configPath, JSON.stringify(mergedConfig, null, 2), 'utf8');
 
-  const env = { ...process.env };
-  for (const name of Object.keys(env)) {
-    if (name.startsWith('OPENCODE_')) {
-      delete env[name];
-    }
-  }
-  env.OPENCODE_CONFIG = configPath;
-  env.HOME = homeDir;
-
-  const result = spawnSync(
-    'opencode',
-    ['run', prompt, '--model', options.model, '--format', 'json'],
-    {
-      env,
-      encoding: 'utf8',
-      maxBuffer: 50 * 1024 * 1024,
-      timeout: options.timeoutMinutes * 60 * 1000,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    },
-  );
-
-  if (result.error) {
-    throw result.error;
-  }
-  if (result.status !== 0) {
-    const errorOutput = (typeof result.stderr === 'string' ? result.stderr : '').trim();
-    throw new Error(
-      `opencode exited with status ${result.status}${errorOutput ? `: ${errorOutput}` : ''}`,
-    );
-  }
-
-  const text: string[] = [];
-  let inputTokens = 0;
-  let outputTokens = 0;
-  let cost = 0;
-
-  for (const line of (typeof result.stdout === 'string' ? result.stdout : '').split(/\r?\n/).filter(Boolean)) {
-    const event = JSON.parse(line) as OpenCodeEvent;
-    if (event.type === 'text') {
-      const value = event.text ?? event.part?.text;
-      if (value) text.push(value);
-    } else if (event.part?.type === 'text' && event.part.text) {
-      text.push(event.part.text);
-    }
-    if (event.type === 'step_finish' || event.part?.type === 'step_finish') {
-      const tokens = event.tokens ?? event.part?.tokens;
-      inputTokens += tokens?.input ?? 0;
-      outputTokens += tokens?.output ?? 0;
-      cost += event.cost ?? event.part?.cost ?? 0;
-    }
-  }
-
-  return {
-    text: text.join('').trim(),
-    tokens: { input: inputTokens, output: outputTokens },
-    cost,
-  };
+  return runOpenCodeServer({
+    configPath,
+    homeDir,
+    model: options.model,
+    prompt,
+    timeoutMinutes: options.timeoutMinutes,
+    permission: { ...VALIDATOR_PERMISSION },
+    opencodeVersion: '',
+  }).then((result) => ({
+    text: result.text.trim(),
+    tokens: { input: result.tokens.input, output: result.tokens.output },
+    cost: result.cost,
+  }));
 }
 
 function parseValidatorResponse(text: string): { status: 'valid' | 'invalid'; reason: string } {
@@ -317,7 +261,7 @@ export async function validateReview(options: ValidateReviewOptions): Promise<Va
 
   let result: InvokeValidatorResult;
   try {
-    result = invokeValidator({
+    result = await invokeValidator({
       reviewPath: options.reviewPath,
       reviewContent,
       model: options.model,

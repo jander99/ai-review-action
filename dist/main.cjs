@@ -27042,7 +27042,7 @@ function buildValidatorConfig(options) {
 }
 
 // packages/run-reviews/src/main.ts
-var import_child_process2 = require("child_process");
+var import_child_process = require("child_process");
 var fs5 = __toESM(require("fs"));
 var os2 = __toESM(require("os"));
 var path5 = __toESM(require("path"));
@@ -27930,22 +27930,44 @@ function composeFusionPrompt(reviews, synthesisPromptTemplate, options = {}) {
 }
 
 // packages/run-reviews/src/opencode.ts
-var import_child_process = require("child_process");
 var fs3 = __toESM(require("fs"));
 var path3 = __toESM(require("path"));
-function invokeOpenCode(prompt, model, configPath, options) {
-  fs3.mkdirSync(options.homeDir, { recursive: true });
-  const args = ["run", prompt, "--model", model, "--format", "json"];
-  const env = { ...process.env };
-  for (const name of Object.keys(env)) {
-    if (name.startsWith("OPENCODE_")) {
-      delete env[name];
+
+// packages/run-reviews/src/opencode-server.ts
+var import_crypto = require("crypto");
+var DEFAULT_TIMEOUT_MS = 1e4;
+var DEFAULT_HEALTH_POLL_MS = 100;
+var DEFAULT_TERMINATE_GRACE_MS = 3e3;
+var DEFAULT_BASE_URL = "http://127.0.0.1";
+function defaultSleep(ms) {
+  return new Promise((resolve3) => setTimeout(resolve3, ms));
+}
+function buildAuthorizationHeader(password) {
+  return `Bearer ${password}`;
+}
+function parseListeningUrl(stream) {
+  const lines = stream.split(/\r?\n/);
+  for (const line of lines) {
+    const urlMatch = line.match(/(https?:\/\/[^\s]+)/);
+    if (urlMatch) {
+      try {
+        const u = new URL(urlMatch[1]);
+        if (u.port) {
+          return { port: Number(u.port), baseUrl: `${u.protocol}//${u.hostname}:${u.port}` };
+        }
+      } catch {
+      }
+    }
+    const portMatch = line.match(/port[:\s]+(\d{2,5})/i);
+    if (portMatch) {
+      return { port: Number(portMatch[1]), baseUrl: `${DEFAULT_BASE_URL}:${portMatch[1]}` };
     }
   }
-  env.OPENCODE_CONFIG = configPath;
-  env.HOME = options.homeDir;
-  if (options.disableTools) {
-    env.OPENCODE_PERMISSION = JSON.stringify({
+  return null;
+}
+function buildPermissionEnv(permission, disableTools) {
+  if (disableTools) {
+    return JSON.stringify({
       read: "deny",
       glob: "deny",
       grep: "deny",
@@ -27957,57 +27979,390 @@ function invokeOpenCode(prompt, model, configPath, options) {
       bash: "deny"
     });
   }
-  const result = (0, import_child_process.spawnSync)("opencode", args, {
-    env,
-    encoding: "utf8",
-    maxBuffer: 50 * 1024 * 1024,
-    timeout: (options.timeoutMinutes ?? 30) * 60 * 1e3,
-    stdio: ["ignore", "pipe", "pipe"]
-  });
-  const stdout = typeof result.stdout === "string" ? result.stdout : "";
-  const stderr = typeof result.stderr === "string" ? result.stderr : "";
-  if (options.debugCapture) {
-    fs3.mkdirSync(path3.dirname(options.debugCapture.stdoutPath), { recursive: true });
-    fs3.mkdirSync(path3.dirname(options.debugCapture.stderrPath), { recursive: true });
-    fs3.writeFileSync(options.debugCapture.stdoutPath, stdout, { encoding: "utf8", mode: 384 });
-    fs3.writeFileSync(options.debugCapture.stderrPath, stderr, { encoding: "utf8", mode: 384 });
+  if (!permission || Object.keys(permission).length === 0) {
+    return null;
   }
-  if (result.error) {
-    throw result.error;
+  return JSON.stringify(permission);
+}
+function splitModel(model) {
+  const slashIndex = model.indexOf("/");
+  if (slashIndex <= 0 || slashIndex === model.length - 1) {
+    return { providerID: "", modelID: model };
   }
-  if (result.status !== 0) {
-    const errorOutput = stderr.trim();
-    throw new Error(`opencode exited with status ${result.status}${errorOutput ? `: ${errorOutput}` : ""}`);
+  return {
+    providerID: model.slice(0, slashIndex),
+    modelID: model.slice(slashIndex + 1)
+  };
+}
+function appendBuffer(target, chunk) {
+  if (chunk == null) return target.join("");
+  if (typeof chunk === "string") {
+    target.push(chunk);
+  } else if (Buffer.isBuffer(chunk)) {
+    target.push(chunk.toString("utf8"));
+  } else if (chunk instanceof Uint8Array) {
+    target.push(Buffer.from(chunk).toString("utf8"));
+  } else {
+    target.push(String(chunk));
   }
-  const text = [];
-  let inputTokens = 0;
-  let outputTokens = 0;
-  let cost = 0;
-  for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
-    const event = JSON.parse(line);
-    if (event.type === "text") {
-      const value = event.text ?? event.part?.text;
-      if (value) {
-        text.push(value);
+  return target.join("");
+}
+function selectTerminalText(parts) {
+  if (!Array.isArray(parts) || parts.length === 0) {
+    return { text: "", parts: [] };
+  }
+  let terminalIndex = -1;
+  for (let i = parts.length - 1; i >= 0; i -= 1) {
+    const candidate = parts[i];
+    if (candidate && candidate.type === "step-finish" && candidate.reason === "stop") {
+      terminalIndex = i;
+      break;
+    }
+  }
+  const upperBound = terminalIndex >= 0 ? terminalIndex : parts.length;
+  let lastTextIndex = -1;
+  for (let i = upperBound - 1; i >= 0; i -= 1) {
+    const candidate = parts[i];
+    if (candidate && candidate.type === "text" && typeof candidate.text === "string") {
+      lastTextIndex = i;
+      break;
+    }
+  }
+  if (lastTextIndex < 0) {
+    return { text: "", parts };
+  }
+  const text = parts[lastTextIndex].text;
+  return { text, parts };
+}
+function readInfo(info3) {
+  if (!info3 || typeof info3 !== "object") {
+    return { cost: 0, tokens: { input: 0, output: 0 }, providerID: "", modelID: "" };
+  }
+  const record = info3;
+  const tokensRaw = record.tokens ?? {};
+  const reasoningRaw = tokensRaw.reasoning;
+  const reasoning = typeof reasoningRaw === "number" && Number.isFinite(reasoningRaw) ? reasoningRaw : void 0;
+  return {
+    cost: typeof record.cost === "number" ? record.cost : 0,
+    tokens: {
+      input: typeof tokensRaw.input === "number" ? tokensRaw.input : 0,
+      output: typeof tokensRaw.output === "number" ? tokensRaw.output : 0,
+      ...reasoning !== void 0 ? { reasoning } : {}
+    },
+    providerID: typeof record.providerID === "string" ? record.providerID : "",
+    modelID: typeof record.modelID === "string" ? record.modelID : ""
+  };
+}
+async function readJsonResponse(fetchFn, response) {
+  const text = await response.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+async function awaitListeningUrl(proc, stdoutBuffer, stderrBuffer, timeoutMs, sleep) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const combined = `${stdoutBuffer.join("")}
+${stderrBuffer.join("")}`;
+    const parsed = parseListeningUrl(combined);
+    if (parsed) return parsed;
+    if (proc.exitCode !== null) {
+      throw new Error(
+        `opencode server exited before announcing a listening URL (code=${proc.exitCode}):
+--- stdout ---
+${stdoutBuffer.join("")}
+--- stderr ---
+${stderrBuffer.join("")}`
+      );
+    }
+    await sleep(50);
+  }
+  throw new Error(
+    `opencode server did not announce a listening URL within ${timeoutMs} ms:
+--- stdout ---
+${stdoutBuffer.join("")}
+--- stderr ---
+${stderrBuffer.join("")}`
+  );
+}
+async function awaitHealthy(fetchFn, baseUrl, password, timeoutMs, pollMs, sleep) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetchFn(`${baseUrl}/global/health`, {
+        method: "GET",
+        headers: {
+          authorization: buildAuthorizationHeader(password),
+          accept: "application/json"
+        }
+      });
+      if (response.ok) {
+        const body = await response.json();
+        if (body && body.healthy === true) return;
       }
-    } else if (event.part?.type === "text" && event.part.text) {
-      text.push(event.part.text);
+    } catch {
     }
-    if (event.type === "step_finish" || event.part?.type === "step_finish") {
-      const tokens = event.tokens ?? event.part?.tokens;
-      inputTokens += tokens?.input ?? 0;
-      outputTokens += tokens?.output ?? 0;
-      cost += event.cost ?? event.part?.cost ?? 0;
+    await sleep(pollMs);
+  }
+  throw new Error(`opencode server did not become healthy within ${timeoutMs} ms`);
+}
+async function createSession(fetchFn, baseUrl, password, title) {
+  const response = await fetchFn(`${baseUrl}/session`, {
+    method: "POST",
+    headers: {
+      authorization: buildAuthorizationHeader(password),
+      "content-type": "application/json",
+      accept: "application/json"
+    },
+    body: JSON.stringify({ title })
+  });
+  if (!response.ok) {
+    const body2 = await response.text();
+    throw new Error(`POST /session failed with status ${response.status}: ${body2}`);
+  }
+  const body = await readJsonResponse(fetchFn, response);
+  if (!body || typeof body.id !== "string" || !body.id) {
+    throw new Error(`POST /session returned a body without an id: ${JSON.stringify(body)}`);
+  }
+  return body.id;
+}
+async function postMessage(fetchFn, baseUrl, password, sessionId, modelParts) {
+  const response = await fetchFn(`${baseUrl}/session/${sessionId}/message`, {
+    method: "POST",
+    headers: {
+      authorization: buildAuthorizationHeader(password),
+      "content-type": "application/json",
+      accept: "application/json"
+    },
+    body: JSON.stringify({
+      modelID: modelParts.modelID,
+      providerID: modelParts.providerID,
+      parts: modelParts.parts
+    })
+  });
+  if (!response.ok) {
+    const body2 = await response.text();
+    throw new Error(`POST /session/${sessionId}/message failed with status ${response.status}: ${body2}`);
+  }
+  const body = await readJsonResponse(fetchFn, response);
+  if (!body) {
+    throw new Error(`POST /session/${sessionId}/message returned an empty body`);
+  }
+  const info3 = readInfo(body.info);
+  const parts = Array.isArray(body.parts) ? body.parts : [];
+  return { info: info3, parts };
+}
+async function terminateServer(proc, graceMs, sleep) {
+  if (proc.exitCode !== null) return;
+  try {
+    proc.kill("SIGTERM");
+  } catch {
+  }
+  const deadline = Date.now() + graceMs;
+  while (Date.now() < deadline) {
+    if (proc.exitCode !== null) return;
+    await sleep(50);
+  }
+  if (proc.exitCode !== null) return;
+  try {
+    proc.kill("SIGKILL");
+  } catch {
+  }
+}
+function pipeStream(stream, buffer, debugPath) {
+  if (!stream) return;
+  stream.on("data", (chunk) => {
+    appendBuffer(buffer, chunk);
+  });
+  stream.on("error", () => {
+  });
+  if (debugPath) {
+    let pending = null;
+    stream.on("data", () => {
+      if (pending) return;
+      pending = setImmediate(() => {
+        pending = null;
+        try {
+          const fs22 = require("fs");
+          fs22.mkdirSync(require("path").dirname(debugPath), { recursive: true });
+          fs22.writeFileSync(debugPath, buffer.join(""), { encoding: "utf8", mode: 384 });
+        } catch {
+        }
+      });
+    });
+  }
+}
+async function runOpenCodeServer(options, runtime) {
+  if (!options || typeof options !== "object") {
+    throw new Error("runOpenCodeServer requires an options object");
+  }
+  if (!options.configPath) {
+    throw new Error("runOpenCodeServer requires options.configPath");
+  }
+  if (!options.homeDir) {
+    throw new Error("runOpenCodeServer requires options.homeDir");
+  }
+  if (!options.prompt) {
+    throw new Error("runOpenCodeServer requires options.prompt");
+  }
+  if (!options.model) {
+    throw new Error("runOpenCodeServer requires options.model");
+  }
+  if (!Number.isFinite(options.timeoutMinutes) || options.timeoutMinutes <= 0) {
+    throw new Error("runOpenCodeServer requires a positive options.timeoutMinutes");
+  }
+  const fs7 = await import("fs");
+  const path7 = await import("path");
+  fs7.mkdirSync(options.homeDir, { recursive: true });
+  const randomBytesFn = runtime?.randomBytes ?? import_crypto.randomBytes;
+  const passwordBytes = randomBytesFn(32);
+  const serverPassword = Buffer.from(passwordBytes).toString("hex");
+  const env = {};
+  for (const [name, value] of Object.entries(process.env)) {
+    if (name.startsWith("OPENCODE_")) continue;
+    env[name] = value;
+  }
+  env.OPENCODE_CONFIG = options.configPath;
+  env.HOME = options.homeDir;
+  env.OPENCODE_SERVER_PASSWORD = serverPassword;
+  const permissionEnv = buildPermissionEnv(options.permission, options.disableTools);
+  if (permissionEnv) {
+    env.OPENCODE_PERMISSION = permissionEnv;
+  }
+  const spawnFn = runtime?.spawn ?? require("child_process").spawn;
+  const fetchFn = runtime?.fetch ?? globalThis.fetch;
+  const sleepFn = runtime?.sleep ?? defaultSleep;
+  const proc = spawnFn(
+    "opencode",
+    [
+      "serve",
+      "--port",
+      "0",
+      "--hostname",
+      "127.0.0.1",
+      "--log-level",
+      "DEBUG",
+      "--print-logs"
+    ],
+    {
+      env,
+      stdio: ["ignore", "pipe", "pipe"]
+    }
+  );
+  const stdoutBuffer = [];
+  const stderrBuffer = [];
+  pipeStream(proc.stdout, stdoutBuffer, options.debugCapture?.stdoutPath);
+  pipeStream(proc.stderr, stderrBuffer, options.debugCapture?.stderrPath);
+  const spawnError = { value: null };
+  proc.on("error", (err) => {
+    spawnError.value = err;
+  });
+  try {
+    const listening = await awaitListeningUrl(
+      proc,
+      stdoutBuffer,
+      stderrBuffer,
+      DEFAULT_TIMEOUT_MS,
+      sleepFn
+    );
+    await awaitHealthy(
+      fetchFn,
+      listening.baseUrl,
+      serverPassword,
+      DEFAULT_TIMEOUT_MS,
+      DEFAULT_HEALTH_POLL_MS,
+      sleepFn
+    );
+    const sessionId = await createSession(
+      fetchFn,
+      listening.baseUrl,
+      serverPassword,
+      `ai-review:${path7.basename(options.configPath)}`
+    );
+    const { providerID, modelID } = splitModel(options.model);
+    const response = await postMessage(fetchFn, listening.baseUrl, serverPassword, sessionId, {
+      providerID,
+      modelID,
+      parts: [{ type: "text", text: options.prompt }]
+    });
+    const selection = selectTerminalText(response.parts);
+    const sanitized = sanitizeModelText(selection.text);
+    const extracted = extractReviewDocument(sanitized);
+    const returnedModel = `${response.info.providerID || providerID}/${response.info.modelID || modelID}`;
+    return {
+      text: extracted ?? sanitized,
+      cost: response.info.cost,
+      tokens: response.info.tokens,
+      model: returnedModel,
+      parts: selection.parts
+    };
+  } catch (error) {
+    if (options.debugCapture) {
+      try {
+        fs7.mkdirSync(path7.dirname(options.debugCapture.stdoutPath), { recursive: true });
+        fs7.mkdirSync(path7.dirname(options.debugCapture.stderrPath), { recursive: true });
+        fs7.writeFileSync(options.debugCapture.stdoutPath, stdoutBuffer.join(""), {
+          encoding: "utf8",
+          mode: 384
+        });
+        fs7.writeFileSync(options.debugCapture.stderrPath, stderrBuffer.join(""), {
+          encoding: "utf8",
+          mode: 384
+        });
+      } catch {
+      }
+    }
+    if (spawnError.value) {
+      throw new Error(`opencode server spawn failed: ${spawnError.value.message}`);
+    }
+    throw error instanceof Error ? error : new Error(String(error));
+  } finally {
+    await terminateServer(proc, DEFAULT_TERMINATE_GRACE_MS, sleepFn);
+    if (options.debugCapture) {
+      try {
+        fs7.mkdirSync(path7.dirname(options.debugCapture.stdoutPath), { recursive: true });
+        fs7.mkdirSync(path7.dirname(options.debugCapture.stderrPath), { recursive: true });
+        fs7.writeFileSync(options.debugCapture.stdoutPath, stdoutBuffer.join(""), {
+          encoding: "utf8",
+          mode: 384
+        });
+        fs7.writeFileSync(options.debugCapture.stderrPath, stderrBuffer.join(""), {
+          encoding: "utf8",
+          mode: 384
+        });
+      } catch {
+      }
     }
   }
-  const rawText = text.join("");
+}
+
+// packages/run-reviews/src/opencode.ts
+async function invokeOpenCode(prompt, model, configPath, options) {
+  fs3.mkdirSync(options.homeDir, { recursive: true });
+  const result = await runOpenCodeServer({
+    configPath,
+    homeDir: options.homeDir,
+    model,
+    prompt,
+    timeoutMinutes: options.timeoutMinutes ?? 30,
+    permission: {},
+    opencodeVersion: "",
+    disableTools: options.disableTools,
+    debugCapture: options.debugCapture,
+    agent: options.agent
+  });
+  const rawText = result.text;
   const sanitized = sanitizeModelText(rawText);
   const extracted = extractReviewDocument(sanitized);
+  void path3;
   return {
     text: extracted ?? sanitized,
-    tokens: { input: inputTokens, output: outputTokens },
-    cost,
-    model
+    tokens: { input: result.tokens.input, output: result.tokens.output },
+    cost: result.cost,
+    model: result.model
   };
 }
 
@@ -28079,7 +28434,7 @@ var REDACTION_PATTERNS = [
   { pattern: /Bearer\s+[^\s"'`\\]+/gi, replacement: "Bearer [REDACTED]" }
 ];
 function assertOpenCodeVersion(expectedVersion) {
-  const result = (0, import_child_process2.spawnSync)("opencode", ["--version"], {
+  const result = (0, import_child_process.spawnSync)("opencode", ["--version"], {
     encoding: "utf8",
     maxBuffer: 1024 * 1024,
     stdio: ["ignore", "pipe", "pipe"],
@@ -28300,7 +28655,7 @@ async function runReviews(options) {
     for (const currentModel of orderedModels) {
       console.log(`Running review: ${currentModel} :: ${prompt.source}`);
       try {
-        const result = invokeOpenCode(
+        const result = await invokeOpenCode(
           composeTaskPromptWithPreviousReviews([prompt], priorReviewsBlock),
           currentModel,
           configPath,
@@ -28354,7 +28709,7 @@ async function runReviews(options) {
           eventContext: eventContextForSetup,
           priorReviewsBlock
         });
-        const fusionResult = invokeOpenCode(
+        const fusionResult = await invokeOpenCode(
           composeFusionPrompt(
             validResults.map((entry) => ({ model: entry.model, prompt: entry.prompt, text: entry.document })),
             agent.synthesis.prompt
@@ -28463,7 +28818,7 @@ async function runReviews(options) {
 }
 
 // packages/validate-review/src/main.ts
-var import_child_process3 = require("child_process");
+var import_child_process2 = require("child_process");
 var fs6 = __toESM(require("fs"));
 var os3 = __toESM(require("os"));
 var path6 = __toESM(require("path"));
@@ -28488,7 +28843,7 @@ function capReason(message) {
   return `${message.slice(0, keep)}${FAILURE_REASON_ELLIPSIS}`;
 }
 function assertOpenCodeVersion2(expectedVersion) {
-  const result = (0, import_child_process3.spawnSync)("opencode", ["--version"], {
+  const result = (0, import_child_process2.spawnSync)("opencode", ["--version"], {
     encoding: "utf8",
     maxBuffer: 1024 * 1024,
     stdio: ["ignore", "pipe", "pipe"],
@@ -28562,58 +28917,19 @@ function invokeValidator(options) {
   };
   const configPath = path6.join(homeDir, "opencode.json");
   fs6.writeFileSync(configPath, JSON.stringify(mergedConfig, null, 2), "utf8");
-  const env = { ...process.env };
-  for (const name of Object.keys(env)) {
-    if (name.startsWith("OPENCODE_")) {
-      delete env[name];
-    }
-  }
-  env.OPENCODE_CONFIG = configPath;
-  env.HOME = homeDir;
-  const result = (0, import_child_process3.spawnSync)(
-    "opencode",
-    ["run", prompt, "--model", options.model, "--format", "json"],
-    {
-      env,
-      encoding: "utf8",
-      maxBuffer: 50 * 1024 * 1024,
-      timeout: options.timeoutMinutes * 60 * 1e3,
-      stdio: ["ignore", "pipe", "pipe"]
-    }
-  );
-  if (result.error) {
-    throw result.error;
-  }
-  if (result.status !== 0) {
-    const errorOutput = (typeof result.stderr === "string" ? result.stderr : "").trim();
-    throw new Error(
-      `opencode exited with status ${result.status}${errorOutput ? `: ${errorOutput}` : ""}`
-    );
-  }
-  const text = [];
-  let inputTokens = 0;
-  let outputTokens = 0;
-  let cost = 0;
-  for (const line of (typeof result.stdout === "string" ? result.stdout : "").split(/\r?\n/).filter(Boolean)) {
-    const event = JSON.parse(line);
-    if (event.type === "text") {
-      const value = event.text ?? event.part?.text;
-      if (value) text.push(value);
-    } else if (event.part?.type === "text" && event.part.text) {
-      text.push(event.part.text);
-    }
-    if (event.type === "step_finish" || event.part?.type === "step_finish") {
-      const tokens = event.tokens ?? event.part?.tokens;
-      inputTokens += tokens?.input ?? 0;
-      outputTokens += tokens?.output ?? 0;
-      cost += event.cost ?? event.part?.cost ?? 0;
-    }
-  }
-  return {
-    text: text.join("").trim(),
-    tokens: { input: inputTokens, output: outputTokens },
-    cost
-  };
+  return runOpenCodeServer({
+    configPath,
+    homeDir,
+    model: options.model,
+    prompt,
+    timeoutMinutes: options.timeoutMinutes,
+    permission: { ...VALIDATOR_PERMISSION2 },
+    opencodeVersion: ""
+  }).then((result) => ({
+    text: result.text.trim(),
+    tokens: { input: result.tokens.input, output: result.tokens.output },
+    cost: result.cost
+  }));
 }
 function parseValidatorResponse(text) {
   const firstLine = text.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? "";
@@ -28692,7 +29008,7 @@ async function validateReview(options) {
   }
   let result;
   try {
-    result = invokeValidator({
+    result = await invokeValidator({
       reviewPath: options.reviewPath,
       reviewContent,
       model: options.model,

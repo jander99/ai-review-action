@@ -1,114 +1,63 @@
-import { spawnSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { extractReviewDocument, sanitizeModelText } from '@jander99/ai-review-review-contract';
 import type { ReviewResult } from './types';
+import { runOpenCodeServer, type DebugCapturePaths } from './opencode-server';
 
-export interface DebugCapturePaths {
-  stdoutPath: string;
-  stderrPath: string;
-}
+// Re-export the runtime types so callers that build higher-level
+// orchestrators (or test doubles) do not need to import the transport
+// module twice.
+export type { DebugCapturePaths } from './opencode-server';
 
 export interface InvokeOpenCodeOptions {
   homeDir: string;
   timeoutMinutes?: number;
   disableTools?: boolean;
   debugCapture?: DebugCapturePaths;
+  /**
+   * Optional override for the `agent` field on `POST /session/:id/message`.
+   * When omitted, the server falls back to the `default_agent` declared in
+   * the merged config.
+   */
+  agent?: string;
 }
 
-interface OpenCodeEvent {
-  type?: string;
-  text?: string;
-  tokens?: { input?: number; output?: number };
-  cost?: number;
-  part?: {
-    type?: string;
-    text?: string;
-    tokens?: { input?: number; output?: number };
-    cost?: number;
-  };
-}
-
-export function invokeOpenCode(
+/**
+ * Drive a single OpenCode invocation through the documented HTTP
+ * server transport. Thin wrapper around `runOpenCodeServer` that
+ * preserves the legacy synchronous-looking signature by returning a
+ * Promise. Callers should `await` the result.
+ *
+ * The capture race that previously lost the final `text` part to the
+ * `opencode run --format json` stream's maxBuffer flush is fixed at
+ * the source: the server's `POST /session/:id/message` is
+ * synchronous and returns the terminal assistant message atomically.
+ *
+ * Public API preserved: `invokeOpenCode(prompt, model, configPath,
+ * options)` returning `{ text, tokens, cost, model }`.
+ */
+export async function invokeOpenCode(
   prompt: string,
   model: string,
   configPath: string,
   options: InvokeOpenCodeOptions,
-): ReviewResult {
+): Promise<ReviewResult> {
   fs.mkdirSync(options.homeDir, { recursive: true });
-  const args = ['run', prompt, '--model', model, '--format', 'json'];
-  const env = { ...process.env };
-  for (const name of Object.keys(env)) {
-    if (name.startsWith('OPENCODE_')) {
-      delete env[name];
-    }
-  }
-  env.OPENCODE_CONFIG = configPath;
-  env.HOME = options.homeDir;
-  if (options.disableTools) {
-    env.OPENCODE_PERMISSION = JSON.stringify({
-      read: 'deny',
-      glob: 'deny',
-      grep: 'deny',
-      list: 'deny',
-      webfetch: 'deny',
-      edit: 'deny',
-      question: 'deny',
-      doom_loop: 'deny',
-      bash: 'deny',
-    });
-  }
 
-  const result = spawnSync('opencode', args, {
-    env,
-    encoding: 'utf8',
-    maxBuffer: 50 * 1024 * 1024,
-    timeout: (options.timeoutMinutes ?? 30) * 60 * 1000,
-    stdio: ['ignore', 'pipe', 'pipe'],
+  const result = await runOpenCodeServer({
+    configPath,
+    homeDir: options.homeDir,
+    model,
+    prompt,
+    timeoutMinutes: options.timeoutMinutes ?? 30,
+    permission: {},
+    opencodeVersion: '',
+    disableTools: options.disableTools,
+    debugCapture: options.debugCapture,
+    agent: options.agent,
   });
 
-  const stdout = typeof result.stdout === 'string' ? result.stdout : '';
-  const stderr = typeof result.stderr === 'string' ? result.stderr : '';
-  if (options.debugCapture) {
-    fs.mkdirSync(path.dirname(options.debugCapture.stdoutPath), { recursive: true });
-    fs.mkdirSync(path.dirname(options.debugCapture.stderrPath), { recursive: true });
-    fs.writeFileSync(options.debugCapture.stdoutPath, stdout, { encoding: 'utf8', mode: 0o600 });
-    fs.writeFileSync(options.debugCapture.stderrPath, stderr, { encoding: 'utf8', mode: 0o600 });
-  }
-
-  if (result.error) {
-    throw result.error;
-  }
-  if (result.status !== 0) {
-    const errorOutput = stderr.trim();
-    throw new Error(`opencode exited with status ${result.status}${errorOutput ? `: ${errorOutput}` : ''}`);
-  }
-
-  const text: string[] = [];
-  let inputTokens = 0;
-  let outputTokens = 0;
-  let cost = 0;
-
-  for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
-    const event = JSON.parse(line) as OpenCodeEvent;
-    if (event.type === 'text') {
-      const value = event.text ?? event.part?.text;
-      if (value) {
-        text.push(value);
-      }
-    } else if (event.part?.type === 'text' && event.part.text) {
-      text.push(event.part.text);
-    }
-
-    if (event.type === 'step_finish' || event.part?.type === 'step_finish') {
-      const tokens = event.tokens ?? event.part?.tokens;
-      inputTokens += tokens?.input ?? 0;
-      outputTokens += tokens?.output ?? 0;
-      cost += event.cost ?? event.part?.cost ?? 0;
-    }
-  }
-
-  const rawText = text.join('');
+  const rawText = result.text;
   // Sanitize orphan tags as a safety net, then slice from the strict
   // '# Review — <title-or-ref>' heading if one is present. If no
   // strict heading exists, return the sanitized raw text so the caller
@@ -116,10 +65,17 @@ export function invokeOpenCode(
   // fabricating a review.
   const sanitized = sanitizeModelText(rawText);
   const extracted = extractReviewDocument(sanitized);
+
+  // The path import keeps the bundler happy when this module is
+  // imported in isolation by tests; it is also a defensive no-op in
+  // production (path is only referenced for debug capture, which
+  // happens inside the transport module).
+  void path;
+
   return {
     text: extracted ?? sanitized,
-    tokens: { input: inputTokens, output: outputTokens },
-    cost,
-    model,
+    tokens: { input: result.tokens.input, output: result.tokens.output },
+    cost: result.cost,
+    model: result.model,
   };
 }

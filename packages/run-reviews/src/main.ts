@@ -401,7 +401,7 @@ export async function runReviews(options: RunReviewsOptions): Promise<RunReviews
     for (const currentModel of orderedModels) {
       console.log(`Running review: ${currentModel} :: ${prompt.source}`);
       try {
-        const result = invokeOpenCode(
+        const result = await invokeOpenCode(
           composeTaskPromptWithPreviousReviews([prompt], priorReviewsBlock),
           currentModel,
           configPath,
@@ -464,7 +464,7 @@ export async function runReviews(options: RunReviewsOptions): Promise<RunReviews
           eventContext: eventContextForSetup,
           priorReviewsBlock,
         });
-        const fusionResult = invokeOpenCode(
+        const fusionResult = await invokeOpenCode(
           composeFusionPrompt(
             validResults.map((entry) => ({ model: entry.model, prompt: entry.prompt, text: entry.document })),
             agent.synthesis.prompt,

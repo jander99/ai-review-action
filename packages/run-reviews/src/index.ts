@@ -31,3 +31,18 @@ export type {
   RunReviewsOptions,
   RunReviewsResult,
 } from './main';
+
+// Shared OpenCode HTTP server transport. Exported so the
+// `validate-review` package can drive its validator call through the
+// same transport that fixes the run-reviews capture race, without
+// duplicating the lifecycle, password handling, or response parsing.
+export {
+  runOpenCodeServer,
+  selectTerminalText,
+} from './opencode-server';
+export type {
+  DebugCapturePaths,
+  OpenCodeServerRuntime,
+  RunOpenCodeServerOptions,
+  RunOpenCodeServerResult,
+} from './opencode-server';
