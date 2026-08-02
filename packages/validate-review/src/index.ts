@@ -4,5 +4,5 @@
  * going through `@actions/core` I/O.
  */
 
-export { validateReview } from './main';
+export { parseValidatorResponse, validateReview } from './main';
 export type { ValidateReviewOptions, ValidateReviewResult } from './main';

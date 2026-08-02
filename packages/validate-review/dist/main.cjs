@@ -20631,6 +20631,9 @@ function capReason(message) {
   const keep = FAILURE_REASON_MAX_CHARS - FAILURE_REASON_ELLIPSIS.length;
   return `${message.slice(0, keep)}${FAILURE_REASON_ELLIPSIS}`;
 }
+function stripThinkingBlocks(text) {
+  return text.replace(/<think>[\s\S]*?<\/think>/g, "");
+}
 function assertOpenCodeVersion(expectedVersion) {
   const result = (0, import_child_process.spawnSync)("opencode", ["--version"], {
     encoding: "utf8",
@@ -20720,7 +20723,8 @@ function invokeValidator(options) {
   }));
 }
 function parseValidatorResponse(text) {
-  const firstLine = text.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? "";
+  const cleaned = stripThinkingBlocks(text);
+  const firstLine = cleaned.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? "";
   if (firstLine === "VALID") {
     return { status: "valid", reason: "" };
   }

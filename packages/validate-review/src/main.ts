@@ -30,6 +30,10 @@ function capReason(message: string): string {
   return `${message.slice(0, keep)}${FAILURE_REASON_ELLIPSIS}`;
 }
 
+function stripThinkingBlocks(text: string): string {
+  return text.replace(/<think>[\s\S]*?<\/think>/g, '');
+}
+
 function assertOpenCodeVersion(expectedVersion: string): void {
   const result = spawnSync('opencode', ['--version'], {
     encoding: 'utf8',
@@ -149,8 +153,9 @@ function invokeValidator(options: InvokeValidatorOptions): Promise<InvokeValidat
   }));
 }
 
-function parseValidatorResponse(text: string): { status: 'valid' | 'invalid'; reason: string } {
-  const firstLine = text.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? '';
+export function parseValidatorResponse(text: string): { status: 'valid' | 'invalid'; reason: string } {
+  const cleaned = stripThinkingBlocks(text);
+  const firstLine = cleaned.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? '';
   if (firstLine === 'VALID') {
     return { status: 'valid', reason: '' };
   }
