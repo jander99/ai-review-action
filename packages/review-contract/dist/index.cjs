@@ -41,6 +41,7 @@ __export(index_exports, {
   renderDocument: () => renderDocument,
   renderFinding: () => renderFinding,
   sanitizeModelText: () => sanitizeModelText,
+  selectTerminalText: () => selectTerminalText,
   stripSentinelBoundary: () => stripSentinelBoundary,
   validateReviewDocument: () => validateReviewDocument
 });
@@ -61,6 +62,27 @@ var EMOJI_TO_SEVERITY = {
 var STATUSES = ["new", "unresolved", "resolved", "new variant"];
 var STATUS_VALUES_SET = new Set(STATUSES);
 var STATUS_COUNTS_AS_NEW = /* @__PURE__ */ new Set(["new", "new variant"]);
+function selectTerminalText(parts) {
+  if (!Array.isArray(parts) || parts.length === 0) {
+    return { text: "", parts: [] };
+  }
+  let terminalIndex = -1;
+  for (let i = parts.length - 1; i >= 0; i -= 1) {
+    const candidate = parts[i];
+    if (candidate && (candidate.type === "step-finish" || candidate.type === "step_finish") && candidate.reason === "stop") {
+      terminalIndex = i;
+      break;
+    }
+  }
+  const upperBound = terminalIndex >= 0 ? terminalIndex : parts.length;
+  for (let i = upperBound - 1; i >= 0; i -= 1) {
+    const candidate = parts[i];
+    if (candidate && candidate.type === "text" && typeof candidate.text === "string") {
+      return { text: candidate.text, parts };
+    }
+  }
+  return { text: "", parts };
+}
 var HEADING_LINE_PATTERN = /^# Review — \S.*$/;
 var FENCE_LINE_PATTERN = /^```/;
 var SUMMARY_HEADING_PATTERN = /^## Summary\s*$/;
@@ -674,6 +696,7 @@ function normalizeTitleForHeading(titleOrRef) {
   renderDocument,
   renderFinding,
   sanitizeModelText,
+  selectTerminalText,
   stripSentinelBoundary,
   validateReviewDocument
 });

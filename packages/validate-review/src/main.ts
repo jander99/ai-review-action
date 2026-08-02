@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { VALIDATOR_AGENT_PROMPT_TEMPLATE } from '@jander99/ai-review-review-contract';
-import { runOpenCodeServer } from '@jander99/ai-review-run-reviews';
+import { runOpenCodeRun } from '@jander99/ai-review-run-reviews';
 import { validateReviewDocument } from './structure';
 
 const DEFAULT_OPENCODE_VERSION = '1.18.5';
@@ -135,14 +135,13 @@ function invokeValidator(options: InvokeValidatorOptions): Promise<InvokeValidat
   const configPath = path.join(homeDir, 'opencode.json');
   fs.writeFileSync(configPath, JSON.stringify(mergedConfig, null, 2), 'utf8');
 
-  return runOpenCodeServer({
+  return runOpenCodeRun({
     configPath,
     homeDir,
     model: options.model,
     prompt,
     timeoutMinutes: options.timeoutMinutes,
-    permission: { ...VALIDATOR_PERMISSION },
-    opencodeVersion: '',
+    disableTools: true,
   }).then((result) => ({
     text: result.text.trim(),
     tokens: { input: result.tokens.input, output: result.tokens.output },

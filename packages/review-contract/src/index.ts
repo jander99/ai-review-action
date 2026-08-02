@@ -37,6 +37,46 @@ export const STATUS_VALUES_SET: ReadonlySet<Status> = new Set(STATUSES);
 
 export const STATUS_COUNTS_AS_NEW: ReadonlySet<Status> = new Set(['new', 'new variant']);
 
+export interface TerminalTextSelection {
+  text: string;
+  parts: ReadonlyArray<unknown>;
+}
+
+/**
+ * Select the terminal assistant text from an ordered OpenCode parts array.
+ * The last stop step-finish is the terminal boundary; when it is absent,
+ * the last text part is used as a defensive fallback. No text parts yields
+ * an empty string so callers can apply their own response validation.
+ */
+export function selectTerminalText(parts: ReadonlyArray<unknown>): TerminalTextSelection {
+  if (!Array.isArray(parts) || parts.length === 0) {
+    return { text: '', parts: [] };
+  }
+
+  let terminalIndex = -1;
+  for (let i = parts.length - 1; i >= 0; i -= 1) {
+    const candidate = parts[i] as { type?: unknown; reason?: unknown } | null;
+    if (
+      candidate &&
+      (candidate.type === 'step-finish' || candidate.type === 'step_finish') &&
+      candidate.reason === 'stop'
+    ) {
+      terminalIndex = i;
+      break;
+    }
+  }
+
+  const upperBound = terminalIndex >= 0 ? terminalIndex : parts.length;
+  for (let i = upperBound - 1; i >= 0; i -= 1) {
+    const candidate = parts[i] as { type?: unknown; text?: unknown } | null;
+    if (candidate && candidate.type === 'text' && typeof candidate.text === 'string') {
+      return { text: candidate.text, parts };
+    }
+  }
+
+  return { text: '', parts };
+}
+
 // Patterns used by the extractor and validator. Kept private to the module
 // so callers do not depend on them.
 const HEADING_LINE_PATTERN = /^# Review — \S.*$/;
