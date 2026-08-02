@@ -38,13 +38,33 @@ jobs:
           checksum: cd4a2557a3d6550f27cb5c0257ebe8d73388bb34beda8b6121e6428a74c1eae2
 
       - name: AI Review
+        id: review
         uses: ./packages/root-action
         with:
           model: minimax/minimax-m3
           prompts: file:examples/prompts/code-review.md
           fusion: false
-          debug: false
+          # Capture redacted, gzipped OpenCode stdout/stderr so the
+          # follow-up step can upload it as a workflow artifact when
+          # the model misbehaves (e.g. keeps emitting preamble-only
+          # text). Set to 'false' once the model is stable.
+          debug: true
           fail-on-error: false
           post-comment: true
+          # The new JS action does NOT auto-forward github.token; we
+          # must pass it explicitly so postErrorComment / postCheckRun
+          # can reach the GitHub API. Without this the action would
+          # silently fail every PR comment (best-effort wrappers
+          # swallow the 401).
+          github-token: ${{ github.token }}
         env:
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+
+      - name: Upload debug artifacts
+        if: always() && steps.review.outputs.debug-artifact-path != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-review-debug
+          path: ${{ steps.review.outputs.debug-artifact-path }}
+          if-no-files-found: ignore
+          retention-days: 7

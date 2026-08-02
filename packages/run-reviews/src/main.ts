@@ -5,6 +5,7 @@ import * as path from 'path';
 import { gzipSync } from 'zlib';
 import {
   mergeReviewDocuments,
+  sanitizeModelText,
   validateReviewDocument,
 } from '@jander99/ai-review-review-contract';
 import { fetchPriorReviews } from '@jander99/ai-review-previous-reviews';
@@ -174,6 +175,67 @@ export interface RunReviewsOptions {
 }
 
 /**
+ * Diagnostic preview of a model document that the deterministic
+ * contract validator rejected. Surfaced on `RunReviewsResult` so the
+ * root-action orchestration can emit a `core.warning` per entry and
+ * give operators something to look at beyond the bare reason string.
+ */
+export interface RejectedDocument {
+  readonly model: string;
+  readonly reason: string;
+  readonly preview: string;
+}
+
+/**
+ * Cap on the number of rejected-document previews surfaced on the
+ * result. The diagnostics are intended for human inspection; three
+ * entries cover the common failure shape (one per model or one per
+ * prompt) without flooding the action log on runs that fan out
+ * across many model/prompt pairs.
+ */
+export const REJECTED_DOCUMENT_CAP = 3;
+
+/**
+ * Default cap on the size of each preview. The preview is intended
+ * to fit comfortably inside a single `core.warning` annotation
+ * without bloating the run log.
+ */
+export const REJECTED_DOCUMENT_PREVIEW_MAX_CHARS = 1024;
+
+/**
+ * Build a sanitized, line-bounded preview of a model document. Used
+ * by `runReviews` to populate the `rejectedDocuments` field on the
+ * result so the orchestration layer can log diagnostics when the
+ * deterministic contract validator rejects a model response.
+ *
+ * The result is always <= `maxChars` characters (no marker is
+ * appended - the caller decides how to label the preview). When the
+ * input fits in the budget the sanitized text is returned verbatim;
+ * when it does not, the helper breaks at the last newline that fits
+ * in the budget so the preview never chops a line mid-token. If no
+ * newline fits (single huge line), the helper hard-truncates at the
+ * cap.
+ *
+ * Pure function: no `core`, no `fs`, no `process` access. Tests can
+ * import this helper directly via the run-reviews index.
+ */
+export function buildRejectedDocumentPreview(
+  text: string,
+  maxChars: number = REJECTED_DOCUMENT_PREVIEW_MAX_CHARS,
+): string {
+  const sanitized = sanitizeModelText(text);
+  if (sanitized.length <= maxChars) {
+    return sanitized;
+  }
+  const slice = sanitized.slice(0, maxChars);
+  const lastNewline = slice.lastIndexOf('\n');
+  if (lastNewline > 0) {
+    return slice.slice(0, lastNewline);
+  }
+  return slice;
+}
+
+/**
  * Result of the programmatic review pipeline. Mirrors the action
  * outputs so the standalone action wrapper can write them via
  * `core.setOutput` and the root action can use them as plain fields.
@@ -190,6 +252,14 @@ export interface RunReviewsResult {
   effectiveModel: string;
   debugArtifactPath: string;
   failureReason: string;
+  /**
+   * Sanitized previews of model documents rejected by the
+   * deterministic contract validator. Capped at
+   * `REJECTED_DOCUMENT_CAP` entries; entries are appended in the
+   * order the validator rejects them. Empty when every invocation
+   * produces a valid document.
+   */
+  rejectedDocuments: ReadonlyArray<RejectedDocument>;
 }
 
 export async function runReviews(options: RunReviewsOptions): Promise<RunReviewsResult> {
@@ -205,6 +275,7 @@ export async function runReviews(options: RunReviewsOptions): Promise<RunReviews
     effectiveModel: '',
     debugArtifactPath: '',
     failureReason: '',
+    rejectedDocuments: [],
   };
 
   try {
@@ -218,6 +289,11 @@ export async function runReviews(options: RunReviewsOptions): Promise<RunReviews
   const accountedResults: ReviewResult[] = [];
   const successfulModels = new Set<string>();
   const failures: string[] = [];
+  // Diagnostics for the orchestration layer. Capped at
+  // REJECTED_DOCUMENT_CAP so the action log stays bounded on fan-out
+  // failures (e.g. every model/prompt combination returning
+  // preamble-only text).
+  const rejectedDocuments: RejectedDocument[] = [];
   let prompts: PromptEntry[];
   let effectiveModels: string[];
   let fusionModel: string;
@@ -347,6 +423,17 @@ export async function runReviews(options: RunReviewsOptions): Promise<RunReviews
           console.warn(
             `Review from ${currentModel} :: ${prompt.source} is structurally invalid: ${validation.reason}`,
           );
+          // Capture a sanitized, line-bounded preview so the
+          // orchestration layer can emit a `core.warning` with the
+          // offending content. Cap at REJECTED_DOCUMENT_CAP to keep
+          // the action log bounded on fan-out failures.
+          if (rejectedDocuments.length < REJECTED_DOCUMENT_CAP) {
+            rejectedDocuments.push({
+              model: currentModel,
+              reason: validation.reason,
+              preview: buildRejectedDocumentPreview(result.text),
+            });
+          }
           continue;
         }
         validResults.push({ ...result, prompt: prompt.source, document: result.text });
@@ -401,6 +488,13 @@ export async function runReviews(options: RunReviewsOptions): Promise<RunReviews
           console.warn(
             `Fusion result from ${fusionModel} is structurally invalid: ${validation.reason}; falling back to deterministic merge.`,
           );
+          if (rejectedDocuments.length < REJECTED_DOCUMENT_CAP) {
+            rejectedDocuments.push({
+              model: `fusion:${fusionModel}`,
+              reason: validation.reason,
+              preview: buildRejectedDocumentPreview(fusionResult.text),
+            });
+          }
         } else {
           canonicalDocument = fusionResult.text;
         }
@@ -484,5 +578,6 @@ export async function runReviews(options: RunReviewsOptions): Promise<RunReviews
     effectiveModel: effectiveModels[0],
     debugArtifactPath,
     failureReason: resolvedFailureReason,
+    rejectedDocuments,
   };
 }

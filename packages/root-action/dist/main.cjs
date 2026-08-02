@@ -19753,10 +19753,10 @@ Support boolean input list: \`true | True | TRUE | false | False | FALSE\``);
       (0, command_1.issueCommand)("error", (0, utils_1.toCommandProperties)(properties), message instanceof Error ? message.toString() : message);
     }
     exports2.error = error;
-    function warning(message, properties = {}) {
+    function warning2(message, properties = {}) {
       (0, command_1.issueCommand)("warning", (0, utils_1.toCommandProperties)(properties), message instanceof Error ? message.toString() : message);
     }
-    exports2.warning = warning;
+    exports2.warning = warning2;
     function notice(message, properties = {}) {
       (0, command_1.issueCommand)("notice", (0, utils_1.toCommandProperties)(properties), message instanceof Error ? message.toString() : message);
     }
@@ -28100,6 +28100,20 @@ function parseRepository(repository) {
     repo: repository.slice(slashIndex + 1)
   };
 }
+var REJECTED_DOCUMENT_CAP = 3;
+var REJECTED_DOCUMENT_PREVIEW_MAX_CHARS = 1024;
+function buildRejectedDocumentPreview(text, maxChars = REJECTED_DOCUMENT_PREVIEW_MAX_CHARS) {
+  const sanitized = sanitizeModelText(text);
+  if (sanitized.length <= maxChars) {
+    return sanitized;
+  }
+  const slice = sanitized.slice(0, maxChars);
+  const lastNewline = slice.lastIndexOf("\n");
+  if (lastNewline > 0) {
+    return slice.slice(0, lastNewline);
+  }
+  return slice;
+}
 async function runReviews(options) {
   const empty = {
     review: "",
@@ -28112,7 +28126,8 @@ async function runReviews(options) {
     configJson: "",
     effectiveModel: "",
     debugArtifactPath: "",
-    failureReason: ""
+    failureReason: "",
+    rejectedDocuments: []
   };
   try {
     assertOpenCodeVersion(options.opencodeVersion);
@@ -28124,6 +28139,7 @@ async function runReviews(options) {
   const accountedResults = [];
   const successfulModels = /* @__PURE__ */ new Set();
   const failures = [];
+  const rejectedDocuments = [];
   let prompts;
   let effectiveModels;
   let fusionModel;
@@ -28237,6 +28253,13 @@ async function runReviews(options) {
           console.warn(
             `Review from ${currentModel} :: ${prompt.source} is structurally invalid: ${validation.reason}`
           );
+          if (rejectedDocuments.length < REJECTED_DOCUMENT_CAP) {
+            rejectedDocuments.push({
+              model: currentModel,
+              reason: validation.reason,
+              preview: buildRejectedDocumentPreview(result.text)
+            });
+          }
           continue;
         }
         validResults.push({ ...result, prompt: prompt.source, document: result.text });
@@ -28286,6 +28309,13 @@ async function runReviews(options) {
           console.warn(
             `Fusion result from ${fusionModel} is structurally invalid: ${validation.reason}; falling back to deterministic merge.`
           );
+          if (rejectedDocuments.length < REJECTED_DOCUMENT_CAP) {
+            rejectedDocuments.push({
+              model: `fusion:${fusionModel}`,
+              reason: validation.reason,
+              preview: buildRejectedDocumentPreview(fusionResult.text)
+            });
+          }
         } else {
           canonicalDocument = fusionResult.text;
         }
@@ -28360,7 +28390,8 @@ async function runReviews(options) {
     configJson: validatorConfig.serializedConfig,
     effectiveModel: effectiveModels[0],
     debugArtifactPath,
-    failureReason: resolvedFailureReason
+    failureReason: resolvedFailureReason,
+    rejectedDocuments
   };
 }
 
@@ -32327,8 +32358,13 @@ var EMPTY_REVIEW_RESULT = {
   configJson: "",
   effectiveModel: "",
   debugArtifactPath: "",
-  failureReason: ""
+  failureReason: "",
+  rejectedDocuments: []
 };
+var MISSING_GITHUB_TOKEN_WARNING = "github-token is not available; review and error comments/check-runs will not be published. Pass github-token: ${{ github.token }} to the action.";
+function resolveGithubToken() {
+  return core2.getInput("github-token") || process.env.GITHUB_TOKEN || "";
+}
 function getBooleanInput(name, fallback = false) {
   const raw = core2.getInput(name).trim().toLowerCase();
   if (raw === "") {
@@ -32448,7 +32484,7 @@ var runDeps = {
   postCheckRun,
   postErrorComment
 };
-function buildPublishContext() {
+function buildPublishContext(githubToken) {
   return {
     eventName: process.env.GITHUB_EVENT_NAME || "",
     owner: import_github.context.repo.owner,
@@ -32458,13 +32494,18 @@ function buildPublishContext() {
     postCommentEnabled: getBooleanInput("post-comment", true),
     postCheckRunEnabled: getBooleanInput("post-check-run", true),
     checkName: core2.getInput("check-name") || "ai-review",
-    checkDetailsUrl: core2.getInput("check-details-url") || "https://github.com"
+    checkDetailsUrl: core2.getInput("check-details-url") || "https://github.com",
+    githubToken
   };
 }
 async function publishError(reason, deps, ctx) {
   core2.setOutput("comment-url", "");
   core2.setOutput("check-run-url", "");
   if (!reason) {
+    return;
+  }
+  if (!ctx.githubToken) {
+    core2.warning(MISSING_GITHUB_TOKEN_WARNING);
     return;
   }
   if (ctx.eventName === "pull_request" && ctx.postCommentEnabled) {
@@ -32485,7 +32526,11 @@ async function publishError(reason, deps, ctx) {
   }
 }
 async function runWithDeps(deps) {
-  const publishCtx = buildPublishContext();
+  const githubToken = resolveGithubToken();
+  if (!githubToken) {
+    core2.warning(MISSING_GITHUB_TOKEN_WARNING);
+  }
+  const publishCtx = buildPublishContext(githubToken);
   const checkConclusion = core2.getInput("check-conclusion") || "neutral";
   const failOnError = getBooleanInput("fail-on-error");
   const reviewOptions = buildRunReviewsOptions();
@@ -32548,7 +32593,9 @@ async function runWithDeps(deps) {
   if (!shouldPublishError && reviewResult.review) {
     core2.setOutput("comment-url", "");
     core2.setOutput("check-run-url", "");
-    if (publishCtx.eventName === "pull_request" && publishCtx.postCommentEnabled) {
+    if (!publishCtx.githubToken) {
+      core2.warning(MISSING_GITHUB_TOKEN_WARNING);
+    } else if (publishCtx.eventName === "pull_request" && publishCtx.postCommentEnabled) {
       const commentResult = await deps.postComment(
         buildPostCommentOptions(reviewResult.review, publishCtx.maxCommentChars),
         {
@@ -32575,6 +32622,12 @@ async function runWithDeps(deps) {
     core2.setOutput("comment-url", "");
     core2.setOutput("check-run-url", "");
   }
+  for (const entry of reviewResult.rejectedDocuments) {
+    core2.warning(
+      `Rejected document preview (model=${entry.model}, reason=${entry.reason}):
+${entry.preview}`
+    );
+  }
   const hasFailure = Boolean(reviewerFailureReason) || validationInvalid || runFailed;
   if (hasFailure) {
     const finalMessage = reviewerFailureReason ? `Review failed: ${reviewerFailureReason}` : `Review validation failed: ${validation?.reason || "unspecified"}`;
@@ -32591,7 +32644,11 @@ if (require.main === module) {
     const message = error instanceof Error ? error.message : String(error);
     const reason = `Root action failed: ${message}`;
     try {
-      const publishCtx = buildPublishContext();
+      const githubToken = resolveGithubToken();
+      if (!githubToken) {
+        core2.warning(MISSING_GITHUB_TOKEN_WARNING);
+      }
+      const publishCtx = buildPublishContext(githubToken);
       await publishError(reason, runDeps, publishCtx);
     } catch {
     }

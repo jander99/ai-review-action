@@ -46,7 +46,29 @@ const EMPTY_REVIEW_RESULT: RunReviewsResult = {
   effectiveModel: '',
   debugArtifactPath: '',
   failureReason: '',
+  rejectedDocuments: [],
 };
+
+// Single source of truth for the missing-token warning. Surfaced as
+// a `core.warning` at the top of `runWithDeps` when neither the
+// `github-token` input nor `process.env.GITHUB_TOKEN` resolves, and
+// again inside every publish path that would otherwise silently
+// no-op (best-effort `postErrorComment` / `postCheckRun` callers
+// already swallow API failures; we now log why up front). Mirrors
+// packages/root-action/src/main.ts.
+const MISSING_GITHUB_TOKEN_WARNING =
+  'github-token is not available; review and error comments/check-runs will not be published. Pass github-token: ${{ github.token }} to the action.';
+
+/**
+ * Resolve the GitHub token used by every publish call. Centralizing
+ * the resolution (input + env fallback) lets us emit the
+ * missing-token warning exactly once and lets `publishError` /
+ * `publishReview` skip the GitHub API cleanly when the token is
+ * absent instead of silently swallowing 401s.
+ */
+function resolveGithubToken(): string {
+  return core.getInput('github-token') || process.env.GITHUB_TOKEN || '';
+}
 
 function getBooleanInput(name: string, fallback = false): boolean {
   const raw = core.getInput(name).trim().toLowerCase();
@@ -202,9 +224,16 @@ interface PublishContext {
   postCheckRunEnabled: boolean;
   checkName: string;
   checkDetailsUrl: string;
+  /**
+   * Resolved GitHub token. When empty, every publish call must
+   * skip the GitHub API and surface a `core.warning` explaining
+   * why instead of silently swallowing the failure inside the
+   * best-effort wrappers.
+   */
+  githubToken: string;
 }
 
-function buildPublishContext(): PublishContext {
+function buildPublishContext(githubToken: string): PublishContext {
   return {
     eventName: process.env.GITHUB_EVENT_NAME || '',
     owner: context.repo.owner,
@@ -215,6 +244,7 @@ function buildPublishContext(): PublishContext {
     postCheckRunEnabled: getBooleanInput('post-check-run', true),
     checkName: core.getInput('check-name') || 'ai-review',
     checkDetailsUrl: core.getInput('check-details-url') || 'https://github.com',
+    githubToken,
   };
 }
 
@@ -228,6 +258,11 @@ async function publishError(reason: string, deps: RunDeps, ctx: PublishContext):
   core.setOutput('check-run-url', '');
 
   if (!reason) return;
+
+  if (!ctx.githubToken) {
+    core.warning(MISSING_GITHUB_TOKEN_WARNING);
+    return;
+  }
 
   if (ctx.eventName === 'pull_request' && ctx.postCommentEnabled) {
     const commentResult: PostErrorCommentResult = await deps.postErrorComment(
@@ -258,7 +293,16 @@ async function publishError(reason: string, deps: RunDeps, ctx: PublishContext):
  * final backstop and also calls `publishError`.
  */
 export async function runWithDeps(deps: RunDeps): Promise<void> {
-  const publishCtx = buildPublishContext();
+  // Resolve the GitHub token once. When missing, surface the
+  // warning BEFORE running the pipeline so the operator sees why
+  // no review / error comment will land on the PR; subsequent
+  // publish paths short-circuit cleanly instead of letting the
+  // best-effort wrappers swallow a 401.
+  const githubToken = resolveGithubToken();
+  if (!githubToken) {
+    core.warning(MISSING_GITHUB_TOKEN_WARNING);
+  }
+  const publishCtx = buildPublishContext(githubToken);
   const checkConclusion = core.getInput('check-conclusion') || 'neutral';
   const failOnError = getBooleanInput('fail-on-error');
 
@@ -335,7 +379,12 @@ export async function runWithDeps(deps: RunDeps): Promise<void> {
   if (!shouldPublishError && reviewResult.review) {
     core.setOutput('comment-url', '');
     core.setOutput('check-run-url', '');
-    if (publishCtx.eventName === 'pull_request' && publishCtx.postCommentEnabled) {
+    if (!publishCtx.githubToken) {
+      // Surface the missing-token warning on the success path too:
+      // a valid review is no good to anyone if it never lands on
+      // the PR / check run.
+      core.warning(MISSING_GITHUB_TOKEN_WARNING);
+    } else if (publishCtx.eventName === 'pull_request' && publishCtx.postCommentEnabled) {
       const commentResult: PostCommentResult = await deps.postComment(
         buildPostCommentOptions(reviewResult.review, publishCtx.maxCommentChars),
         {
@@ -363,6 +412,21 @@ export async function runWithDeps(deps: RunDeps): Promise<void> {
     core.setOutput('check-run-url', '');
   }
 
+  // 6. Surface diagnostic previews of model documents rejected by
+  // the deterministic contract validator. Mirrors
+  // packages/root-action/src/main.ts. The previews are sanitized
+  // (orphan-tag stripped) and bounded to
+  // REJECTED_DOCUMENT_PREVIEW_MAX_CHARS per entry on the
+  // run-reviews side; the orchestrator just emits one
+  // `core.warning` per entry so operators can see the offending
+  // content in the run log without leaking it back into prompts.
+  for (const entry of reviewResult.rejectedDocuments) {
+    core.warning(
+      `Rejected document preview (model=${entry.model}, reason=${entry.reason}):\n${entry.preview}`,
+    );
+  }
+
+  // 7. Surface the step's final status.
   const hasFailure = Boolean(reviewerFailureReason) || validationInvalid || runFailed;
   if (hasFailure) {
     const finalMessage = reviewerFailureReason
@@ -383,8 +447,14 @@ if (require.main === module) {
     const message = error instanceof Error ? error.message : String(error);
     const reason = `Root action failed: ${message}`;
     // Best-effort: also post an error comment / failure check run.
+    // Token is resolved fresh so a missing-token warning is logged
+    // even on this backstop path.
     try {
-      const publishCtx = buildPublishContext();
+      const githubToken = resolveGithubToken();
+      if (!githubToken) {
+        core.warning(MISSING_GITHUB_TOKEN_WARNING);
+      }
+      const publishCtx = buildPublishContext(githubToken);
       await publishError(reason, runDeps, publishCtx);
     } catch {
       // Ignore publication errors here; `core.setFailed` below is

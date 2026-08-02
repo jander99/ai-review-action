@@ -20,5 +20,14 @@ export type {
   BuildValidatorConfigResult,
 } from './config-builder';
 
-export { runReviews } from './main';
-export type { RunReviewsOptions, RunReviewsResult } from './main';
+export {
+  buildRejectedDocumentPreview,
+  runReviews,
+  REJECTED_DOCUMENT_CAP,
+  REJECTED_DOCUMENT_PREVIEW_MAX_CHARS,
+} from './main';
+export type {
+  RejectedDocument,
+  RunReviewsOptions,
+  RunReviewsResult,
+} from './main';

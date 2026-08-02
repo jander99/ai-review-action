@@ -25191,6 +25191,20 @@ function parseRepository(repository) {
     repo: repository.slice(slashIndex + 1)
   };
 }
+var REJECTED_DOCUMENT_CAP = 3;
+var REJECTED_DOCUMENT_PREVIEW_MAX_CHARS = 1024;
+function buildRejectedDocumentPreview(text, maxChars = REJECTED_DOCUMENT_PREVIEW_MAX_CHARS) {
+  const sanitized = sanitizeModelText(text);
+  if (sanitized.length <= maxChars) {
+    return sanitized;
+  }
+  const slice = sanitized.slice(0, maxChars);
+  const lastNewline = slice.lastIndexOf("\n");
+  if (lastNewline > 0) {
+    return slice.slice(0, lastNewline);
+  }
+  return slice;
+}
 async function runReviews(options) {
   const empty = {
     review: "",
@@ -25203,7 +25217,8 @@ async function runReviews(options) {
     configJson: "",
     effectiveModel: "",
     debugArtifactPath: "",
-    failureReason: ""
+    failureReason: "",
+    rejectedDocuments: []
   };
   try {
     assertOpenCodeVersion(options.opencodeVersion);
@@ -25215,6 +25230,7 @@ async function runReviews(options) {
   const accountedResults = [];
   const successfulModels = /* @__PURE__ */ new Set();
   const failures = [];
+  const rejectedDocuments = [];
   let prompts;
   let effectiveModels;
   let fusionModel;
@@ -25328,6 +25344,13 @@ async function runReviews(options) {
           console.warn(
             `Review from ${currentModel} :: ${prompt.source} is structurally invalid: ${validation.reason}`
           );
+          if (rejectedDocuments.length < REJECTED_DOCUMENT_CAP) {
+            rejectedDocuments.push({
+              model: currentModel,
+              reason: validation.reason,
+              preview: buildRejectedDocumentPreview(result.text)
+            });
+          }
           continue;
         }
         validResults.push({ ...result, prompt: prompt.source, document: result.text });
@@ -25377,6 +25400,13 @@ async function runReviews(options) {
           console.warn(
             `Fusion result from ${fusionModel} is structurally invalid: ${validation.reason}; falling back to deterministic merge.`
           );
+          if (rejectedDocuments.length < REJECTED_DOCUMENT_CAP) {
+            rejectedDocuments.push({
+              model: `fusion:${fusionModel}`,
+              reason: validation.reason,
+              preview: buildRejectedDocumentPreview(fusionResult.text)
+            });
+          }
         } else {
           canonicalDocument = fusionResult.text;
         }
@@ -25451,7 +25481,8 @@ async function runReviews(options) {
     configJson: validatorConfig.serializedConfig,
     effectiveModel: effectiveModels[0],
     debugArtifactPath,
-    failureReason: resolvedFailureReason
+    failureReason: resolvedFailureReason,
+    rejectedDocuments
   };
 }
 

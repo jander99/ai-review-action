@@ -118,6 +118,7 @@ function emptyReviewResult(overrides = {}) {
     effectiveModel: 'anthropic/claude-sonnet-4.6',
     debugArtifactPath: '',
     failureReason: '',
+    rejectedDocuments: [],
     ...overrides,
   };
 }
@@ -289,4 +290,144 @@ test('non-PR event + runFailed -> postCheckRun is called with conclusion "failur
   assert.equal(checkRunCalls[0].conclusion, 'failure');
   assert.equal(checkRunCalls[0].name, 'ai-review');
   assert.match(checkRunCalls[0].review, /OpenCode version assertion failed: mismatch/);
+});
+
+// -----------------------------------------------------------------------------
+// Phase-5 bounded fix Part 1: missing github-token.
+// -----------------------------------------------------------------------------
+
+/**
+ * Spy on `process.stdout.write` so we can assert the bundled
+ * `@actions/core` emitted a warning with the expected substring.
+ *
+ * `core.warning` ultimately calls
+ * `issueCommand('warning', ...)` which writes the GitHub Actions
+ * `::warning ...` command stream to `process.stdout.write`.
+ */
+function captureStdoutWrites() {
+  const captured = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  // @ts-expect-error - tests deliberately replace stdout.write.
+  process.stdout.write = (chunk, ...rest) => {
+    captured.push(typeof chunk === 'string' ? chunk : chunk.toString('utf8'));
+    return true;
+  };
+  return {
+    captured,
+    restore() {
+      process.stdout.write = originalWrite;
+    },
+  };
+}
+
+test('missing github-token -> warning is emitted, no throw, publishError skips the API call', async () => {
+  setUp();
+  // Remove every source of a token so `resolveGithubToken()` returns ''.
+  delete process.env.INPUT_GITHUB_TOKEN;
+  delete process.env.GITHUB_TOKEN;
+
+  const stdoutSpy = captureStdoutWrites();
+  let didThrow = false;
+  try {
+    const bundle = loadBundle();
+
+    const errorCommentCalls = [];
+    mock.method(bundle.runDeps, 'runReviews', async () =>
+      emptyReviewResult({ failureReason: 'synthetic token-missing failure' }),
+    );
+    mock.method(bundle.runDeps, 'validateReview', async () => ({ status: 'valid', reason: '', cost: 0, tokens: { input: 0, output: 0 }, failureReason: '' }));
+    mock.method(bundle.runDeps, 'postErrorComment', async (opts, ctx) => {
+      errorCommentCalls.push({ opts, ctx });
+      // If the orchestration actually calls us on the missing-token
+      // path the test will fail loudly via the assert below; we
+      // still return a sane result so the orchestration doesn't
+      // crash before the assertion fires.
+      return { commentUrl: 'http://example.test/should-not-fire' };
+    });
+    mock.method(bundle.runDeps, 'postCheckRun', async () => ({ checkRunUrl: '' }));
+    mock.method(bundle.runDeps, 'postComment', async () => ({ commentUrl: '' }));
+
+    try {
+      await bundle.runWithDeps(bundle.runDeps);
+    } catch (error) {
+      didThrow = true;
+      throw error;
+    }
+
+    assert.equal(didThrow, false, 'orchestration must not throw when the token is missing');
+    assert.equal(
+      errorCommentCalls.length,
+      0,
+      'postErrorComment must NOT be called when the github-token is missing',
+    );
+
+    // The missing-token warning must have been emitted at least once
+    // (upfront in runWithDeps + again inside publishError).
+    const allOutput = stdoutSpy.captured.join('');
+    const occurrences = (allOutput.match(/github-token is not available/g) ?? []).length;
+    assert.ok(
+      occurrences >= 1,
+      `core.warning must include the missing-token message; got: ${allOutput.slice(0, 400)}`,
+    );
+
+    // Outputs are still cleared (so consumers don't see stale URLs).
+    assert.ok(fs.existsSync(outputPath), 'GITHUB_OUTPUT file must exist after runWithDeps');
+    const output = fs.readFileSync(outputPath, 'utf8');
+    assert.doesNotMatch(
+      output,
+      /comment-url<<[^\n]+\nhttp:\/\/example\.test\/should-not-fire/,
+      'comment-url must NOT contain the URL that postErrorComment would have returned',
+    );
+  } finally {
+    stdoutSpy.restore();
+    tearDown();
+  }
+});
+
+// -----------------------------------------------------------------------------
+// Phase-5 bounded fix Part 3: rejectedDocuments previews surface as warnings.
+// -----------------------------------------------------------------------------
+
+test('runFailed with rejectedDocuments -> core.warning emitted per entry with the preview', async () => {
+  setUp();
+  const stdoutSpy = captureStdoutWrites();
+  try {
+    const bundle = loadBundle();
+
+    const SAMPLE_PREVIEW = '# Review — Fake Heading\nbody content that fails validation';
+    mock.method(bundle.runDeps, 'runReviews', async () =>
+      emptyReviewResult({
+        failureReason: 'all 1 review invocation(s) produced invalid documents',
+        rejectedDocuments: [
+          { model: 'minimax/minimax-m3', reason: 'missing ## Summary section', preview: SAMPLE_PREVIEW },
+          { model: 'minimax/minimax-m3', reason: 'finding 1 missing Status field', preview: 'partial second preview' },
+        ],
+      }),
+    );
+    mock.method(bundle.runDeps, 'validateReview', async () => ({ status: 'valid', reason: '', cost: 0, tokens: { input: 0, output: 0 }, failureReason: '' }));
+    mock.method(bundle.runDeps, 'postErrorComment', async () => ({ commentUrl: '' }));
+    mock.method(bundle.runDeps, 'postCheckRun', async () => ({ checkRunUrl: '' }));
+    mock.method(bundle.runDeps, 'postComment', async () => ({ commentUrl: '' }));
+
+    await bundle.runWithDeps(bundle.runDeps);
+
+    const allOutput = stdoutSpy.captured.join('');
+    // @actions/core escapes newlines as %0A in the command stream
+    // (see `escapeData` in @actions/core/lib/command.js). Match
+    // against the encoded form so the assertion reflects what the
+    // runner actually writes to stdout.
+    assert.match(
+      allOutput,
+      /Rejected document preview \(model=minimax\/minimax-m3, reason=missing ## Summary section\):%0A# Review — Fake Heading%0Abody content that fails validation/,
+      'core.warning must carry the first rejected-document preview',
+    );
+    assert.match(
+      allOutput,
+      /Rejected document preview \(model=minimax\/minimax-m3, reason=finding 1 missing Status field\)/,
+      'core.warning must carry the second rejected-document preview',
+    );
+  } finally {
+    stdoutSpy.restore();
+    tearDown();
+  }
 });
