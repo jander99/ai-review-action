@@ -96,11 +96,8 @@ export interface BuildAgentDefinitionOptions {
 }
 
 export function buildAgentDefinition(options: BuildAgentDefinitionOptions): AgentDefinition {
-  // Always resolve reviewOutputPath through the same path builder so the
-  // runtime context serialized to the agent matches the value the action
-  // will actually use.
   const eventContext = options.eventContext;
-  const reviewOutputPath = eventContext.reviewOutputPath ?? buildReviewOutputPath(eventContext);
+  const reviewOutputPath = eventContext.reviewOutputPath;
   const contextForAgent: EventContext = { ...eventContext, reviewOutputPath };
   const runtimeContext = JSON.stringify(contextForAgent, null, 2);
   const priorReviewsBlock = options.priorReviewsBlock ?? 'none';

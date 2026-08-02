@@ -24649,7 +24649,7 @@ function titleOrRefForHeading(eventContext) {
 }
 function buildAgentDefinition(options) {
   const eventContext = options.eventContext;
-  const reviewOutputPath = eventContext.reviewOutputPath ?? buildReviewOutputPath(eventContext);
+  const reviewOutputPath = eventContext.reviewOutputPath;
   const contextForAgent = { ...eventContext, reviewOutputPath };
   const runtimeContext = JSON.stringify(contextForAgent, null, 2);
   const priorReviewsBlock = options.priorReviewsBlock ?? "none";
@@ -25136,19 +25136,18 @@ function buildEnvironment(options) {
     fs3.mkdirSync(options.homeDir, { recursive: true, mode: 448 });
     env.HOME = options.homeDir;
   }
-  if (options.disableTools) {
-    env.OPENCODE_PERMISSION = JSON.stringify({
-      read: "deny",
-      glob: "deny",
-      grep: "deny",
-      list: "deny",
-      webfetch: "deny",
-      edit: "deny",
-      question: "deny",
-      doom_loop: "deny",
-      bash: "deny"
-    });
-  }
+  env.OPENCODE_PERMISSION = JSON.stringify({
+    read: "deny",
+    glob: "deny",
+    grep: "deny",
+    list: "deny",
+    webfetch: "deny",
+    edit: "deny",
+    write: "deny",
+    question: "deny",
+    doom_loop: "deny",
+    bash: "deny"
+  });
   return env;
 }
 function commandArgs(model, prompt) {
@@ -25156,8 +25155,6 @@ function commandArgs(model, prompt) {
     `--model=${model}`,
     "run",
     "--format=json",
-    "--thinking",
-    "--dangerously-skip-permissions",
     "--",
     prompt
   ];

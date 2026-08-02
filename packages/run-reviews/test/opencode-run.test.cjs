@@ -77,8 +77,6 @@ test('runOpenCodeRun returns terminal text after a successful process exit', asy
     `--model=${MODEL}`,
     'run',
     '--format=json',
-    '--thinking',
-    '--dangerously-skip-permissions',
     '--',
     PROMPT,
   ]);

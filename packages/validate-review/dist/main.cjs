@@ -20430,19 +20430,18 @@ function buildEnvironment(options) {
     fs.mkdirSync(options.homeDir, { recursive: true, mode: 448 });
     env.HOME = options.homeDir;
   }
-  if (options.disableTools) {
-    env.OPENCODE_PERMISSION = JSON.stringify({
-      read: "deny",
-      glob: "deny",
-      grep: "deny",
-      list: "deny",
-      webfetch: "deny",
-      edit: "deny",
-      question: "deny",
-      doom_loop: "deny",
-      bash: "deny"
-    });
-  }
+  env.OPENCODE_PERMISSION = JSON.stringify({
+    read: "deny",
+    glob: "deny",
+    grep: "deny",
+    list: "deny",
+    webfetch: "deny",
+    edit: "deny",
+    write: "deny",
+    question: "deny",
+    doom_loop: "deny",
+    bash: "deny"
+  });
   return env;
 }
 function commandArgs(model, prompt) {
@@ -20450,8 +20449,6 @@ function commandArgs(model, prompt) {
     `--model=${model}`,
     "run",
     "--format=json",
-    "--thinking",
-    "--dangerously-skip-permissions",
     "--",
     prompt
   ];
