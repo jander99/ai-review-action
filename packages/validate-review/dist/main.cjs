@@ -19827,6 +19827,112 @@ var import_child_process = require("child_process");
 var fs = __toESM(require("fs"));
 var os = __toESM(require("os"));
 var path = __toESM(require("path"));
+
+// packages/validate-review/src/structure.ts
+var HEADING_LINE_PATTERN = /^# Review\b[^]*?/;
+var SUMMARY_HEADING_PATTERN = /^## Summary\b/m;
+var FINDINGS_HEADING_PATTERN = /^## Findings\b/m;
+var FINDING_BLOCK_PATTERN = /^### (🔴 Critical|🟡 Warning|🟢 Suggestion) —\s*(.+?)$/;
+var FIELD_LINE_PATTERN = /^-\s*(Status|Location|Description):\s*(.+?)$/;
+var STATUS_VALUES = /* @__PURE__ */ new Set(["new", "unresolved", "resolved", "new variant"]);
+var MAX_FILE_BYTES = 256e3;
+function isInsideFence(lines, index) {
+  let fenceOpen = false;
+  for (let i = 0; i < index; i++) {
+    if (lines[i].trim().startsWith("```")) {
+      fenceOpen = !fenceOpen;
+    }
+  }
+  return fenceOpen;
+}
+function validateSummary(content) {
+  const headingMatch = content.match(SUMMARY_HEADING_PATTERN);
+  if (!headingMatch) {
+    return "missing ## Summary section";
+  }
+  const summaryStart = headingMatch.index ?? 0;
+  const summarySlice = content.slice(summaryStart);
+  const requiredFields = [
+    { label: "New findings", pattern: /^\s*-\s*New findings:\s*\d+\s*$/m },
+    { label: "Unresolved from prior review", pattern: /^\s*-\s*Unresolved from prior review:\s*\d+\s*$/m },
+    { label: "Resolved by latest commits", pattern: /^\s*-\s*Resolved by latest commits:\s*\d+\s*$/m }
+  ];
+  for (const { label, pattern } of requiredFields) {
+    if (!pattern.test(summarySlice)) {
+      return `## Summary section is missing required field: ${label}`;
+    }
+  }
+  return null;
+}
+function validateFindings(content) {
+  const lines = content.split("\n");
+  let foundAny = false;
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (!FINDING_BLOCK_PATTERN.test(line)) {
+      i += 1;
+      continue;
+    }
+    if (isInsideFence(lines, i)) {
+      i += 1;
+      continue;
+    }
+    foundAny = true;
+    const fields = {};
+    let j = i + 1;
+    while (j < lines.length && !FINDING_BLOCK_PATTERN.test(lines[j])) {
+      const fieldMatch = lines[j].match(FIELD_LINE_PATTERN);
+      if (fieldMatch) {
+        fields[fieldMatch[1].toLowerCase()] = fieldMatch[2];
+      }
+      j += 1;
+    }
+    if (!fields.status) {
+      return `finding at line ${i + 1} is missing Status field`;
+    }
+    if (!STATUS_VALUES.has(fields.status.toLowerCase())) {
+      return `finding at line ${i + 1} has invalid Status value: ${fields.status}`;
+    }
+    if (!fields.location) {
+      return `finding at line ${i + 1} is missing Location field`;
+    }
+    if (!fields.description) {
+      return `finding at line ${i + 1} is missing Description field`;
+    }
+    i = j;
+  }
+  if (!foundAny) {
+    return "no findings blocks were found";
+  }
+  return null;
+}
+function validateReviewStructure(content) {
+  if (content.length > MAX_FILE_BYTES) {
+    return { valid: false, reason: `review file exceeds ${MAX_FILE_BYTES} bytes` };
+  }
+  if (!HEADING_LINE_PATTERN.test(content)) {
+    return { valid: false, reason: "missing # Review heading at the top of the file" };
+  }
+  const cleaned = content.replace(/<\/?(?:think|tool_call|tool_result|mm:think|script)>|<!--|-->/gi, "");
+  const headingMatch = cleaned.match(HEADING_LINE_PATTERN);
+  if (!headingMatch || (headingMatch.index ?? 0) > 0) {
+    return { valid: false, reason: "review must start with the # Review heading" };
+  }
+  if (!SUMMARY_HEADING_PATTERN.test(cleaned)) {
+    return { valid: false, reason: "missing ## Summary section" };
+  }
+  if (!FINDINGS_HEADING_PATTERN.test(cleaned)) {
+    return { valid: false, reason: "missing ## Findings section" };
+  }
+  const summaryError = validateSummary(cleaned);
+  if (summaryError) return { valid: false, reason: summaryError };
+  const findingsError = validateFindings(cleaned);
+  if (findingsError) return { valid: false, reason: findingsError };
+  return { valid: true, reason: "" };
+}
+
+// packages/validate-review/src/main.ts
 var DEFAULT_OPENCODE_VERSION = "1.18.5";
 var DEFAULT_TIMEOUT_MINUTES = 5;
 var VALIDATION_PROMPT = `You are a structural validator. Read the file at the path supplied below. Do not inspect the repository, do not call tools other than reading that file, and do not propose fixes.
@@ -20024,6 +20130,15 @@ function run() {
     core.setOutput("cost", 0);
     core.setOutput("tokens", JSON.stringify({ input: 0, output: 0 }));
     core.setFailed(`Cannot read review file: ${message}`);
+    return;
+  }
+  const structural = validateReviewStructure(reviewContent);
+  if (!structural.valid) {
+    core.setOutput("status", "invalid");
+    core.setOutput("reason", structural.reason);
+    core.setOutput("cost", 0);
+    core.setOutput("tokens", JSON.stringify({ input: 0, output: 0 }));
+    core.setFailed(`Review failed structural validation: ${structural.reason}`);
     return;
   }
   let result;

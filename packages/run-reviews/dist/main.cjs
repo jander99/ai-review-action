@@ -20548,15 +20548,10 @@ function run() {
     reviewText = readReviewOutputFile(reviewOutputPath);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (individualResults.length === 1 && !fusionEnabled) {
-      core2.warning(`${message}; falling back to the model response text.`);
-      reviewText = individualResults[0].text;
-    } else {
-      setEmptyOutputs();
-      core2.setFailed(`Review output contract violated: ${message}`);
-      core2.setOutput("review-output-path", reviewOutputPath);
-      return;
-    }
+    setEmptyOutputs();
+    core2.setOutput("review-output-path", reviewOutputPath);
+    core2.setFailed(`Review output contract violated: ${message}`);
+    return;
   }
   if (fusionEnabled && individualResults.length > 0) {
     core2.info(`Running fusion: ${fusionModel}`);
@@ -20578,8 +20573,10 @@ function run() {
         reviewText = readReviewOutputFile(reviewOutputPath);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        core2.warning(`Fusion did not write the review file (${message}); using the model response text.`);
-        reviewText = fusionResult.text;
+        setEmptyOutputs();
+        core2.setOutput("review-output-path", reviewOutputPath);
+        core2.setFailed(`Fusion output contract violated: ${message}`);
+        return;
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

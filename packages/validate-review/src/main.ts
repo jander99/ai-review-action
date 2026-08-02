@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { gzipSync } from 'zlib';
+import { validateReviewStructure } from './structure';
 
 interface OpenCodeEvent {
   type?: string;
@@ -243,6 +244,20 @@ function run(): void {
     core.setOutput('cost', 0);
     core.setOutput('tokens', JSON.stringify({ input: 0, output: 0 }));
     core.setFailed(`Cannot read review file: ${message}`);
+    return;
+  }
+
+  // Deterministic structural check first. The model validator is only
+  // useful when the file already has the right shape; relying on the
+  // model for primary validation allowed looped "thinking" output to
+  // pass.
+  const structural = validateReviewStructure(reviewContent);
+  if (!structural.valid) {
+    core.setOutput('status', 'invalid');
+    core.setOutput('reason', structural.reason);
+    core.setOutput('cost', 0);
+    core.setOutput('tokens', JSON.stringify({ input: 0, output: 0 }));
+    core.setFailed(`Review failed structural validation: ${structural.reason}`);
     return;
   }
 

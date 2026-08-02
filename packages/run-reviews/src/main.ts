@@ -252,26 +252,18 @@ function run(): void {
   }
 
   // The model is contractually required to write the review markdown to
-  // `reviewOutputPath`. Read the file and use it as the review output for
-  // multi-model cases where the wrapper is not needed.
-  //
-  // Fallback: if the file is missing for a single-model run, surface the
-  // model response so the validator/poster still has something to inspect.
-  // Multi-model runs with no file are treated as a failure.
+  // `reviewOutputPath`. The file is the *only* source of truth for the
+  // published review. The model response text is discarded on purpose so
+  // looped "thinking" output never reaches the published comment.
   let reviewText: string;
   try {
     reviewText = readReviewOutputFile(reviewOutputPath);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (individualResults.length === 1 && !fusionEnabled) {
-      core.warning(`${message}; falling back to the model response text.`);
-      reviewText = individualResults[0].text;
-    } else {
-      setEmptyOutputs();
-      core.setFailed(`Review output contract violated: ${message}`);
-      core.setOutput('review-output-path', reviewOutputPath);
-      return;
-    }
+    setEmptyOutputs();
+    core.setOutput('review-output-path', reviewOutputPath);
+    core.setFailed(`Review output contract violated: ${message}`);
+    return;
   }
   if (fusionEnabled && individualResults.length > 0) {
     core.info(`Running fusion: ${fusionModel}`);
@@ -296,8 +288,10 @@ function run(): void {
         reviewText = readReviewOutputFile(reviewOutputPath);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        core.warning(`Fusion did not write the review file (${message}); using the model response text.`);
-        reviewText = fusionResult.text;
+        setEmptyOutputs();
+        core.setOutput('review-output-path', reviewOutputPath);
+        core.setFailed(`Fusion output contract violated: ${message}`);
+        return;
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
