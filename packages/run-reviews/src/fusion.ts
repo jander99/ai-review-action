@@ -1,4 +1,4 @@
-import { extractReviewDocument, sanitizeModelText } from '@jander99/ai-review-review-contract';
+import { extractReviewDocument } from '@jander99/ai-review-review-contract';
 
 export interface FusionReview {
   model: string;
@@ -38,14 +38,14 @@ function fusionSection(review: FusionReview): string {
 }
 
 export function sanitizeForFusion(text: string): string {
-  // Strip orphan tags and the heading slice before fence-injection
-  // inspection so a model that puts the heading inside a code fence does
-  // not get the fence (and the heading inside it) stripped before we
-  // have a chance to use the heading as an anchor.
-  const stripped = sanitizeModelText(text);
-  const extracted = extractReviewDocument(stripped);
-  const anchored = extracted !== null ? extracted : stripped;
-  return anchored.replace(/```[\s\S]*?```/g, (block) =>
+  // Slice from the heading boundary (or use the raw text when no
+  // heading exists) before fence-injection inspection so a model that
+  // puts the heading inside a code fence does not get the fence (and
+  // the heading inside it) stripped before we have a chance to use the
+  // heading as an anchor.
+  const extracted = extractReviewDocument(text);
+  const anchored = extracted !== null ? extracted : text;
+  return anchored.replace(/```[\s\S]*?```/g, (block: string) =>
     INJECTION_PATTERN.test(block) ? '' : block,
   );
 }

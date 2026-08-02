@@ -1,21 +1,18 @@
 /**
- * Fetch and sanitize prior review comments posted by the AI review
+ * Fetch prior review comments posted by the AI review
  * bot for the current pull request.
  *
  * The bot is identified by the canonical GitHub App login
  * `github-actions[bot]`, which is the actor that posts the action's
  * review comments. The module returns at most five most recent
  * comments, truncates each to 4 KB on a non-fence line boundary, caps
- * the total payload at 16 KB, runs every body through the shared
- * `sanitizeModelText` helper so the action cannot accidentally inject
- * orphan tags into the next review prompt, and tracks fenced code
- * blocks during truncation so an open fence never escapes into the
- * result. Returns `null` when no comments are available so callers can
+ * the total payload at 16 KB, and tracks fenced code blocks during
+ * truncation so an open fence never escapes into the result.
+ * Returns `null` when no comments are available so callers can
  * degrade to a fresh review.
  */
 
 import type { Octokit } from '@octokit/rest';
-import { sanitizeModelText } from '@jander99/ai-review-review-contract';
 
 export const PRIOR_REVIEW_BOT_LOGIN = 'github-actions[bot]';
 export const PRIOR_REVIEW_LIMIT = 5;
@@ -130,7 +127,7 @@ function truncateOnLineBoundary(text: string, maxChars: number): string {
 }
 
 function sanitizeBody(raw: string): string {
-  return sanitizeModelText(raw).trim();
+  return raw.trim();
 }
 
 /**
@@ -184,11 +181,11 @@ export function formatPriorReviews(comments: ReadonlyArray<PriorReviewComment>):
     if (trimmed.length >= PRIOR_REVIEW_LIMIT) {
       break;
     }
-    const sanitized = sanitizeBody(comment.body);
-    if (!sanitized) {
+    const trimmedBody = sanitizeBody(comment.body);
+    if (!trimmedBody) {
       continue;
     }
-    const truncated = truncateOnLineBoundary(sanitized, PRIOR_REVIEW_PER_COMMENT_CHARS);
+    const truncated = truncateOnLineBoundary(trimmedBody, PRIOR_REVIEW_PER_COMMENT_CHARS);
     const bounded = trimTrailingOrphanSurrogate(truncated);
     if (!bounded) {
       continue;

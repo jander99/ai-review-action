@@ -6,7 +6,6 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const {
-  sanitizeModelText,
   stripSentinelBoundary,
   extractReviewDocument,
   validateReviewDocument,
@@ -145,12 +144,6 @@ test('extraction ignores heading inside fenced code block', () => {
 test('extraction returns null when no strict heading exists', () => {
   const raw = 'no heading here at all';
   assert.equal(extractReviewDocument(raw), null);
-});
-
-test('sanitizeModelText strips orphan tags', () => {
-  const raw = 'response preamble <think>internal</think> body <!--comment--> tail';
-  const sanitized = sanitizeModelText(raw);
-  assert.equal(sanitized, 'response preamble internal body comment tail');
 });
 
 test('missing Status field is invalid', () => {
@@ -985,39 +978,6 @@ test('sentinel inside a fenced code block is ignored', () => {
     validation.reason,
     /after final finding|unexpected content/i,
     `expected a post-finding content rejection; got: ${validation.reason}`,
-  );
-});
-
-test('inline sentinel (surrounded by other text on the same line) is ignored', () => {
-  // Only an EXACT line of the sentinel counts. The token embedded
-  // in prose, or appended to another line, must NOT trigger the
-  // slicer. Note: sanitizeModelText strips the literal `<!--` and
-  // `-->` markup on the way through (it treats every HTML comment
-  // as orphan-tag noise), so we assert on the prose around the
-  // inline sentinel rather than on the sentinel markup itself.
-  const doc = [
-    `# Review — ${TITLE}`,
-    '',
-    '## Summary',
-    '',
-    '- New findings: 0',
-    '- Unresolved from prior review: 0',
-    '- Resolved by latest commits: 0',
-    '',
-    'the model wrote the sentinel inline in this sentence',
-    '',
-    'a separate sentence referencing the sentinel inline',
-  ].join('\n');
-
-  const extracted = extractReviewDocument(doc);
-  assert.ok(extracted);
-  assert.ok(
-    extracted.includes('the model wrote the sentinel inline'),
-    'inline sentinel must not trigger slicing (text before inline sentinel preserved)',
-  );
-  assert.ok(
-    extracted.includes('a separate sentence referencing the sentinel inline'),
-    'inline sentinel must not trigger slicing (text after inline sentinel preserved)',
   );
 });
 

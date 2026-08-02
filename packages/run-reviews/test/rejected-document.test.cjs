@@ -32,17 +32,13 @@ test('buildRejectedDocumentPreview returns the input verbatim when shorter than 
   assert.equal(buildRejectedDocumentPreview(text, MAX_CHARS), text);
 });
 
-test('buildRejectedDocumentPreview strips orphan tags before truncating', () => {
-  const text =
-    '<think>internal reasoning</think>' +
-    '<tool_call>foo</tool_call>' +
-    '<!--comment-->' +
-    'real content that should remain after sanitization';
+test('buildRejectedDocumentPreview passes the input through unchanged when it fits', () => {
+  // The preview no longer strips orphan tags; with non-agentic
+  // transport, the model never emits them, so the input is returned
+  // verbatim when it fits in the budget.
+  const text = 'real content that should remain verbatim';
   const result = buildRejectedDocumentPreview(text, MAX_CHARS);
-  assert.ok(!result.includes('<think>'), 'think tag must be stripped');
-  assert.ok(!result.includes('<tool_call>'), 'tool_call tag must be stripped');
-  assert.ok(!result.includes('<!--'), 'comment tag must be stripped');
-  assert.ok(result.includes('real content'), 'non-orphan content must survive');
+  assert.equal(result, text);
 });
 
 test('buildRejectedDocumentPreview truncates at a line boundary when possible', () => {

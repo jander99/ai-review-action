@@ -5,7 +5,6 @@ import * as path from 'path';
 import { gzipSync } from 'zlib';
 import {
   mergeReviewDocuments,
-  sanitizeModelText,
   validateReviewDocument,
 } from '@jander99/ai-review-review-contract';
 import { fetchPriorReviews } from '@jander99/ai-review-previous-reviews';
@@ -203,14 +202,14 @@ export const REJECTED_DOCUMENT_CAP = 3;
 export const REJECTED_DOCUMENT_PREVIEW_MAX_CHARS = 1024;
 
 /**
- * Build a sanitized, line-bounded preview of a model document. Used
+ * Build a line-bounded preview of a model document. Used
  * by `runReviews` to populate the `rejectedDocuments` field on the
  * result so the orchestration layer can log diagnostics when the
  * deterministic contract validator rejects a model response.
  *
  * The result is always <= `maxChars` characters (no marker is
  * appended - the caller decides how to label the preview). When the
- * input fits in the budget the sanitized text is returned verbatim;
+ * input fits in the budget the input text is returned verbatim;
  * when it does not, the helper breaks at the last newline that fits
  * in the budget so the preview never chops a line mid-token. If no
  * newline fits (single huge line), the helper hard-truncates at the
@@ -223,11 +222,10 @@ export function buildRejectedDocumentPreview(
   text: string,
   maxChars: number = REJECTED_DOCUMENT_PREVIEW_MAX_CHARS,
 ): string {
-  const sanitized = sanitizeModelText(text);
-  if (sanitized.length <= maxChars) {
-    return sanitized;
+  if (text.length <= maxChars) {
+    return text;
   }
-  const slice = sanitized.slice(0, maxChars);
+  const slice = text.slice(0, maxChars);
   const lastNewline = slice.lastIndexOf('\n');
   if (lastNewline > 0) {
     return slice.slice(0, lastNewline);
@@ -253,7 +251,7 @@ export interface RunReviewsResult {
   debugArtifactPath: string;
   failureReason: string;
   /**
-   * Sanitized previews of model documents rejected by the
+   * Previews of model documents rejected by the
    * deterministic contract validator. Capped at
    * `REJECTED_DOCUMENT_CAP` entries; entries are appended in the
    * order the validator rejects them. Empty when every invocation

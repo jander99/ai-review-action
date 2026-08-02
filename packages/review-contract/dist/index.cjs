@@ -40,7 +40,6 @@ __export(index_exports, {
   normalizeTitleForHeading: () => normalizeTitleForHeading,
   renderDocument: () => renderDocument,
   renderFinding: () => renderFinding,
-  sanitizeModelText: () => sanitizeModelText,
   selectTerminalText: () => selectTerminalText,
   stripSentinelBoundary: () => stripSentinelBoundary,
   validateReviewDocument: () => validateReviewDocument
@@ -96,7 +95,6 @@ var FIELD_ORDER = [
   "description"
 ];
 var CANONICAL_FIELD_ORDER_TEXT = "mandatory Status/Location/Description fields, in that order";
-var ORPHAN_TAG_PATTERN = /<\/?(?:think|tool_call|tool_result|mm:think|script)>|<!--|-->/gi;
 var REVIEW_DONE_SENTINEL = "<!-- AI_REVIEW_DONE -->";
 var REVIEW_AGENT_PROMPT_TEMPLATE = `You are the privileged AI review agent for this GitHub Actions run.
 
@@ -215,9 +213,6 @@ If the file is missing or malformed, reply with exactly one line: INVALID <reaso
 where <reason> is a short human-readable cause (e.g. "missing ## Summary section", "finding 2 missing Status field"). Do not include any other text in your reply.
 
 Path to validate: __REVIEW_PATH__`;
-function sanitizeModelText(text) {
-  return text.replace(ORPHAN_TAG_PATTERN, "");
-}
 function stripSentinelBoundary(text) {
   const lines = text.split("\n");
   let fenceOpen = false;
@@ -256,8 +251,7 @@ function findHeadingBoundary(text) {
 }
 function extractReviewDocument(text) {
   const sliced = stripSentinelBoundary(text);
-  const sanitized = sanitizeModelText(sliced);
-  return findHeadingBoundary(sanitized);
+  return findHeadingBoundary(sliced);
 }
 function isFenceOpenAt(lines, index) {
   let fenceOpen = false;
@@ -695,7 +689,6 @@ function normalizeTitleForHeading(titleOrRef) {
   normalizeTitleForHeading,
   renderDocument,
   renderFinding,
-  sanitizeModelText,
   selectTerminalText,
   stripSentinelBoundary,
   validateReviewDocument

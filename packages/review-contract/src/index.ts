@@ -5,7 +5,7 @@
  *   - the exact review document format (heading, sections, findings, counts),
  *   - the prompt template shared by the review and synthesis agents,
  *   - the validator prompt template used by the validate-review action,
- *   - sanitization, extraction, deterministic validation, and merging.
+ *   - extraction, deterministic validation, and merging.
  *
  * Generation, extraction, deterministic validation, and fusion all import
  * from this module so they agree on the contract.
@@ -106,12 +106,6 @@ const FIELD_ORDER: ReadonlyArray<'status' | 'location' | 'description'> = [
 export const CANONICAL_FIELD_ORDER_TEXT =
   'mandatory Status/Location/Description fields, in that order';
 
-// Orphan tags the model sometimes emits in its text reply. These never
-// belong in a canonical review document; the sanitizer wholesale strips
-// them as a safety net for the case where a closing tag (e.g. `</think>`)
-// lands in the same text region as the heading and ends up after the
-// boundary slice.
-const ORPHAN_TAG_PATTERN = /<\/?(?:think|tool_call|tool_result|mm:think|script)>|<!--|-->/gi;
 
 /**
  * Completion sentinel the model may emit as the final line of its
@@ -252,12 +246,9 @@ where <reason> is a short human-readable cause (e.g. "missing ## Summary section
 Path to validate: __REVIEW_PATH__`;
 
 // -----------------------------------------------------------------------------
-// Sanitization and extraction
+// Extraction
 // -----------------------------------------------------------------------------
 
-export function sanitizeModelText(text: string): string {
-  return text.replace(ORPHAN_TAG_PATTERN, '');
-}
 
 /**
  * Strip the model text from the first eligible completion sentinel
@@ -318,19 +309,14 @@ export function findHeadingBoundary(text: string): string | null {
  *      and only outside a fenced code block; its presence never
  *      causes rejection, but when it is found we discard it and
  *      everything after so a model that emits post-review prose
- *      never breaks structural validation downstream. Doing this
- *      before orphan-tag stripping matters because the sentinel
- *      uses HTML-comment markup that the orphan-tag sanitizer would
- *      otherwise strip on its way through.
- *   2. Strip orphan tags (think / tool_call / comments).
- *   3. Walk lines, ignoring any heading found inside a fenced code block.
- *   4. Slice from the first strict '# Review — <title-or-ref>' heading.
- *   5. Return null if no strict heading exists.
+ *      never breaks structural validation downstream.
+ *   2. Walk lines, ignoring any heading found inside a fenced code block.
+ *   3. Slice from the first strict '# Review — <title-or-ref>' heading.
+ *   4. Return null if no strict heading exists.
  */
 export function extractReviewDocument(text: string): string | null {
   const sliced = stripSentinelBoundary(text);
-  const sanitized = sanitizeModelText(sliced);
-  return findHeadingBoundary(sanitized);
+  return findHeadingBoundary(sliced);
 }
 
 // -----------------------------------------------------------------------------

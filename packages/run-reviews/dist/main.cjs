@@ -23875,7 +23875,6 @@ var FIELD_ORDER = [
   "description"
 ];
 var CANONICAL_FIELD_ORDER_TEXT = "mandatory Status/Location/Description fields, in that order";
-var ORPHAN_TAG_PATTERN = /<\/?(?:think|tool_call|tool_result|mm:think|script)>|<!--|-->/gi;
 var REVIEW_DONE_SENTINEL = "<!-- AI_REVIEW_DONE -->";
 var REVIEW_AGENT_PROMPT_TEMPLATE = `You are the privileged AI review agent for this GitHub Actions run.
 
@@ -23994,9 +23993,6 @@ If the file is missing or malformed, reply with exactly one line: INVALID <reaso
 where <reason> is a short human-readable cause (e.g. "missing ## Summary section", "finding 2 missing Status field"). Do not include any other text in your reply.
 
 Path to validate: __REVIEW_PATH__`;
-function sanitizeModelText(text) {
-  return text.replace(ORPHAN_TAG_PATTERN, "");
-}
 function stripSentinelBoundary(text) {
   const lines = text.split("\n");
   let fenceOpen = false;
@@ -24035,8 +24031,7 @@ function findHeadingBoundary(text) {
 }
 function extractReviewDocument(text) {
   const sliced = stripSentinelBoundary(text);
-  const sanitized = sanitizeModelText(sliced);
-  return findHeadingBoundary(sanitized);
+  return findHeadingBoundary(sliced);
 }
 function isFenceOpenAt(lines, index) {
   let fenceOpen = false;
@@ -24500,7 +24495,7 @@ function truncateOnLineBoundary(text, maxChars) {
   return result;
 }
 function sanitizeBody(raw) {
-  return sanitizeModelText(raw).trim();
+  return raw.trim();
 }
 function trimTrailingOrphanSurrogate(text) {
   if (text.length === 0) {
@@ -24529,11 +24524,11 @@ function formatPriorReviews(comments) {
     if (trimmed.length >= PRIOR_REVIEW_LIMIT) {
       break;
     }
-    const sanitized = sanitizeBody(comment.body);
-    if (!sanitized) {
+    const trimmedBody = sanitizeBody(comment.body);
+    if (!trimmedBody) {
       continue;
     }
-    const truncated = truncateOnLineBoundary(sanitized, PRIOR_REVIEW_PER_COMMENT_CHARS);
+    const truncated = truncateOnLineBoundary(trimmedBody, PRIOR_REVIEW_PER_COMMENT_CHARS);
     const bounded = trimTrailingOrphanSurrogate(truncated);
     if (!bounded) {
       continue;
@@ -24997,9 +24992,8 @@ function fusionSection(review) {
 ${review.text}`;
 }
 function sanitizeForFusion(text) {
-  const stripped = sanitizeModelText(text);
-  const extracted = extractReviewDocument(stripped);
-  const anchored = extracted !== null ? extracted : stripped;
+  const extracted = extractReviewDocument(text);
+  const anchored = extracted !== null ? extracted : text;
   return anchored.replace(
     /```[\s\S]*?```/g,
     (block) => INJECTION_PATTERN.test(block) ? "" : block
@@ -25328,10 +25322,9 @@ async function invokeOpenCode(prompt, model, configPath, options) {
     debugCapture: options.debugCapture
   });
   const rawText = result.text;
-  const sanitized = sanitizeModelText(rawText);
-  const extracted = extractReviewDocument(sanitized);
+  const extracted = extractReviewDocument(rawText);
   return {
-    text: extracted ?? sanitized,
+    text: extracted ?? rawText,
     tokens: { input: result.tokens.input, output: result.tokens.output },
     cost: result.cost,
     model: result.model
@@ -25497,11 +25490,10 @@ function parseRepository(repository) {
 var REJECTED_DOCUMENT_CAP = 3;
 var REJECTED_DOCUMENT_PREVIEW_MAX_CHARS = 1024;
 function buildRejectedDocumentPreview(text, maxChars = REJECTED_DOCUMENT_PREVIEW_MAX_CHARS) {
-  const sanitized = sanitizeModelText(text);
-  if (sanitized.length <= maxChars) {
-    return sanitized;
+  if (text.length <= maxChars) {
+    return text;
   }
-  const slice = sanitized.slice(0, maxChars);
+  const slice = text.slice(0, maxChars);
   const lastNewline = slice.lastIndexOf("\n");
   if (lastNewline > 0) {
     return slice.slice(0, lastNewline);

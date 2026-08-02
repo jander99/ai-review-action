@@ -1,4 +1,4 @@
-import { extractReviewDocument, sanitizeModelText } from '@jander99/ai-review-review-contract';
+import { extractReviewDocument } from '@jander99/ai-review-review-contract';
 import type { ReviewResult } from './types';
 import {
   runOpenCodeRun,
@@ -41,11 +41,10 @@ export async function invokeOpenCode(
   });
 
   const rawText = result.text;
-  const sanitized = sanitizeModelText(rawText);
-  const extracted = extractReviewDocument(sanitized);
+  const extracted = extractReviewDocument(rawText);
 
   return {
-    text: extracted ?? sanitized,
+    text: extracted ?? rawText,
     tokens: { input: result.tokens.input, output: result.tokens.output },
     cost: result.cost,
     model: result.model,

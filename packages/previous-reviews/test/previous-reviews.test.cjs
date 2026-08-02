@@ -119,20 +119,6 @@ test('formatPriorReviews respects the total character cap across comments', () =
   assert.ok(result.length <= PRIOR_REVIEW_TOTAL_CHARS, `total length ${result.length} exceeded total cap`);
 });
 
-test('formatPriorReviews strips orphan tags via sanitizeModelText', () => {
-  const comment = toPriorComment(
-    makeComment({
-      id: 5,
-      body: '<think>internal</think># Review — PR Title\n\n## Summary\n\n- New findings: 0\n- Unresolved from prior review: 0\n- Resolved by latest commits: 0\n<!--trailing-->',
-    }),
-  );
-  const result = formatPriorReviews([comment]);
-  assert.ok(!result.includes('<think>'));
-  assert.ok(!result.includes('</think>'));
-  assert.ok(!result.includes('<!--'));
-  assert.ok(result.includes('PR Title'));
-});
-
 test('formatPriorReviews trims orphan multi-byte tail when truncation leaves an invalid UTF-8 boundary', () => {
   // Build a body that, after a 200-character slice, ends with a
   // surrogate-half character that would orphan a multi-byte sequence.
@@ -211,10 +197,10 @@ test('fetchPriorReviews returns null when no bot comments exist', async () => {
   assert.equal(result, null);
 });
 
-test('fetchPriorReviews returns null when all bot bodies are sanitized away', async () => {
-  // A body that is only orphan tags and whitespace collapses to an
-  // empty string after sanitize + trim.
-  const data = [makeComment({ id: 1, body: '<think></think>   <!-- -->' })];
+test('fetchPriorReviews returns null when all bot bodies are trimmed away', async () => {
+  // A body that is only whitespace collapses to an empty string
+  // after trim, so the comment is dropped from the result.
+  const data = [makeComment({ id: 1, body: '   \n  \t  ' })];
   const octokit = makeMockOctokit(data);
   const result = await fetchPriorReviews({
     token: 'token',
