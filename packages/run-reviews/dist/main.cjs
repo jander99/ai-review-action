@@ -20112,7 +20112,7 @@ var INJECTION_PATTERN = /ignore\s+(?:all|previous|prior)(?:\s+instructions)?|dis
 var REVIEW_SEPARATOR = "\n\n---\n\n";
 var LABEL_LIMIT = 200;
 var FUSION_ORPHAN_TAG_PATTERN = /<\/?(?:think|tool_call|tool_result|mm:think)>|<!--|-->/g;
-var FUSION_HEADING_LINE_PATTERN = /^# PR #\d+ Review\b/;
+var FUSION_HEADING_LINE_PATTERN = /^# (?:Review — .+|PR #\d+ Review — .+)$/;
 var FUSION_FENCE_LINE_PATTERN = /^```/;
 function fusionFindHeadingBoundary(text) {
   const lines = text.split("\n");
@@ -20193,7 +20193,7 @@ var import_child_process = require("child_process");
 var fs3 = __toESM(require("fs"));
 var path3 = __toESM(require("path"));
 var ORPHAN_TAG_PATTERN = /<\/?(?:think|tool_call|tool_result|mm:think)>|<!--|-->/g;
-var HEADING_LINE_PATTERN = /^# PR #\d+ Review\b/;
+var HEADING_LINE_PATTERN = /^# (?:Review — .+|PR #\d+ Review — .+)$/;
 var FENCE_LINE_PATTERN = /^```/;
 function findHeadingBoundary(text) {
   const lines = text.split("\n");

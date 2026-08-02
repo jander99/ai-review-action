@@ -25,7 +25,7 @@ const FUSION_ORPHAN_TAG_PATTERN =
 // walk lets us skip any heading that appears inside a fenced code block, and
 // the heading must use the literal word `Review` so it cannot be satisfied by
 // an attacker-controlled line.
-const FUSION_HEADING_LINE_PATTERN = /^# PR #\d+ Review\b/;
+const FUSION_HEADING_LINE_PATTERN = /^# (?:Review — .+|PR #\d+ Review — .+)$/;
 const FUSION_FENCE_LINE_PATTERN = /^```/;
 
 function fusionFindHeadingBoundary(text: string): string | null {

@@ -29,7 +29,7 @@ interface OpenCodeEvent {
 }
 
 // The heading boundary (below) is the parser's primary defense: anything the
-// model emits before `# PR #N Review — <title>` is sliced off, so reasoning
+// model emits before `# Review — <title-or-ref>` is sliced off, so reasoning
 // blocks, tool-call XML, and other model-internal markup never reach the PR
 // comment. The orphan-tag regex is a small safety net for the cross-event
 // case where a closing tag (e.g. `</think>`) lands in the same text region
@@ -38,12 +38,11 @@ interface OpenCodeEvent {
 const ORPHAN_TAG_PATTERN =
   /<\/?(?:think|tool_call|tool_result|mm:think)>|<!--|-->/g;
 
-// Parser boundary: the prompt contract requires the review body to begin with
-// `# PR #N Review — <title>`. Walks the text line by line so we can skip any
-// heading that appears inside a fenced code block, then returns the heading
-// line and everything after. Returns `null` if no valid heading exists outside
-// a fence.
-const HEADING_LINE_PATTERN = /^# PR #\d+ Review\b/;
+// Parser boundary: the current contract requires `# Review — <title-or-ref>`.
+// The legacy PR heading remains accepted so existing callers do not regress.
+// Requiring the em dash and a non-empty suffix prevents scratch headings such
+// as `# Review plan` from becoming the boundary.
+const HEADING_LINE_PATTERN = /^# (?:Review — .+|PR #\d+ Review — .+)$/;
 const FENCE_LINE_PATTERN = /^```/;
 
 function findHeadingBoundary(text: string): string | null {
