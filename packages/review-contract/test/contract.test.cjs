@@ -7,12 +7,14 @@ const path = require('node:path');
 
 const {
   sanitizeModelText,
+  stripSentinelBoundary,
   extractReviewDocument,
   validateReviewDocument,
   mergeReviewDocuments,
   MAX_CHARS,
   renderDocument,
   formatLocations,
+  REVIEW_DONE_SENTINEL,
   REVIEW_AGENT_PROMPT_TEMPLATE,
   SYNTHESIS_AGENT_PROMPT_TEMPLATE,
   VALIDATOR_AGENT_PROMPT_TEMPLATE,
@@ -845,4 +847,261 @@ test('all three prompt templates declare the comma-separated multi-location gram
       `${name} must steer the model away from natural-language connectors`,
     );
   }
+});
+
+// -----------------------------------------------------------------------------
+// Phase-7 bounded implementation: completion sentinel.
+//
+// The review and synthesis models may emit
+//   <!-- AI_REVIEW_DONE -->
+// as the final line of their reply. The deterministic parser strips
+// the sentinel plus everything after it (outside a fenced code
+// block) before structural validation, so post-review scratch prose
+// never breaks downstream validation. The sentinel is OPTIONAL -
+// absence never causes rejection.
+// -----------------------------------------------------------------------------
+
+const SENTINEL = '<!-- AI_REVIEW_DONE -->';
+
+test('REVIEW_DONE_SENTINEL is exported and uses the exact approved token', () => {
+  assert.equal(REVIEW_DONE_SENTINEL, SENTINEL);
+});
+
+test('valid review + sentinel + trailing prose extracts to the review with no sentinel and no trailing prose', () => {
+  const doc = [
+    `# Review — ${TITLE}`,
+    '',
+    '## Summary',
+    '',
+    '- New findings: 0',
+    '- Unresolved from prior review: 0',
+    '- Resolved by latest commits: 0',
+    '',
+    SENTINEL,
+    'extra scratch prose the model emitted after completion',
+    'second line of scratch prose that must also be discarded',
+  ].join('\n');
+
+  const extracted = extractReviewDocument(doc);
+  assert.ok(extracted, 'extractor must return a non-null document');
+  assert.ok(extracted.startsWith(`# Review — ${TITLE}`), 'extracted text must begin with the canonical heading');
+  assert.ok(!extracted.includes(SENTINEL), `extracted text must not contain the sentinel; got: ${JSON.stringify(extracted)}`);
+  assert.ok(
+    !extracted.includes('extra scratch prose'),
+    'extracted text must not contain post-sentinel scratch prose',
+  );
+  assert.ok(
+    !extracted.includes('second line of scratch prose'),
+    'extracted text must not contain the second scratch-prose line',
+  );
+
+  // The extracted document must also pass deterministic validation
+  // end-to-end (summary zero, no findings).
+  const result = validateReviewDocument(extracted);
+  assert.equal(result.valid, true, result.reason);
+  assert.equal(result.document.findings.length, 0);
+});
+
+test('sentinel with trailing prose and a finding still validates and yields the finding', () => {
+  const doc = [
+    `# Review — ${TITLE}`,
+    '',
+    '## Summary',
+    '',
+    '- New findings: 1',
+    '- Unresolved from prior review: 0',
+    '- Resolved by latest commits: 0',
+    '',
+    '## Findings',
+    '',
+    '### 🔴 Critical — Bug',
+    '- Status: new',
+    '- Location: src/foo.ts:1',
+    '- Description: d',
+    '',
+    SENTINEL,
+    'junk that must be discarded',
+  ].join('\n');
+
+  const extracted = extractReviewDocument(doc);
+  assert.ok(extracted);
+  const result = validateReviewDocument(extracted);
+  assert.equal(result.valid, true, result.reason);
+  assert.equal(result.document.findings.length, 1);
+  assert.equal(result.document.findings[0].title, 'Bug');
+  assert.ok(!extracted.includes(SENTINEL));
+  assert.ok(!extracted.includes('junk that must be discarded'));
+});
+
+test('text without a sentinel preserves existing behavior (input passes through unchanged)', () => {
+  const doc = [
+    `# Review — ${TITLE}`,
+    '',
+    '## Summary',
+    '',
+    '- New findings: 0',
+    '- Unresolved from prior review: 0',
+    '- Resolved by latest commits: 0',
+  ].join('\n');
+
+  const extracted = extractReviewDocument(doc);
+  assert.ok(extracted);
+  // No sentinel in the input -> the extracted body must equal what
+  // the heading extractor would produce on its own.
+  const validation = validateReviewDocument(extracted);
+  assert.equal(validation.valid, true, validation.reason);
+});
+
+test('sentinel inside a fenced code block is ignored', () => {
+  const doc = [
+    `# Review — ${TITLE}`,
+    '',
+    '## Summary',
+    '',
+    '- New findings: 0',
+    '- Unresolved from prior review: 0',
+    '- Resolved by latest commits: 0',
+    '',
+    '```markdown',
+    SENTINEL,
+    'inside a code block - must NOT trigger sentinel slicing',
+    '```',
+    '',
+    'after the fence: still part of the document',
+  ].join('\n');
+
+  const extracted = extractReviewDocument(doc);
+  assert.ok(extracted);
+  // The extractor discards preamble before the heading, but the
+  // sentinel inside the fence should NOT have triggered slicing.
+  // Concretely: 'after the fence: still part of the document' is on
+  // a blank-after-findings document so it would itself trigger the
+  // 'unexpected content after final finding' rejection if it were
+  // preserved. We assert the rejection fires so we know the
+  // sentinel did NOT truncate the document prematurely.
+  const validation = validateReviewDocument(extracted);
+  assert.equal(validation.valid, false, 'document must remain intact (sentinel inside fence is ignored)');
+  assert.match(
+    validation.reason,
+    /after final finding|unexpected content/i,
+    `expected a post-finding content rejection; got: ${validation.reason}`,
+  );
+});
+
+test('inline sentinel (surrounded by other text on the same line) is ignored', () => {
+  // Only an EXACT line of the sentinel counts. The token embedded
+  // in prose, or appended to another line, must NOT trigger the
+  // slicer. Note: sanitizeModelText strips the literal `<!--` and
+  // `-->` markup on the way through (it treats every HTML comment
+  // as orphan-tag noise), so we assert on the prose around the
+  // inline sentinel rather than on the sentinel markup itself.
+  const doc = [
+    `# Review — ${TITLE}`,
+    '',
+    '## Summary',
+    '',
+    '- New findings: 0',
+    '- Unresolved from prior review: 0',
+    '- Resolved by latest commits: 0',
+    '',
+    'the model wrote the sentinel inline in this sentence',
+    '',
+    'a separate sentence referencing the sentinel inline',
+  ].join('\n');
+
+  const extracted = extractReviewDocument(doc);
+  assert.ok(extracted);
+  assert.ok(
+    extracted.includes('the model wrote the sentinel inline'),
+    'inline sentinel must not trigger slicing (text before inline sentinel preserved)',
+  );
+  assert.ok(
+    extracted.includes('a separate sentence referencing the sentinel inline'),
+    'inline sentinel must not trigger slicing (text after inline sentinel preserved)',
+  );
+});
+
+test('first eligible sentinel wins when more than one exists', () => {
+  // First sentinel (before the second prose block) is eligible and
+  // must win. The second sentinel (inside the post-prose) is never
+  // reached.
+  const doc = [
+    `# Review — ${TITLE}`,
+    '',
+    '## Summary',
+    '',
+    '- New findings: 0',
+    '- Unresolved from prior review: 0',
+    '- Resolved by latest commits: 0',
+    '',
+    SENTINEL,
+    'prose between the two sentinels',
+    SENTINEL,
+    'prose after the second sentinel',
+  ].join('\n');
+
+  const extracted = extractReviewDocument(doc);
+  assert.ok(extracted);
+  assert.ok(extracted.startsWith(`# Review — ${TITLE}`));
+  assert.ok(!extracted.includes(SENTINEL), 'both sentinels must be stripped');
+  assert.ok(
+    !extracted.includes('prose between the two sentinels'),
+    'prose between the two sentinels must be stripped (first eligible wins)',
+  );
+  assert.ok(
+    !extracted.includes('prose after the second sentinel'),
+    'prose after the second sentinel must also be stripped',
+  );
+});
+
+test('stripSentinelBoundary is a pure no-op when the token is absent', () => {
+  const text = 'just some prose\nno sentinel here\n';
+  assert.equal(stripSentinelBoundary(text), text);
+});
+
+test('stripSentinelBoundary preserves everything before the sentinel and discards the rest', () => {
+  const before = 'first line\nsecond line';
+  const after = SENTINEL;
+  const text = `${before}\n${after}\ntail`;
+  assert.equal(stripSentinelBoundary(text), before);
+});
+
+test('stripSentinelBoundary inside a fenced code block is ignored', () => {
+  const before = 'first line\n```\n' + SENTINEL + '\n```\nlast line';
+  assert.equal(stripSentinelBoundary(before), before);
+});
+
+test('REVIEW and SYNTHESIS templates require the final-line sentinel; VALIDATOR template does not', () => {
+  // Both model templates must instruct the model to emit the exact
+  // token on its own line and treat it as a stand-alone completion
+  // marker. The exact token MUST appear in each prompt so the model
+  // does not invent a near-miss variant.
+  for (const [name, template] of [
+    ['REVIEW_AGENT_PROMPT_TEMPLATE', REVIEW_AGENT_PROMPT_TEMPLATE],
+    ['SYNTHESIS_AGENT_PROMPT_TEMPLATE', SYNTHESIS_AGENT_PROMPT_TEMPLATE],
+  ]) {
+    assert.ok(
+      template.includes(SENTINEL),
+      `${name} must embed the exact sentinel token "${SENTINEL}"`,
+    );
+    assert.match(
+      template,
+      /own line|last line/i,
+      `${name} must instruct the model to put the sentinel on its own / as the last line`,
+    );
+    // The model must be told the sentinel is OPTIONAL so absence
+    // doesn't accidentally produce an INVALID verdict.
+    assert.match(
+      template,
+      /OPTIONAL|absence/i,
+      `${name} must declare the sentinel as OPTIONAL (absence accepted)`,
+    );
+  }
+
+  // The validator template MUST NOT mention the sentinel - the
+  // validator replies with VALID / INVALID, not review Markdown.
+  assert.ok(
+    !VALIDATOR_AGENT_PROMPT_TEMPLATE.includes(SENTINEL),
+    'VALIDATOR_AGENT_PROMPT_TEMPLATE must NOT mention the sentinel',
+  );
 });
