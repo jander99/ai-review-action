@@ -22,6 +22,7 @@
       "dependsOn": ["^build", "build-tests"]
     },
     "build-tests": {
+      "_comment": "packages/run-reviews/dist-test/index.cjs is gitignored (see /.gitignore). It is rebuilt on demand before :test runs. Keeping it out of git prevents esbuild's cwd-relative path comment from drifting between local and CI builds.",
       "executor": "nx:run-commands",
       "options": {
         "cwd": "packages/run-reviews",

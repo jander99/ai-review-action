@@ -23857,6 +23857,8 @@ var CANONICAL_FIELD_ORDER_TEXT = "mandatory Status/Location/Description fields, 
 var ORPHAN_TAG_PATTERN = /<\/?(?:think|tool_call|tool_result|mm:think|script)>|<!--|-->/gi;
 var REVIEW_AGENT_PROMPT_TEMPLATE = `You are the privileged AI review agent for this GitHub Actions run.
 
+Your final reply MUST begin with the heading "# Review \u2014 <title-or-ref>" on the very first line; emit no preamble, no explanation, and no tool-call XML before the heading.
+
 Runtime context:
 - You are running inside a GitHub Actions Linux x64 runner, invoked non-interactively by the AI Review Action.
 - Each invocation is stateless. There is no interactive user; do not ask follow-up questions.

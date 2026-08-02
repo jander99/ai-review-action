@@ -3,6 +3,12 @@
 node_modules/
 .yarn/install-state.gz
 
+# Per-package test bundles. They are rebuilt on demand by the
+# `build-tests` Nx target before `:test` runs, so the esbuild path
+# comment differs between local and CI builds. They must NOT be
+# committed.
+packages/*/dist-test/
+
 .claude/worktrees
 .worktrees/
 .slim/deepwork/

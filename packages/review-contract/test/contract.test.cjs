@@ -612,6 +612,30 @@ test('review agent and synthesis agent prompts share a "no prose outside this sh
   }
 });
 
+test('review agent prompt declares the heading-first reply constraint', () => {
+  // Bound the regression where the model emitted preamble prose /
+  // tool-call XML before the '# Review — <title-or-ref>' heading.
+  // The constraint must appear near the top of the prompt so the
+  // model sees it before any other guidance.
+  assert.match(
+    REVIEW_AGENT_PROMPT_TEMPLATE,
+    /Your final reply MUST begin with the heading "# Review — <title-or-ref>" on the very first line; emit no preamble, no explanation, and no tool-call XML before the heading\./,
+    'REVIEW_AGENT_PROMPT_TEMPLATE must declare the heading-first reply constraint',
+  );
+  // The constraint must appear before any other rule. Locate the
+  // "Runtime context:" header and assert the constraint precedes it.
+  const constraintIdx = REVIEW_AGENT_PROMPT_TEMPLATE.indexOf(
+    'Your final reply MUST begin with the heading',
+  );
+  const runtimeContextIdx = REVIEW_AGENT_PROMPT_TEMPLATE.indexOf('Runtime context:');
+  assert.ok(constraintIdx >= 0, 'constraint must be present');
+  assert.ok(runtimeContextIdx >= 0, 'Runtime context: header must be present');
+  assert.ok(
+    constraintIdx < runtimeContextIdx,
+    `constraint must precede the Runtime context: header (constraint=${constraintIdx}, runtime=${runtimeContextIdx})`,
+  );
+});
+
 test('review-contract project.json declares a test target that runs node --test', () => {
   const projectPath = path.join(__dirname, '..', 'project.json');
   const project = JSON.parse(fs.readFileSync(projectPath, 'utf8'));

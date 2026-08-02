@@ -26724,7 +26724,9 @@ __export(main_exports, {
   postComment: () => postComment,
   postErrorComment: () => postErrorComment,
   run: () => run,
+  runDeps: () => runDeps,
   runReviews: () => runReviews,
+  runWithDeps: () => runWithDeps,
   validateReview: () => validateReview
 });
 module.exports = __toCommonJS(main_exports);
@@ -27071,6 +27073,8 @@ var FIELD_ORDER = [
 var CANONICAL_FIELD_ORDER_TEXT = "mandatory Status/Location/Description fields, in that order";
 var ORPHAN_TAG_PATTERN = /<\/?(?:think|tool_call|tool_result|mm:think|script)>|<!--|-->/gi;
 var REVIEW_AGENT_PROMPT_TEMPLATE = `You are the privileged AI review agent for this GitHub Actions run.
+
+Your final reply MUST begin with the heading "# Review \u2014 <title-or-ref>" on the very first line; emit no preamble, no explanation, and no tool-call XML before the heading.
 
 Runtime context:
 - You are running inside a GitHub Actions Linux x64 runner, invoked non-interactively by the AI Review Action.
@@ -32312,6 +32316,19 @@ var DEFAULT_PERMISSION = {
 var DEFAULT_OPENCODE_VERSION = "1.18.5";
 var DEFAULT_MODEL = "anthropic/claude-sonnet-4.6";
 var DEFAULT_TIMEOUT_MINUTES = 30;
+var EMPTY_REVIEW_RESULT = {
+  review: "",
+  reviewOutputPath: "",
+  modelsUsed: "",
+  cost: 0,
+  costByModel: {},
+  tokens: { input: 0, output: 0 },
+  tokensByModel: {},
+  configJson: "",
+  effectiveModel: "",
+  debugArtifactPath: "",
+  failureReason: ""
+};
 function getBooleanInput(name, fallback = false) {
   const raw = core2.getInput(name).trim().toLowerCase();
   if (raw === "") {
@@ -32415,17 +32432,70 @@ function computeFailureReason(reviewerFailureReason, validatorFailureReason) {
   }
   return "";
 }
-async function run() {
-  const githubToken = core2.getInput("github-token") || process.env.GITHUB_TOKEN;
-  const maxCommentChars = getIntInput("max-comment-chars", 65e3);
-  const checkName = core2.getInput("check-name") || "ai-review";
+function buildSyntheticInvalidValidation(message, prefix) {
+  return {
+    status: "invalid",
+    reason: message,
+    cost: 0,
+    tokens: { input: 0, output: 0 },
+    failureReason: `${prefix}: ${message}`
+  };
+}
+var runDeps = {
+  runReviews,
+  validateReview,
+  postComment,
+  postCheckRun,
+  postErrorComment
+};
+function buildPublishContext() {
+  return {
+    eventName: process.env.GITHUB_EVENT_NAME || "",
+    owner: import_github.context.repo.owner,
+    repo: import_github.context.repo.repo,
+    issueNumber: import_github.context.issue.number,
+    maxCommentChars: getIntInput("max-comment-chars", 65e3),
+    postCommentEnabled: getBooleanInput("post-comment", true),
+    postCheckRunEnabled: getBooleanInput("post-check-run", true),
+    checkName: core2.getInput("check-name") || "ai-review",
+    checkDetailsUrl: core2.getInput("check-details-url") || "https://github.com"
+  };
+}
+async function publishError(reason, deps, ctx) {
+  core2.setOutput("comment-url", "");
+  core2.setOutput("check-run-url", "");
+  if (!reason) {
+    return;
+  }
+  if (ctx.eventName === "pull_request" && ctx.postCommentEnabled) {
+    const commentResult = await deps.postErrorComment(
+      buildPostErrorCommentOptions(reason, ctx.maxCommentChars),
+      {
+        owner: ctx.owner,
+        repo: ctx.repo,
+        issueNumber: ctx.issueNumber
+      }
+    );
+    core2.setOutput("comment-url", commentResult.commentUrl);
+  } else if (ctx.eventName !== "pull_request" && ctx.postCheckRunEnabled) {
+    const checkResult = await deps.postCheckRun(
+      buildPostCheckRunOptions(reason, ctx.checkName, "failure", ctx.checkDetailsUrl)
+    );
+    core2.setOutput("check-run-url", checkResult.checkRunUrl);
+  }
+}
+async function runWithDeps(deps) {
+  const publishCtx = buildPublishContext();
   const checkConclusion = core2.getInput("check-conclusion") || "neutral";
-  const checkDetailsUrl = core2.getInput("check-details-url") || "https://github.com";
-  const postCommentEnabled = getBooleanInput("post-comment", true);
-  const postCheckRunEnabled = getBooleanInput("post-check-run", true);
   const failOnError = getBooleanInput("fail-on-error");
   const reviewOptions = buildRunReviewsOptions();
-  const reviewResult = await runReviews(reviewOptions);
+  let reviewResult;
+  try {
+    reviewResult = await deps.runReviews(reviewOptions);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    reviewResult = { ...EMPTY_REVIEW_RESULT, failureReason: `Review invocation threw: ${message}` };
+  }
   core2.setOutput("review", reviewResult.review);
   core2.setOutput("review-output-path", reviewResult.reviewOutputPath);
   core2.setOutput("models-used", reviewResult.modelsUsed);
@@ -32440,13 +32510,18 @@ async function run() {
   }
   let validation = null;
   if (reviewResult.review) {
-    validation = await validateReview(
-      buildValidateReviewOptions(
-        reviewResult.reviewOutputPath,
-        reviewResult.effectiveModel || reviewOptions.model,
-        reviewResult.configJson
-      )
-    );
+    try {
+      validation = await deps.validateReview(
+        buildValidateReviewOptions(
+          reviewResult.reviewOutputPath,
+          reviewResult.effectiveModel || reviewOptions.model,
+          reviewResult.configJson
+        )
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      validation = buildSyntheticInvalidValidation(message, "Validator invocation threw");
+    }
     core2.setOutput("validate-status", validation.status);
     core2.setOutput("validate-reason", validation.reason);
     core2.setOutput("validate-cost", validation.cost);
@@ -32470,46 +32545,35 @@ async function run() {
   const validationInvalid = validation?.status === "invalid";
   const runFailed = !reviewResult.review && Boolean(reviewerFailureReason);
   const shouldPublishError = validationInvalid || runFailed;
-  const eventName = process.env.GITHUB_EVENT_NAME || "";
   if (!shouldPublishError && reviewResult.review) {
-    if (eventName === "pull_request" && postCommentEnabled) {
-      const commentResult = await postComment(
-        buildPostCommentOptions(reviewResult.review, maxCommentChars),
+    core2.setOutput("comment-url", "");
+    core2.setOutput("check-run-url", "");
+    if (publishCtx.eventName === "pull_request" && publishCtx.postCommentEnabled) {
+      const commentResult = await deps.postComment(
+        buildPostCommentOptions(reviewResult.review, publishCtx.maxCommentChars),
         {
-          owner: import_github.context.repo.owner,
-          repo: import_github.context.repo.repo,
-          issueNumber: import_github.context.issue.number
+          owner: publishCtx.owner,
+          repo: publishCtx.repo,
+          issueNumber: publishCtx.issueNumber
         }
       );
       core2.setOutput("comment-url", commentResult.commentUrl);
-    } else if (eventName !== "pull_request" && postCheckRunEnabled) {
-      const checkResult = await postCheckRun(
-        buildPostCheckRunOptions(reviewResult.review, checkName, checkConclusion, checkDetailsUrl)
+    } else if (publishCtx.eventName !== "pull_request" && publishCtx.postCheckRunEnabled) {
+      const checkResult = await deps.postCheckRun(
+        buildPostCheckRunOptions(
+          reviewResult.review,
+          publishCtx.checkName,
+          checkConclusion,
+          publishCtx.checkDetailsUrl
+        )
       );
       core2.setOutput("check-run-url", checkResult.checkRunUrl);
-    } else {
-      core2.setOutput("comment-url", "");
-      core2.setOutput("check-run-url", "");
     }
+  } else if (shouldPublishError && errorReason) {
+    await publishError(errorReason, deps, publishCtx);
   } else {
     core2.setOutput("comment-url", "");
     core2.setOutput("check-run-url", "");
-    if (eventName === "pull_request" && postCommentEnabled && errorReason) {
-      const commentResult = await postErrorComment(
-        buildPostErrorCommentOptions(errorReason, maxCommentChars),
-        {
-          owner: import_github.context.repo.owner,
-          repo: import_github.context.repo.repo,
-          issueNumber: import_github.context.issue.number
-        }
-      );
-      core2.setOutput("comment-url", commentResult.commentUrl);
-    } else if (eventName !== "pull_request" && postCheckRunEnabled && errorReason) {
-      const checkResult = await postCheckRun(
-        buildPostCheckRunOptions(errorReason, checkName, "failure", checkDetailsUrl)
-      );
-      core2.setOutput("check-run-url", checkResult.checkRunUrl);
-    }
   }
   const hasFailure = Boolean(reviewerFailureReason) || validationInvalid || runFailed;
   if (hasFailure) {
@@ -32519,10 +32583,19 @@ async function run() {
     core2.setFailed(reviewerFailureReason);
   }
 }
+async function run() {
+  return runWithDeps(runDeps);
+}
 if (require.main === module) {
-  run().catch((error) => {
+  run().catch(async (error) => {
     const message = error instanceof Error ? error.message : String(error);
-    core2.setFailed(`Root action failed: ${message}`);
+    const reason = `Root action failed: ${message}`;
+    try {
+      const publishCtx = buildPublishContext();
+      await publishError(reason, runDeps, publishCtx);
+    } catch {
+    }
+    core2.setFailed(reason);
   });
 }
 // Annotate the CommonJS export names for ESM import in node:
@@ -32532,7 +32605,9 @@ if (require.main === module) {
   postComment,
   postErrorComment,
   run,
+  runDeps,
   runReviews,
+  runWithDeps,
   validateReview
 });
 /*! Bundled license information:

@@ -24,6 +24,24 @@ const DEFAULT_OPENCODE_VERSION = '1.18.5';
 const DEFAULT_MODEL = 'anthropic/claude-sonnet-4.6';
 const DEFAULT_TIMEOUT_MINUTES = 30;
 
+// Empty RunReviewsResult used when runReviews throws. The run() flow
+// converts any thrown error into a synthetic failure-reason so the
+// orchestration can still post an error comment instead of silently
+// failing.
+const EMPTY_REVIEW_RESULT: RunReviewsResult = {
+  review: '',
+  reviewOutputPath: '',
+  modelsUsed: '',
+  cost: 0,
+  costByModel: {},
+  tokens: { input: 0, output: 0 },
+  tokensByModel: {},
+  configJson: '',
+  effectiveModel: '',
+  debugArtifactPath: '',
+  failureReason: '',
+};
+
 function getBooleanInput(name: string, fallback = false): boolean {
   const raw = core.getInput(name).trim().toLowerCase();
   if (raw === '') {
@@ -151,19 +169,143 @@ function computeFailureReason(
   return '';
 }
 
-export async function run(): Promise<void> {
-  const githubToken = core.getInput('github-token') || process.env.GITHUB_TOKEN;
-  const maxCommentChars = getIntInput('max-comment-chars', 65000);
-  const checkName = core.getInput('check-name') || 'ai-review';
+/**
+ * Build a synthetic invalid validation result when the validator
+ * invocation throws. This mirrors the shape returned by the
+ * validate-review package and is what the publish-error helper
+ * expects so the error comment can be posted with the throw message.
+ */
+function buildSyntheticInvalidValidation(message: string, prefix: string): ValidateReviewResult {
+  return {
+    status: 'invalid',
+    reason: message,
+    cost: 0,
+    tokens: { input: 0, output: 0 },
+    failureReason: `${prefix}: ${message}`,
+  };
+}
+
+/**
+ * Mutable dependency bag for the orchestration. Exported so tests
+ * can stub individual methods via `mock.method` from `node:test`,
+ * and so the same object backs the default `run()` entrypoint and
+ * any future call sites that want to override one specific dep
+ * without going through `runWithDeps`.
+ */
+export interface RunDeps {
+  runReviews(options: RunReviewsOptions): Promise<RunReviewsResult>;
+  validateReview(options: ValidateReviewOptions): Promise<ValidateReviewResult>;
+  postComment(
+    options: PostCommentOptions,
+    ctx: { owner: string; repo: string; issueNumber: number },
+  ): Promise<PostCommentResult>;
+  postCheckRun(options: PostCheckRunOptions): Promise<PostCheckRunResult>;
+  postErrorComment(
+    options: PostErrorCommentOptions,
+    ctx: { owner: string; repo: string; issueNumber: number },
+  ): Promise<PostErrorCommentResult>;
+}
+
+export const runDeps: RunDeps = {
+  runReviews,
+  validateReview,
+  postComment,
+  postCheckRun,
+  postErrorComment,
+};
+
+interface PublishContext {
+  eventName: string;
+  owner: string;
+  repo: string;
+  issueNumber: number;
+  maxCommentChars: number;
+  postCommentEnabled: boolean;
+  postCheckRunEnabled: boolean;
+  checkName: string;
+  checkDetailsUrl: string;
+}
+
+function buildPublishContext(): PublishContext {
+  return {
+    eventName: process.env.GITHUB_EVENT_NAME || '',
+    owner: context.repo.owner,
+    repo: context.repo.repo,
+    issueNumber: context.issue.number,
+    maxCommentChars: getIntInput('max-comment-chars', 65000),
+    postCommentEnabled: getBooleanInput('post-comment', true),
+    postCheckRunEnabled: getBooleanInput('post-check-run', true),
+    checkName: core.getInput('check-name') || 'ai-review',
+    checkDetailsUrl: core.getInput('check-details-url') || 'https://github.com',
+  };
+}
+
+/**
+ * Post an event-aware error comment / failure check run. Used by
+ * BOTH the existing runFailed/validationInvalid path and the new
+ * exception path (runReviews throw, validateReview throw, or any
+ * other unhandled throw caught by the entrypoint's `.catch`).
+ *
+ * Always clears `comment-url` / `check-run-url` first so the
+ * outputs reflect whichever publication channel fired (or none).
+ */
+async function publishError(reason: string, deps: RunDeps, ctx: PublishContext): Promise<void> {
+  core.setOutput('comment-url', '');
+  core.setOutput('check-run-url', '');
+
+  if (!reason) {
+    return;
+  }
+
+  if (ctx.eventName === 'pull_request' && ctx.postCommentEnabled) {
+    const commentResult: PostErrorCommentResult = await deps.postErrorComment(
+      buildPostErrorCommentOptions(reason, ctx.maxCommentChars),
+      {
+        owner: ctx.owner,
+        repo: ctx.repo,
+        issueNumber: ctx.issueNumber,
+      },
+    );
+    core.setOutput('comment-url', commentResult.commentUrl);
+  } else if (ctx.eventName !== 'pull_request' && ctx.postCheckRunEnabled) {
+    const checkResult: PostCheckRunResult = await deps.postCheckRun(
+      buildPostCheckRunOptions(reason, ctx.checkName, 'failure', ctx.checkDetailsUrl),
+    );
+    core.setOutput('check-run-url', checkResult.checkRunUrl);
+  }
+}
+
+/**
+ * Programmatic orchestration entrypoint. Same flow as `run()` but
+ * with the package APIs injected through `deps`. The default `run()`
+ * entrypoint delegates here with the bundled `runDeps`.
+ *
+ * Every failure path (reviewer throw, reviewer invalid, validator
+ * throw, validator invalid, all invalid) routes through
+ * `publishError` so an error comment is posted on PR events or a
+ * failure check run is created on non-PR events. The entrypoint's
+ * `.catch` (in `run()`) is the final backstop and also calls
+ * `publishError` so unhandled throws do not silently drop the
+ * error publication.
+ */
+export async function runWithDeps(deps: RunDeps): Promise<void> {
+  const publishCtx = buildPublishContext();
   const checkConclusion = core.getInput('check-conclusion') || 'neutral';
-  const checkDetailsUrl = core.getInput('check-details-url') || 'https://github.com';
-  const postCommentEnabled = getBooleanInput('post-comment', true);
-  const postCheckRunEnabled = getBooleanInput('post-check-run', true);
   const failOnError = getBooleanInput('fail-on-error');
 
-  // 1. Run reviews.
+  // 1. Run reviews. Catch any thrown error and convert it into a
+  // synthetic failure-reason so the existing publish-error logic
+  // still fires (previously the throw propagated past the catch
+  // in `run()` and only `core.setFailed` ran, leaving the PR with
+  // a red step but no error comment).
   const reviewOptions = buildRunReviewsOptions();
-  const reviewResult: RunReviewsResult = await runReviews(reviewOptions);
+  let reviewResult: RunReviewsResult;
+  try {
+    reviewResult = await deps.runReviews(reviewOptions);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    reviewResult = { ...EMPTY_REVIEW_RESULT, failureReason: `Review invocation threw: ${message}` };
+  }
 
   core.setOutput('review', reviewResult.review);
   core.setOutput('review-output-path', reviewResult.reviewOutputPath);
@@ -178,16 +320,24 @@ export async function run(): Promise<void> {
     core.setOutput('debug-artifact-path', reviewResult.debugArtifactPath);
   }
 
-  // 2. Validate the review when one was produced.
+  // 2. Validate the review when one was produced. Same try/catch
+  // shape as the reviewer call: a thrown validator invocation now
+  // surfaces as an invalid validation result with the throw message
+  // so the publish-error logic posts a comment.
   let validation: ValidateReviewResult | null = null;
   if (reviewResult.review) {
-    validation = await validateReview(
-      buildValidateReviewOptions(
-        reviewResult.reviewOutputPath,
-        reviewResult.effectiveModel || reviewOptions.model,
-        reviewResult.configJson,
-      ),
-    );
+    try {
+      validation = await deps.validateReview(
+        buildValidateReviewOptions(
+          reviewResult.reviewOutputPath,
+          reviewResult.effectiveModel || reviewOptions.model,
+          reviewResult.configJson,
+        ),
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      validation = buildSyntheticInvalidValidation(message, 'Validator invocation threw');
+    }
     core.setOutput('validate-status', validation.status);
     core.setOutput('validate-reason', validation.reason);
     core.setOutput('validate-cost', validation.cost);
@@ -220,47 +370,40 @@ export async function run(): Promise<void> {
   const validationInvalid = validation?.status === 'invalid';
   const runFailed = !reviewResult.review && Boolean(reviewerFailureReason);
   const shouldPublishError = validationInvalid || runFailed;
-  const eventName = process.env.GITHUB_EVENT_NAME || '';
 
   if (!shouldPublishError && reviewResult.review) {
-    if (eventName === 'pull_request' && postCommentEnabled) {
-      const commentResult: PostCommentResult = await postComment(
-        buildPostCommentOptions(reviewResult.review, maxCommentChars),
+    core.setOutput('comment-url', '');
+    core.setOutput('check-run-url', '');
+    if (publishCtx.eventName === 'pull_request' && publishCtx.postCommentEnabled) {
+      const commentResult: PostCommentResult = await deps.postComment(
+        buildPostCommentOptions(reviewResult.review, publishCtx.maxCommentChars),
         {
-          owner: context.repo.owner,
-          repo: context.repo.repo,
-          issueNumber: context.issue.number,
+          owner: publishCtx.owner,
+          repo: publishCtx.repo,
+          issueNumber: publishCtx.issueNumber,
         },
       );
       core.setOutput('comment-url', commentResult.commentUrl);
-    } else if (eventName !== 'pull_request' && postCheckRunEnabled) {
-      const checkResult: PostCheckRunResult = await postCheckRun(
-        buildPostCheckRunOptions(reviewResult.review, checkName, checkConclusion, checkDetailsUrl),
+    } else if (publishCtx.eventName !== 'pull_request' && publishCtx.postCheckRunEnabled) {
+      const checkResult: PostCheckRunResult = await deps.postCheckRun(
+        buildPostCheckRunOptions(
+          reviewResult.review,
+          publishCtx.checkName,
+          checkConclusion,
+          publishCtx.checkDetailsUrl,
+        ),
       );
       core.setOutput('check-run-url', checkResult.checkRunUrl);
-    } else {
-      core.setOutput('comment-url', '');
-      core.setOutput('check-run-url', '');
     }
+  } else if (shouldPublishError && errorReason) {
+    // Covers reviewer throw (caught above -> failureReason set ->
+    // runFailed true), reviewer produced no document, and validator
+    // throw / invalid. Always routes through `publishError` so the
+    // helper is the single source of truth for error publication.
+    await publishError(errorReason, deps, publishCtx);
   } else {
     core.setOutput('comment-url', '');
     core.setOutput('check-run-url', '');
-    if (eventName === 'pull_request' && postCommentEnabled && errorReason) {
-      const commentResult: PostErrorCommentResult = await postErrorComment(
-        buildPostErrorCommentOptions(errorReason, maxCommentChars),
-        {
-          owner: context.repo.owner,
-          repo: context.repo.repo,
-          issueNumber: context.issue.number,
-        },
-      );
-      core.setOutput('comment-url', commentResult.commentUrl);
-    } else if (eventName !== 'pull_request' && postCheckRunEnabled && errorReason) {
-      const checkResult: PostCheckRunResult = await postCheckRun(
-        buildPostCheckRunOptions(errorReason, checkName, 'failure', checkDetailsUrl),
-      );
-      core.setOutput('check-run-url', checkResult.checkRunUrl);
-    }
   }
 
   // 6. Surface the step's final status.
@@ -275,13 +418,29 @@ export async function run(): Promise<void> {
   }
 }
 
+export async function run(): Promise<void> {
+  return runWithDeps(runDeps);
+}
+
 // Top-level entrypoint. Gated on `require.main === module` so
 // importing this bundle as a library (e.g., by tests) does not
 // trigger the action.
 if (require.main === module) {
-  run().catch((error) => {
+  run().catch(async (error) => {
     const message = error instanceof Error ? error.message : String(error);
-    core.setFailed(`Root action failed: ${message}`);
+    const reason = `Root action failed: ${message}`;
+    // Best-effort: also post an error comment / failure check run.
+    // This is the final backstop: any throw that escapes the inner
+    // try/catches (e.g. malformed permission JSON, unknown boolean
+    // input value) still surfaces on the PR.
+    try {
+      const publishCtx = buildPublishContext();
+      await publishError(reason, runDeps, publishCtx);
+    } catch {
+      // Ignore publication errors here; `core.setFailed` below is
+      // the authoritative failure signal.
+    }
+    core.setFailed(reason);
   });
 }
 

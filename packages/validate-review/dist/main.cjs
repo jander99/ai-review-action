@@ -19855,6 +19855,8 @@ var FIELD_ORDER = [
 var CANONICAL_FIELD_ORDER_TEXT = "mandatory Status/Location/Description fields, in that order";
 var REVIEW_AGENT_PROMPT_TEMPLATE = `You are the privileged AI review agent for this GitHub Actions run.
 
+Your final reply MUST begin with the heading "# Review \u2014 <title-or-ref>" on the very first line; emit no preamble, no explanation, and no tool-call XML before the heading.
+
 Runtime context:
 - You are running inside a GitHub Actions Linux x64 runner, invoked non-interactively by the AI Review Action.
 - Each invocation is stateless. There is no interactive user; do not ask follow-up questions.

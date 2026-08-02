@@ -38,6 +38,12 @@ jobs:
         run: yarn nx run repo-root:build --skip-nx-cache
 
       - name: Build run-reviews test bundle
+        # packages/*/dist-test/ is gitignored (see .gitignore); the
+        # test bundle is rebuilt on demand by the `:build-tests`
+        # target. CI's :test target depends on it, so this step must
+        # run before any :test invocation. The build is intentionally
+        # not committed so esbuild's cwd-relative path comment does
+        # not drift between local and CI builds.
         run: yarn nx run run-reviews:build-tests --skip-nx-cache
 
       - name: Build setup-opencode test bundle
@@ -48,24 +54,21 @@ jobs:
           set -euo pipefail
           # Phase 3: the root action is a single JS bundle under
           # packages/root-action/dist/. The composite `./packages/*`
-          # references in the old action.yml are gone. Each leaf also
-          # ships a `dist-test/index.cjs` used by its test target; those
-          # are checked separately below.
+          # references in the old action.yml are gone.
+          #
+          # The dist-test/ bundles are gitignored and rebuilt on
+          # demand by the `:build-tests` Nx target. They are NOT
+          # committed (the esbuild path comment differs between local
+          # and CI builds).
           tracked=(
             "dist/main.cjs"
             "packages/root-action/dist/main.cjs"
             "packages/run-reviews/dist/main.cjs"
-            "packages/run-reviews/dist-test/index.cjs"
             "packages/validate-review/dist/main.cjs"
-            "packages/validate-review/dist-test/index.cjs"
             "packages/setup-opencode/dist/main.cjs"
-            "packages/setup-opencode/dist-test/index.cjs"
             "packages/post-comment/dist/main.cjs"
-            "packages/post-comment/dist-test/index.cjs"
             "packages/post-check-run/dist/main.cjs"
-            "packages/post-check-run/dist-test/index.cjs"
             "packages/post-error-comment/dist/main.cjs"
-            "packages/post-error-comment/dist-test/index.cjs"
             "packages/review-contract/dist/index.cjs"
             "packages/previous-reviews/dist/index.cjs"
           )
@@ -81,13 +84,15 @@ jobs:
       - name: Verify every dist bundle is tracked
         run: |
           set -euo pipefail
-          # Fix 11 of the Phase-3 bounded remediation: every
-          # packages/*/dist/main.cjs and packages/*/dist-test/index.cjs
-          # that exists must be tracked in git; otherwise the action
-          # reference will fail under remote invocation because the
-          # runner never sees the file.
+          # Fix 11 of the Phase-3 bounded remediation: every committed
+          # dist file must be tracked in git. Test-only bundles under
+          # packages/*/dist-test/ are gitignored (see .gitignore) so
+          # we skip them here.
           missing=0
           for dist in $(find packages dist -path '*/dist*/main.cjs' -o -path '*/dist*/index.cjs' -o -path 'dist/main.cjs' 2>/dev/null); do
+            case "$dist" in
+              */dist-test/*) continue ;;
+            esac
             if [ ! -f "$dist" ]; then
               continue
             fi
