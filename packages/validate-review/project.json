@@ -1,0 +1,24 @@
+{
+  "name": "validate-review",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "root": "packages/validate-review",
+  "sourceRoot": "packages/validate-review/src",
+  "targets": {
+    "build": {
+      "executor": "@nx/esbuild:esbuild",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "main": "packages/validate-review/src/main.ts",
+        "outputPath": "packages/validate-review/dist",
+        "outputFileName": "main.cjs",
+        "tsConfig": "packages/validate-review/tsconfig.json",
+        "bundle": true,
+        "platform": "node",
+        "target": "node20",
+        "format": ["cjs"],
+        "thirdParty": true
+      }
+    }
+  }
+}

@@ -10,7 +10,7 @@ import { composeFusionPrompt, composeLabeledReviews } from './fusion';
 import { invokeOpenCode } from './opencode';
 import type { DebugCapturePaths } from './opencode';
 import { DEFAULT_PERMISSION } from './permissions';
-import { composeTaskPrompt, parsePrompts } from './prompt-composer';
+import { composeTaskPromptWithPreviousReviews, parsePrompts } from './prompt-composer';
 import type { Permission, PromptEntry, ReviewResult } from './types';
 
 const DEFAULT_OPENCODE_VERSION = '1.18.5';
@@ -103,6 +103,20 @@ function finalizeDebugDirectory(directory: string): void {
 
 interface IndividualReviewResult extends ReviewResult {
   prompt: string;
+}
+
+function readReviewOutputFile(path: string): string {
+  // The model is contractually required to write the review markdown to
+  // this path; the action reads the file after the model returns. If the
+  // file is missing or empty, the model failed to honor the contract.
+  if (!fs.existsSync(path)) {
+    throw new Error(`review output file not found at ${path}`);
+  }
+  const content = fs.readFileSync(path, 'utf8');
+  if (!content.trim()) {
+    throw new Error(`review output file at ${path} is empty`);
+  }
+  return content;
 }
 
 function readPermission(): Permission {
@@ -207,11 +221,19 @@ function run(): void {
   const orderedPrompts = [...prompts].sort((left, right) => compareLexically(left.source, right.source));
   const orderedModels = [...effectiveModels].sort(compareLexically);
 
+  const eventContext = getEventContext();
+  const reviewOutputPath = eventContext.reviewOutputPath;
+  if (!reviewOutputPath) {
+    setEmptyOutputs();
+    core.setFailed('review output path could not be determined for this event');
+    return;
+  }
+
   for (const prompt of orderedPrompts) {
     for (const currentModel of orderedModels) {
       core.info(`Running review: ${currentModel} :: ${prompt.source}`);
       try {
-        const result = invokeOpenCode(composeTaskPrompt([prompt]), currentModel, configPath, {
+        const result = invokeOpenCode(composeTaskPromptWithPreviousReviews([prompt], ''), currentModel, configPath, {
           homeDir,
           timeoutMinutes,
           debugCapture: debugEnabled
@@ -229,16 +251,28 @@ function run(): void {
     }
   }
 
-  // When fusion is disabled, a single review path does not need the
-  // `## <model> :: <prompt>` wrapper — the prompt contract requires the
-  // review body to start with the `# PR #N Review — <title>` heading, and
-  // the wrapper would prepend metadata above it. Multi-review runs keep the
-  // wrapper so each section can be attributed to its source.
-  const reviewNeedsLabelWrapper =
-    fusionEnabled || individualResults.length !== 1;
-  let reviewText = reviewNeedsLabelWrapper
-    ? composeLabeledReviews(individualResults)
-    : individualResults[0].text;
+  // The model is contractually required to write the review markdown to
+  // `reviewOutputPath`. Read the file and use it as the review output for
+  // multi-model cases where the wrapper is not needed.
+  //
+  // Fallback: if the file is missing for a single-model run, surface the
+  // model response so the validator/poster still has something to inspect.
+  // Multi-model runs with no file are treated as a failure.
+  let reviewText: string;
+  try {
+    reviewText = readReviewOutputFile(reviewOutputPath);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (individualResults.length === 1 && !fusionEnabled) {
+      core.warning(`${message}; falling back to the model response text.`);
+      reviewText = individualResults[0].text;
+    } else {
+      setEmptyOutputs();
+      core.setFailed(`Review output contract violated: ${message}`);
+      core.setOutput('review-output-path', reviewOutputPath);
+      return;
+    }
+  }
   if (fusionEnabled && individualResults.length > 0) {
     core.info(`Running fusion: ${fusionModel}`);
     try {
@@ -257,7 +291,14 @@ function run(): void {
       );
       accountedResults.push(fusionResult);
       successfulModels.add(fusionModel);
-      reviewText = fusionResult.text;
+      // Fusion also writes to the same file path; reread it after the call.
+      try {
+        reviewText = readReviewOutputFile(reviewOutputPath);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        core.warning(`Fusion did not write the review file (${message}); using the model response text.`);
+        reviewText = fusionResult.text;
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       failures.push(`fusion :: ${fusionModel}: ${message}`);
@@ -286,6 +327,7 @@ function run(): void {
     }
 
     core.setOutput('review', reviewText);
+    core.setOutput('review-output-path', reviewOutputPath);
     core.setOutput('models-used', [...successfulModels].join(','));
     core.setOutput('cost', totalCost);
     core.setOutput('cost-by-model', JSON.stringify(costByModel));

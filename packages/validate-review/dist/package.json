@@ -1,0 +1,9 @@
+{
+  "name": "@jander99/ai-review-validate-review",
+  "version": "1.0.0",
+  "main": "dist/main.cjs",
+  "private": true,
+  "dependencies": {
+    "@actions/core": "^1.11.1"
+  }
+}

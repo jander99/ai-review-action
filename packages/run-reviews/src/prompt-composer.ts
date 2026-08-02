@@ -43,3 +43,12 @@ export function parsePrompts(input: string): PromptEntry[] {
 export function composeTaskPrompt(prompts: PromptEntry[]): string {
   return prompts.map((prompt) => prompt.content).join('\n\n');
 }
+
+export function composeTaskPromptWithPreviousReviews(
+  prompts: PromptEntry[],
+  previousReviewsBlock: string,
+): string {
+  const userPrompt = composeTaskPrompt(prompts);
+  if (!previousReviewsBlock) return userPrompt;
+  return `${userPrompt}\n\n${previousReviewsBlock}`;
+}

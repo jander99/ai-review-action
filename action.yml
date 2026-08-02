@@ -132,6 +132,12 @@ outputs:
   debug-artifact-path:
     description: 'Directory containing redacted, gzipped debug output when debug is enabled.'
     value: ${{ steps.run.outputs.debug-artifact-path }}
+  validate-status:
+    description: 'Status from the structural validator: "valid" or "invalid".'
+    value: ${{ steps.validate.outputs.status }}
+  validate-reason:
+    description: 'Human-readable reason when the validator rejects the review.'
+    value: ${{ steps.validate.outputs.reason }}
 
 runs:
   using: composite
@@ -140,6 +146,7 @@ runs:
       id: run
       uses: ./packages/run-reviews
       with:
+        github-token: ${{ inputs.github-token || github.token }}
         opencode-version: ${{ inputs.opencode-version }}
         debug: ${{ inputs.debug }}
         model: ${{ inputs.model }}
@@ -152,8 +159,19 @@ runs:
         fusion-model: ${{ inputs.fusion-model }}
         fail-on-error: ${{ inputs.fail-on-error }}
 
+    - name: Validate review
+      id: validate
+      if: always() && steps.run.outputs.review != ''
+      uses: ./packages/validate-review
+      with:
+        review-path: ${{ steps.run.outputs.review-output-path }}
+        opencode-version: ${{ inputs.opencode-version }}
+        model: ${{ inputs.model }}
+        timeout-minutes: '5'
+        github-token: ${{ inputs.github-token || github.token }}
+
     - name: Post comment
-      if: always() && github.event_name == 'pull_request'
+      if: always() && github.event_name == 'pull_request' && steps.validate.outputs.status == 'valid'
       id: post-comment
       uses: ./packages/post-comment
       with:
@@ -162,8 +180,18 @@ runs:
         post-comment: ${{ inputs.post-comment }}
         max-comment-chars: ${{ inputs.max-comment-chars }}
 
+    - name: Post error comment
+      if: always() && github.event_name == 'pull_request' && steps.validate.outputs.status == 'invalid'
+      id: post-error-comment
+      uses: ./packages/post-error-comment
+      with:
+        github-token: ${{ inputs.github-token || github.token }}
+        reason: ${{ steps.validate.outputs.reason }}
+        post-comment: ${{ inputs.post-comment }}
+        max-comment-chars: ${{ inputs.max-comment-chars }}
+
     - name: Post check run
-      if: always() && github.event_name != 'pull_request' && inputs.post-check-run == 'true'
+      if: always() && github.event_name != 'pull_request' && inputs.post-check-run == 'true' && steps.validate.outputs.status == 'valid'
       id: post-check-run
       uses: ./packages/post-check-run
       with:
@@ -171,6 +199,17 @@ runs:
         review: ${{ steps.run.outputs.review }}
         name: ${{ inputs.check-name }}
         conclusion: ${{ inputs.check-conclusion }}
+        details-url: ${{ inputs.check-details-url }}
+
+    - name: Post error check run
+      if: always() && github.event_name != 'pull_request' && inputs.post-check-run == 'true' && steps.validate.outputs.status == 'invalid'
+      id: post-error-check-run
+      uses: ./packages/post-check-run
+      with:
+        github-token: ${{ inputs.github-token || github.token }}
+        review: ${{ steps.validate.outputs.reason }}
+        name: ${{ inputs.check-name }}
+        conclusion: 'failure'
         details-url: ${{ inputs.check-details-url }}
 
     - name: Upload debug artifact

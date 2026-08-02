@@ -1,6 +1,10 @@
 name: 'Run Reviews'
 description: 'Run AI reviews with the OpenCode CLI'
 inputs:
+  github-token:
+    description: 'Token forwarded to the action. Currently unused for review work but passes through to the validator and downstream steps.'
+    required: false
+    default: ''
   opencode-version:
     description: 'Expected OpenCode version installed on PATH'
     required: false
@@ -57,6 +61,8 @@ outputs:
     description: 'JSON object containing token usage by model'
   debug-artifact-path:
     description: 'Directory containing redacted, gzipped debug output when debug is enabled'
+  review-output-path:
+    description: 'Runner-local path to the authoritative review markdown file written by the model'
 runs:
   using: node24
   main: dist/main.cjs
