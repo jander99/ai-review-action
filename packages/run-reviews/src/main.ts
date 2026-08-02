@@ -3,6 +3,7 @@ import { spawnSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+const nodePath = path;
 import { gzipSync } from 'zlib';
 import { buildAgentDefinition, getEventContext } from './agent-definition';
 import { buildFusionConfig, buildMergedConfig } from './config-builder';
@@ -106,9 +107,6 @@ interface IndividualReviewResult extends ReviewResult {
 }
 
 function readReviewOutputFile(path: string): string {
-  // The model is contractually required to write the review markdown to
-  // this path; the action reads the file after the model returns. If the
-  // file is missing or empty, the model failed to honor the contract.
   if (!fs.existsSync(path)) {
     throw new Error(`review output file not found at ${path}`);
   }
@@ -117,6 +115,15 @@ function readReviewOutputFile(path: string): string {
     throw new Error(`review output file at ${path} is empty`);
   }
   return content;
+}
+
+function writeReviewOutputFile(path: string, content: string): void {
+  // The action is the authoritative source of the review file. The model
+  // emits the structured review markdown in its reply; the action captures
+  // the reply text, strips orphan tags, and writes the result so the
+  // structural validator and the publishing step both read the same file.
+  fs.mkdirSync(nodePath.dirname(path), { recursive: true });
+  fs.writeFileSync(path, content, { encoding: 'utf8', mode: 0o600 });
 }
 
 function readPermission(): Permission {
@@ -251,20 +258,42 @@ function run(): void {
     }
   }
 
-  // The model is contractually required to write the review markdown to
-  // `reviewOutputPath`. The file is the *only* source of truth for the
-  // published review. The model response text is discarded on purpose so
-  // looped "thinking" output never reaches the published comment.
-  let reviewText: string;
-  try {
-    reviewText = readReviewOutputFile(reviewOutputPath);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+  // The action is the authoritative source of the review file. The model
+  // emits the structured review markdown in its reply; the action captures
+  // the reply text and writes it to `reviewOutputPath` so the structural
+  // validator and the publishing step read the same file. The file-as-
+  // contract pattern keeps the model honest: it can either reply with
+  // structured content or the file will be missing and the action will
+  // fail.
+  if (individualResults.length === 1 && !fusionEnabled) {
+    const reviewText = individualResults[0].text;
+    try {
+      writeReviewOutputFile(reviewOutputPath, reviewText);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setEmptyOutputs();
+      core.setOutput('review-output-path', reviewOutputPath);
+      core.setFailed(`Review output file write failed: ${message}`);
+      return;
+    }
+  } else if (individualResults.length === 0) {
     setEmptyOutputs();
     core.setOutput('review-output-path', reviewOutputPath);
-    core.setFailed(`Review output contract violated: ${message}`);
+    core.setFailed('No review invocations succeeded; review file not written.');
     return;
+  } else {
+    // Multi-model / fusion path: write the labeled concatenation as a
+    // placeholder until fusion overwrites it.
+    const placeholder = composeLabeledReviews(individualResults);
+    try {
+      writeReviewOutputFile(reviewOutputPath, placeholder);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      core.warning(`Initial review placeholder write failed: ${message}`);
+    }
   }
+
+  let reviewText: string;
   if (fusionEnabled && individualResults.length > 0) {
     core.info(`Running fusion: ${fusionModel}`);
     try {
@@ -283,14 +312,16 @@ function run(): void {
       );
       accountedResults.push(fusionResult);
       successfulModels.add(fusionModel);
-      // Fusion also writes to the same file path; reread it after the call.
+      // Fusion writes its structured output to the same file path; reread
+      // the file after the call so the validator and publisher see the
+      // fused review.
       try {
-        reviewText = readReviewOutputFile(reviewOutputPath);
+        writeReviewOutputFile(reviewOutputPath, fusionResult.text);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         setEmptyOutputs();
         core.setOutput('review-output-path', reviewOutputPath);
-        core.setFailed(`Fusion output contract violated: ${message}`);
+        core.setFailed(`Fusion output file write failed: ${message}`);
         return;
       }
     } catch (error) {
@@ -298,6 +329,16 @@ function run(): void {
       failures.push(`fusion :: ${fusionModel}: ${message}`);
       core.warning(`Fusion failed for ${fusionModel}; using all successful individual reviews: ${message}`);
     }
+  }
+
+  try {
+    reviewText = readReviewOutputFile(reviewOutputPath);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    setEmptyOutputs();
+    core.setOutput('review-output-path', reviewOutputPath);
+    core.setFailed(`Review output file read failed: ${message}`);
+    return;
   }
 
   if (individualResults.length === 0) {

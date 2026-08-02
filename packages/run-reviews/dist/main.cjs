@@ -19892,9 +19892,8 @@ Runtime context:
 - Provider credentials live in environment variables and are referenced through OpenCode's '{env:VAR}' configuration. Read them only as needed for the review.
 
 Output contract \u2014 strict:
-- The action reads the review markdown from the file at 'reviewOutputPath' (advertised in the runtime context below). The file is the authoritative review; your reply text is NOT the review.
-- Write the full review to 'reviewOutputPath' first, then reply with exactly one word: 'OK'. Do not include the review text in your reply. Do not respond with anything else.
-- The file must start with the heading '# Review \u2014 <title-or-ref>' (use the PR title for 'pull_request' events, or the ref for other events) and follow the structured template below in this exact order.
+- Reply with the structured review markdown. The action captures your reply, sanitizes it, and writes it to 'reviewOutputPath' for the structural validator to inspect.
+- The review must start with the heading '# Review \u2014 <title-or-ref>' (use the PR title for 'pull_request' events, or the ref for other events) and follow the structured template below in this exact order.
 - Every finding must be a discrete block with the shape:
 
   ### <emoji> <severity> \u2014 <short title>
@@ -20355,6 +20354,7 @@ ${previousReviewsBlock}`;
 }
 
 // packages/run-reviews/src/main.ts
+var nodePath = path5;
 var DEFAULT_OPENCODE_VERSION = "1.18.5";
 var REDACTION_PATTERNS = [
   { pattern: /sk-ant-[A-Za-z0-9._-]+/g, replacement: "[REDACTED]" },
@@ -20437,6 +20437,10 @@ function readReviewOutputFile(path6) {
     throw new Error(`review output file at ${path6} is empty`);
   }
   return content;
+}
+function writeReviewOutputFile(path6, content) {
+  fs5.mkdirSync(nodePath.dirname(path6), { recursive: true });
+  fs5.writeFileSync(path6, content, { encoding: "utf8", mode: 384 });
 }
 function readPermission() {
   const input = core2.getInput("permission");
@@ -20551,16 +20555,32 @@ function run() {
       }
     }
   }
-  let reviewText;
-  try {
-    reviewText = readReviewOutputFile(reviewOutputPath);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+  if (individualResults.length === 1 && !fusionEnabled) {
+    const reviewText2 = individualResults[0].text;
+    try {
+      writeReviewOutputFile(reviewOutputPath, reviewText2);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setEmptyOutputs();
+      core2.setOutput("review-output-path", reviewOutputPath);
+      core2.setFailed(`Review output file write failed: ${message}`);
+      return;
+    }
+  } else if (individualResults.length === 0) {
     setEmptyOutputs();
     core2.setOutput("review-output-path", reviewOutputPath);
-    core2.setFailed(`Review output contract violated: ${message}`);
+    core2.setFailed("No review invocations succeeded; review file not written.");
     return;
+  } else {
+    const placeholder = composeLabeledReviews(individualResults);
+    try {
+      writeReviewOutputFile(reviewOutputPath, placeholder);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      core2.warning(`Initial review placeholder write failed: ${message}`);
+    }
   }
+  let reviewText;
   if (fusionEnabled && individualResults.length > 0) {
     core2.info(`Running fusion: ${fusionModel}`);
     try {
@@ -20578,12 +20598,12 @@ function run() {
       accountedResults.push(fusionResult);
       successfulModels.add(fusionModel);
       try {
-        reviewText = readReviewOutputFile(reviewOutputPath);
+        writeReviewOutputFile(reviewOutputPath, fusionResult.text);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         setEmptyOutputs();
         core2.setOutput("review-output-path", reviewOutputPath);
-        core2.setFailed(`Fusion output contract violated: ${message}`);
+        core2.setFailed(`Fusion output file write failed: ${message}`);
         return;
       }
     } catch (error) {
@@ -20591,6 +20611,15 @@ function run() {
       failures.push(`fusion :: ${fusionModel}: ${message}`);
       core2.warning(`Fusion failed for ${fusionModel}; using all successful individual reviews: ${message}`);
     }
+  }
+  try {
+    reviewText = readReviewOutputFile(reviewOutputPath);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    setEmptyOutputs();
+    core2.setOutput("review-output-path", reviewOutputPath);
+    core2.setFailed(`Review output file read failed: ${message}`);
+    return;
   }
   if (individualResults.length === 0) {
     core2.warning("All review invocations failed; no review output was generated.");

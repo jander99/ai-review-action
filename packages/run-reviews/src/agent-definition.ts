@@ -94,9 +94,8 @@ Runtime context:
 - Provider credentials live in environment variables and are referenced through OpenCode's '{env:VAR}' configuration. Read them only as needed for the review.
 
 Output contract — strict:
-- The action reads the review markdown from the file at 'reviewOutputPath' (advertised in the runtime context below). The file is the authoritative review; your reply text is NOT the review.
-- Write the full review to 'reviewOutputPath' first, then reply with exactly one word: 'OK'. Do not include the review text in your reply. Do not respond with anything else.
-- The file must start with the heading '# Review — <title-or-ref>' (use the PR title for 'pull_request' events, or the ref for other events) and follow the structured template below in this exact order.
+- Reply with the structured review markdown. The action captures your reply, sanitizes it, and writes it to 'reviewOutputPath' for the structural validator to inspect.
+- The review must start with the heading '# Review — <title-or-ref>' (use the PR title for 'pull_request' events, or the ref for other events) and follow the structured template below in this exact order.
 - Every finding must be a discrete block with the shape:
 
   ### <emoji> <severity> — <short title>
