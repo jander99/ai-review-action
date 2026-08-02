@@ -1,0 +1,31 @@
+{
+  "name": "repo-root",
+  "$schema": "./node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "root": ".",
+  "sourceRoot": "packages/root-action/src",
+  "targets": {
+    "build": {
+      "executor": "@nx/esbuild:esbuild",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "main": "packages/root-action/src/action-entry.ts",
+        "outputPath": "dist",
+        "outputFileName": "main.cjs",
+        "tsConfig": "packages/root-action/tsconfig.json",
+        "bundle": true,
+        "platform": "node",
+        "target": "node20",
+        "format": ["cjs"],
+        "thirdParty": true
+      },
+      "dependsOn": ["^build", "build-tests"]
+    },
+    "build-tests": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "esbuild packages/run-reviews/src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=packages/run-reviews/dist-test/index.cjs && esbuild packages/validate-review/src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=packages/validate-review/dist-test/index.cjs && esbuild packages/post-comment/src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=packages/post-comment/dist-test/index.cjs && esbuild packages/post-check-run/src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=packages/post-check-run/dist-test/index.cjs && esbuild packages/post-error-comment/src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=packages/post-error-comment/dist-test/index.cjs"
+      }
+    }
+  }
+}

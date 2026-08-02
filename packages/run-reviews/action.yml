@@ -1,6 +1,10 @@
 name: 'Run Reviews'
 description: 'Run AI reviews with the OpenCode CLI'
 inputs:
+  github-token:
+    description: 'Token forwarded to the action. Used for fetching prior AI review comments and forwarded to the validator.'
+    required: false
+    default: ''
   opencode-version:
     description: 'Expected OpenCode version installed on PATH'
     required: false
@@ -57,6 +61,14 @@ outputs:
     description: 'JSON object containing token usage by model'
   debug-artifact-path:
     description: 'Directory containing redacted, gzipped debug output when debug is enabled'
+  review-output-path:
+    description: 'Runner-local path to the authoritative review markdown file written by the action from a validated model response'
+  config-json:
+    description: 'Deterministic JSON serialization of a validator-only OpenCode config. Contains the resolved providers (built-in and user-supplied, with secret-bearing fields redacted), the effective first model, the deny-all validator permission, and a single agent.validator definition. The config carries a __validator__: true marker and does NOT include agent.review, agent.synthesis, or any prompt that embeds reviewOutputPath.'
+  effective-model:
+    description: 'The effective first model (provider/model format) selected from the inputs.model or inputs.models list. Downstream actions should pass this to the validator as the model input.'
+  failure-reason:
+    description: 'Latest failure message produced by the action (empty on success). Captures both pre-document failures (all invocations failed or returned invalid documents) and post-document failures (file write/read errors).'
 runs:
   using: node24
   main: dist/main.cjs

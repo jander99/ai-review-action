@@ -6,7 +6,9 @@
 
 AI Review Action runs repository reviews through the OpenCode CLI in GitHub Actions. The workflow supplies the runner, checkout, credentials, prompts, optional configuration, skills, MCPs, and plugins. The action owns the review agent, runtime configuration, invocation orchestration, result aggregation, and publication.
 
-The core implementation is shipped:
+The root action (`packages/root-action`) is a single JavaScript bundle that wires `run-reviews`, `validate-review`, `post-comment`, `post-check-run`, and `post-error-comment` together. Each leaf package exports a plain TypeScript API (`runReviews`, `validateReview`, `postComment`, `postCheckRun`, `postErrorComment`) and the leaf action's `dist/main.cjs` is a thin wrapper that translates `@actions/core` inputs and outputs. The bundle uses `require.main === module` to gate the action entrypoint, so the same file can also be imported as a library.
+
+The sub-actions remain available for callers who want fine-grained composition:
 
 - `setup-opencode` installs a pinned Linux x64 OpenCode release after verifying its SHA-256 checksum.
 - The root action asserts the installed OpenCode version before reviewing.
@@ -17,6 +19,8 @@ The core implementation is shipped:
 - Results expose review text, successful models, cost, and token totals, including per-model JSON outputs.
 - Pull requests publish comments; non-PR events publish check runs. Publishing can be disabled independently.
 - Debug mode captures stdout/stderr, applies best-effort credential redaction, compresses the files, and uploads a short-lived artifact.
+- Prior AI review comments for the same pull request are fetched, sanitized, and size-capped, then injected into the reviewer prompt so status changes (`unresolved`, `resolved`) propagate to the next run.
+- The validator runs a deterministic structural check first and a model-based check second; the model only sees a sanitized config that does not embed the reviewer prompt, the runner-local path, or any literal user secret.
 
 ## Runtime and security contracts
 

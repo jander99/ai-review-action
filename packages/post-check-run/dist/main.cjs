@@ -17594,12 +17594,12 @@ var require_lib = __commonJS({
             throw new Error("Client has already been disposed.");
           }
           const parsedUrl = new URL(requestUrl);
-          let info2 = this._prepareRequest(verb, parsedUrl, headers);
+          let info = this._prepareRequest(verb, parsedUrl, headers);
           const maxTries = this._allowRetries && RetryableHttpVerbs.includes(verb) ? this._maxRetries + 1 : 1;
           let numTries = 0;
           let response;
           do {
-            response = yield this.requestRaw(info2, data);
+            response = yield this.requestRaw(info, data);
             if (response && response.message && response.message.statusCode === HttpCodes.Unauthorized) {
               let authenticationHandler;
               for (const handler of this.handlers) {
@@ -17609,7 +17609,7 @@ var require_lib = __commonJS({
                 }
               }
               if (authenticationHandler) {
-                return authenticationHandler.handleAuthentication(this, info2, data);
+                return authenticationHandler.handleAuthentication(this, info, data);
               } else {
                 return response;
               }
@@ -17632,8 +17632,8 @@ var require_lib = __commonJS({
                   }
                 }
               }
-              info2 = this._prepareRequest(verb, parsedRedirectUrl, headers);
-              response = yield this.requestRaw(info2, data);
+              info = this._prepareRequest(verb, parsedRedirectUrl, headers);
+              response = yield this.requestRaw(info, data);
               redirectsRemaining--;
             }
             if (!response.message.statusCode || !HttpResponseRetryCodes.includes(response.message.statusCode)) {
@@ -17662,7 +17662,7 @@ var require_lib = __commonJS({
        * @param info
        * @param data
        */
-      requestRaw(info2, data) {
+      requestRaw(info, data) {
         return __awaiter(this, void 0, void 0, function* () {
           return new Promise((resolve, reject) => {
             function callbackForResult(err, res) {
@@ -17674,7 +17674,7 @@ var require_lib = __commonJS({
                 resolve(res);
               }
             }
-            this.requestRawWithCallback(info2, data, callbackForResult);
+            this.requestRawWithCallback(info, data, callbackForResult);
           });
         });
       }
@@ -17684,12 +17684,12 @@ var require_lib = __commonJS({
        * @param data
        * @param onResult
        */
-      requestRawWithCallback(info2, data, onResult) {
+      requestRawWithCallback(info, data, onResult) {
         if (typeof data === "string") {
-          if (!info2.options.headers) {
-            info2.options.headers = {};
+          if (!info.options.headers) {
+            info.options.headers = {};
           }
-          info2.options.headers["Content-Length"] = Buffer.byteLength(data, "utf8");
+          info.options.headers["Content-Length"] = Buffer.byteLength(data, "utf8");
         }
         let callbackCalled = false;
         function handleResult(err, res) {
@@ -17698,7 +17698,7 @@ var require_lib = __commonJS({
             onResult(err, res);
           }
         }
-        const req = info2.httpModule.request(info2.options, (msg) => {
+        const req = info.httpModule.request(info.options, (msg) => {
           const res = new HttpClientResponse(msg);
           handleResult(void 0, res);
         });
@@ -17710,7 +17710,7 @@ var require_lib = __commonJS({
           if (socket) {
             socket.end();
           }
-          handleResult(new Error(`Request timeout: ${info2.options.path}`));
+          handleResult(new Error(`Request timeout: ${info.options.path}`));
         });
         req.on("error", function(err) {
           handleResult(err);
@@ -17746,27 +17746,27 @@ var require_lib = __commonJS({
         return this._getProxyAgentDispatcher(parsedUrl, proxyUrl);
       }
       _prepareRequest(method, requestUrl, headers) {
-        const info2 = {};
-        info2.parsedUrl = requestUrl;
-        const usingSsl = info2.parsedUrl.protocol === "https:";
-        info2.httpModule = usingSsl ? https : http;
+        const info = {};
+        info.parsedUrl = requestUrl;
+        const usingSsl = info.parsedUrl.protocol === "https:";
+        info.httpModule = usingSsl ? https : http;
         const defaultPort = usingSsl ? 443 : 80;
-        info2.options = {};
-        info2.options.host = info2.parsedUrl.hostname;
-        info2.options.port = info2.parsedUrl.port ? parseInt(info2.parsedUrl.port) : defaultPort;
-        info2.options.path = (info2.parsedUrl.pathname || "") + (info2.parsedUrl.search || "");
-        info2.options.method = method;
-        info2.options.headers = this._mergeHeaders(headers);
+        info.options = {};
+        info.options.host = info.parsedUrl.hostname;
+        info.options.port = info.parsedUrl.port ? parseInt(info.parsedUrl.port) : defaultPort;
+        info.options.path = (info.parsedUrl.pathname || "") + (info.parsedUrl.search || "");
+        info.options.method = method;
+        info.options.headers = this._mergeHeaders(headers);
         if (this.userAgent != null) {
-          info2.options.headers["user-agent"] = this.userAgent;
+          info.options.headers["user-agent"] = this.userAgent;
         }
-        info2.options.agent = this._getAgent(info2.parsedUrl);
+        info.options.agent = this._getAgent(info.parsedUrl);
         if (this.handlers) {
           for (const handler of this.handlers) {
-            handler.prepareRequest(info2.options);
+            handler.prepareRequest(info.options);
           }
         }
-        return info2;
+        return info;
       }
       _mergeHeaders(headers) {
         if (this.requestOptions && this.requestOptions.headers) {
@@ -19731,11 +19731,11 @@ Support boolean input list: \`true | True | TRUE | false | False | FALSE\``);
       (0, command_1.issue)("echo", enabled ? "on" : "off");
     }
     exports2.setCommandEcho = setCommandEcho;
-    function setFailed(message) {
+    function setFailed2(message) {
       process.exitCode = ExitCode.Failure;
       error(message);
     }
-    exports2.setFailed = setFailed;
+    exports2.setFailed = setFailed2;
     function isDebug() {
       return process.env["RUNNER_DEBUG"] === "1";
     }
@@ -19748,18 +19748,18 @@ Support boolean input list: \`true | True | TRUE | false | False | FALSE\``);
       (0, command_1.issueCommand)("error", (0, utils_1.toCommandProperties)(properties), message instanceof Error ? message.toString() : message);
     }
     exports2.error = error;
-    function warning2(message, properties = {}) {
+    function warning(message, properties = {}) {
       (0, command_1.issueCommand)("warning", (0, utils_1.toCommandProperties)(properties), message instanceof Error ? message.toString() : message);
     }
-    exports2.warning = warning2;
+    exports2.warning = warning;
     function notice(message, properties = {}) {
       (0, command_1.issueCommand)("notice", (0, utils_1.toCommandProperties)(properties), message instanceof Error ? message.toString() : message);
     }
     exports2.notice = notice;
-    function info2(message) {
+    function info(message) {
       process.stdout.write(message + os.EOL);
     }
-    exports2.info = info2;
+    exports2.info = info;
     function startGroup(name) {
       (0, command_1.issue)("group", name);
     }
@@ -26615,16 +26615,12 @@ var require_dist_node14 = __commonJS({
   }
 });
 
-// packages/post-check-run/src/main.ts
+// packages/post-check-run/src/action.ts
 var core = __toESM(require_core());
 var import_github = __toESM(require_github());
-var import_rest = __toESM(require_dist_node14());
-var MAX_SUMMARY_CHARS = 65e3;
-var TRUNCATION_MARKER = `
 
----
-*Review truncated at ${MAX_SUMMARY_CHARS} characters.*`;
-var TRUNCATION_MARKER_LENGTH = TRUNCATION_MARKER.length;
+// packages/post-check-run/src/main.ts
+var import_rest = __toESM(require_dist_node14());
 var CHECK_CONCLUSIONS = [
   "action_required",
   "cancelled",
@@ -26635,40 +26631,37 @@ var CHECK_CONCLUSIONS = [
   "stale",
   "timed_out"
 ];
-(async () => {
-  const review = core.getInput("review");
-  if (!review) {
-    core.warning("review input is empty; skipping check run.");
-    core.setOutput("check-run-url", "");
-    return;
+var MAX_SUMMARY_CHARS = 65e3;
+var TRUNCATION_MARKER = `
+
+---
+*Review truncated at ${MAX_SUMMARY_CHARS} characters.*`;
+var TRUNCATION_MARKER_LENGTH = TRUNCATION_MARKER.length;
+async function postCheckRun(options, octokitFactory = (token) => new import_rest.Octokit({ auth: token })) {
+  if (!options.review) {
+    return { checkRunUrl: "" };
   }
-  const name = core.getInput("name") || "ai-review";
-  let conclusion = core.getInput("conclusion") || "neutral";
+  const name = options.name || "ai-review";
+  let conclusion = options.conclusion || "neutral";
   if (!CHECK_CONCLUSIONS.includes(conclusion)) {
-    core.warning(`Invalid check-conclusion '${conclusion}'; falling back to 'neutral'.`);
     conclusion = "neutral";
   }
-  const detailsUrl = core.getInput("details-url") || "https://github.com";
-  const headSha = process.env.GITHUB_SHA;
-  if (!headSha) {
-    core.warning("GITHUB_SHA is not set; cannot create a check run. Skipping.");
-    core.setOutput("check-run-url", "");
-    return;
+  const detailsUrl = options.detailsUrl || "https://github.com";
+  if (!options.headSha) {
+    return { checkRunUrl: "" };
   }
-  let summary = review;
+  let summary = options.review;
   if (summary.length > MAX_SUMMARY_CHARS) {
     const effectiveLimit = Math.max(0, MAX_SUMMARY_CHARS - TRUNCATION_MARKER_LENGTH);
     summary = summary.slice(0, effectiveLimit) + TRUNCATION_MARKER;
   }
-  const token = core.getInput("github-token") || process.env.GITHUB_TOKEN;
-  const { owner, repo } = import_github.context.repo;
   try {
-    const octokit = new import_rest.Octokit({ auth: token });
+    const octokit = octokitFactory(options.token);
     const response = await octokit.rest.checks.create({
-      owner,
-      repo,
+      owner: options.owner,
+      repo: options.repo,
       name,
-      head_sha: headSha,
+      head_sha: options.headSha,
       status: "completed",
       conclusion,
       details_url: detailsUrl,
@@ -26677,14 +26670,40 @@ var CHECK_CONCLUSIONS = [
         summary
       }
     });
-    const checkRunUrl = response.data.html_url;
-    core.setOutput("check-run-url", checkRunUrl);
-    core.info(`Created check run: ${checkRunUrl}`);
-  } catch (err) {
-    core.warning(`Failed to create check run; check token permissions. ${err}`);
-    core.setOutput("check-run-url", "");
+    const checkRunUrl = response.data.html_url ?? "";
+    return { checkRunUrl };
+  } catch {
+    return { checkRunUrl: "" };
   }
-})();
+}
+
+// packages/post-check-run/src/action.ts
+function buildOptionsFromCore() {
+  return {
+    token: core.getInput("github-token") || process.env.GITHUB_TOKEN,
+    review: core.getInput("review"),
+    name: core.getInput("name"),
+    conclusion: core.getInput("conclusion"),
+    detailsUrl: core.getInput("details-url"),
+    headSha: process.env.GITHUB_SHA ?? "",
+    owner: import_github.context.repo.owner,
+    repo: import_github.context.repo.repo
+  };
+}
+function writeOutputs(result) {
+  core.setOutput("check-run-url", result.checkRunUrl);
+}
+async function run() {
+  const options = buildOptionsFromCore();
+  const result = await postCheckRun(options);
+  writeOutputs(result);
+}
+if (require.main === module) {
+  run().catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    core.setFailed(`post-check-run failed: ${message}`);
+  });
+}
 /*! Bundled license information:
 
 undici/lib/fetch/body.js:

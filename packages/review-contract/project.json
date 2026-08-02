@@ -1,0 +1,32 @@
+{
+  "name": "review-contract",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "root": "packages/review-contract",
+  "sourceRoot": "packages/review-contract/src",
+  "targets": {
+    "build": {
+      "executor": "@nx/esbuild:esbuild",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "main": "packages/review-contract/src/index.ts",
+        "outputPath": "packages/review-contract/dist",
+        "outputFileName": "index.cjs",
+        "tsConfig": "packages/review-contract/tsconfig.json",
+        "bundle": true,
+        "platform": "node",
+        "target": "node20",
+        "format": ["cjs"],
+        "thirdParty": false
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build"],
+      "options": {
+        "cwd": "packages/review-contract",
+        "command": "node --test test/*.test.cjs"
+      }
+    }
+  }
+}

@@ -1,0 +1,27 @@
+name: 'Post Error Comment'
+description: 'Post a short error comment when the AI review validator rejects the generated review.'
+inputs:
+  github-token:
+    description: 'GitHub token for authentication.'
+    required: false
+  reason:
+    description: 'Human-readable reason returned by the validator.'
+    required: true
+  post-comment:
+    description: 'Whether to post the comment (mirrors post-comment input on the root action).'
+    required: false
+    default: 'true'
+  max-comment-chars:
+    description: 'Maximum comment length in characters.'
+    required: false
+    default: '65000'
+  title:
+    description: 'Heading for the error comment.'
+    required: false
+    default: 'AI Review validator rejected the generated review.'
+outputs:
+  comment-url:
+    description: 'URL of the posted error comment.'
+runs:
+  using: node24
+  main: dist/main.cjs

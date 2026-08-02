@@ -1,0 +1,6 @@
+{
+  "name": "@jander99/ai-review-review-contract",
+  "version": "1.0.0",
+  "main": "dist/index.cjs",
+  "private": true
+}

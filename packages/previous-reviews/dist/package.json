@@ -1,0 +1,10 @@
+{
+  "name": "@jander99/ai-review-previous-reviews",
+  "version": "1.0.0",
+  "main": "dist/index.cjs",
+  "private": true,
+  "dependencies": {
+    "@jander99/ai-review-review-contract": "1.0.0",
+    "@octokit/rest": "^20.1.1"
+  }
+}

@@ -1,0 +1,37 @@
+name: 'Validate Review'
+description: 'Validate the structured review markdown produced by run-reviews.'
+inputs:
+  review-path:
+    description: 'Path to the review markdown file produced by run-reviews.'
+    required: true
+  opencode-version:
+    description: 'OpenCode version expected to be installed on PATH.'
+    required: false
+    default: '1.18.5'
+  model:
+    description: 'OpenCode model in provider/model format used for the validator call.'
+    required: false
+    default: 'anthropic/claude-sonnet-4.6'
+  timeout-minutes:
+    description: 'Timeout for the validator call.'
+    required: false
+    default: '5'
+  github-token:
+    description: 'Token used by the validator agent via OpenCode provider configuration.'
+    required: false
+    default: ''
+  config-json:
+    description: 'Deterministic JSON serialization of the validator-only OpenCode config produced by run-reviews. The config carries the __validator__: true marker, the resolved providers (with secret-bearing fields redacted), the effective model, the deny-all permission, and a single agent.validator definition. The validator uses this as its actual OPENCODE_CONFIG.'
+    required: true
+outputs:
+  status:
+    description: '"valid" or "invalid" depending on the validator outcome.'
+  reason:
+    description: 'Human-readable reason when the validator rejects the review.'
+  cost:
+    description: 'Reported cost of the validator call in USD.'
+  tokens:
+    description: 'JSON object with input/output tokens for the validator call.'
+runs:
+  using: node24
+  main: dist/main.cjs

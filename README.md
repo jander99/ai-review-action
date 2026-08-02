@@ -73,16 +73,17 @@ The examples use `@v1` for readability. In production, resolve the `v1` release 
 └──────────────────────┬───────────────────────┘
                        ▼
 ┌──────────────────────────────────────────────┐
-│ 3. AI Review Action                         │
-│ run-reviews                                 │
+│ 3. AI Review Action (single JS bundle)      │
+│ run-reviews → validate-review               │
 │ → post-comment (pull_request)               │
 │ → post-check-run (other events)             │
+│ → post-error-comment / error check run      │
 └──────────────────────────────────────────────┘
 ```
 
 1. The workflow owns checkout, credentials, prompts, skills, MCPs, plugins, and optional user configuration.
 2. `setup-opencode` installs the exact requested OpenCode version only after the supplied archive checksum matches.
-3. `run-reviews` creates an isolated merged configuration and invokes OpenCode for the stable lexical cross-product of prompts and models. The root action then posts a PR comment or check run.
+3. The root action (`packages/root-action`) is a single JavaScript bundle. It drives `run-reviews`, `validate-review`, `post-comment`, `post-check-run`, and `post-error-comment` programmatically, so the action works when invoked as `owner/repo@ref` (not just from a checked-out workspace). The packages remain available as standalone sub-actions for callers who want fine-grained composition.
 
 The action does not materialize a diff. It injects event and ref context into the action-owned agent definition, and the model uses Git to decide what to review.
 
@@ -135,15 +136,46 @@ OpenCode does not currently provide reliable sub-command allow-lists. `bash: all
 
 | Output | Description |
 |---|---|
-| `review` | Synthesized text when fusion succeeds; otherwise all successful individual reviews labeled `<model> :: <prompt>` and separated by `---`. Empty when no reviews succeed. |
-| `comment-url` | URL of the posted PR comment. Empty for non-PR events, disabled posting, or unsuccessful posting. |
-| `check-run-url` | URL of the non-PR check run. Empty for PR events or when check-run posting is disabled. |
-| `models-used` | Comma-separated models that completed successfully. |
-| `cost` | Total reported cost in USD across successful review and fusion calls. |
-| `cost-by-model` | JSON object mapping each model to its reported USD cost. |
-| `tokens` | JSON object with total `input` and `output` token counts. |
-| `tokens-by-model` | JSON object mapping each model to its `input` and `output` token counts. |
-| `debug-artifact-path` | Runner directory containing redacted, gzipped debug files when `debug: true`. The root action uploads this directory automatically. |
+| `review` | Canonical review document. When a single review invocation produces a valid document, that document is returned. When multiple invocations succeed, the documents are deterministically merged (or fused when fusion is enabled and successful) into one canonical document. Empty when no invocation produced a valid document. |
+| `review-output-path` | Runner-local path to the authoritative review markdown file written by the action from a validated model response. |
+| `config-json` | OpenCode config JSON for the validator invocation (no agent review/synthesis prompts, no path leakage, no user-supplied secrets). |
+| `comment-url` | URL of the posted PR comment (pull_request events). Falls back to the error-comment URL when the normal post is skipped. |
+| `check-run-url` | URL of the created check run (non-PR events). Falls back to the error-check-run URL when the normal check run is skipped. |
+| `models-used` | Comma-separated list of models that completed successfully. |
+| `effective-model` | The effective first model (provider/model format) selected from `model` or `models`. |
+| `cost` | Reviewer-only cost in USD. The validator cost is reported separately under `validate-cost`; the sum is exposed as `total-cost`. |
+| `validate-cost` | Validator cost in USD. |
+| `total-cost` | Reviewer + validator cost in USD. |
+| `cost-by-model` | JSON object containing cost by model (reviewer only). |
+| `tokens` | JSON object containing total input and output tokens (reviewer only). |
+| `validate-tokens` | JSON object with input/output tokens for the validator call. |
+| `tokens-by-model` | JSON object containing token usage by model (reviewer only). |
+| `debug-artifact-path` | Runner directory containing redacted, gzipped debug files when `debug: true`. The workflow is responsible for uploading this directory (see [Debug mode](#debug-mode) below); the root action only exposes the path. |
+| `validate-status` | Status from the structural validator: `valid` or `invalid`. Empty when validation was skipped. |
+| `validate-reason` | Human-readable reason when the validator rejects the review. Empty when validation was skipped (e.g. all review invocations failed before producing a document); see `failure-reason` for the canonical fallback message covering both reviewer and validator failures. |
+| `failure-reason` | Canonical failure message (empty on success). Covers BOTH reviewer failures AND validator failures. When both fail, the reviewer message wins because the validator typically was skipped. |
+
+## Sub-actions
+
+The repository is an Nx monorepo. The root action is a single JavaScript bundle; the packages under `packages/*` are also exposed as standalone sub-actions for callers that want fine-grained composition.
+
+| Sub-action | Path | Purpose |
+|---|---|---|
+| `setup-opencode` | `packages/setup-opencode` | Install a pinned OpenCode release after verifying its SHA-256 checksum. |
+| `run-reviews` | `packages/run-reviews` | Run the review, fusion, and validation pipeline; write the canonical document. |
+| `validate-review` | `packages/validate-review` | Run the structural validator on a review file. |
+| `post-comment` | `packages/post-comment` | Post a PR comment from a review document. |
+| `post-check-run` | `packages/post-check-run` | Create a check run from a review document. |
+| `post-error-comment` | `packages/post-error-comment` | Post a short error comment when the validator rejects a review. |
+
+A consumer can pin a sub-action exactly like the root action:
+
+```yaml
+- uses: jander99/ai-review-action/packages/run-reviews@v1
+  with:
+    prompts: file:examples/prompts/code-review.md
+    opencode-config: examples/opencode.json
+```
 
 ## Sample workflows
 

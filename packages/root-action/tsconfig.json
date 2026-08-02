@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "../..",
+    "types": ["node"]
+  },
+  "include": [
+    "src/**/*",
+    "../run-reviews/src/**/*",
+    "../validate-review/src/**/*",
+    "../post-comment/src/**/*",
+    "../post-check-run/src/**/*",
+    "../post-error-comment/src/**/*",
+    "../../packages/review-contract/src/**/*",
+    "../../packages/previous-reviews/src/**/*"
+  ]
+}

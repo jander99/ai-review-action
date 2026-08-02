@@ -9,7 +9,7 @@
       "executor": "@nx/esbuild:esbuild",
       "outputs": ["{options.outputPath}"],
       "options": {
-        "main": "packages/post-comment/src/main.ts",
+        "main": "packages/post-comment/src/action.ts",
         "outputPath": "packages/post-comment/dist",
         "outputFileName": "main.cjs",
         "tsConfig": "packages/post-comment/tsconfig.json",
@@ -18,6 +18,22 @@
         "target": "node20",
         "format": ["cjs"],
         "thirdParty": true
+      }
+    },
+    "build-tests": {
+      "_comment": "packages/post-comment/dist-test/index.cjs is gitignored (see /.gitignore). It is rebuilt on demand before :test runs. Keeping it out of git prevents esbuild's cwd-relative path comment from drifting between local and CI builds.",
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/post-comment",
+        "command": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist-test/index.cjs"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build-tests"],
+      "options": {
+        "cwd": "packages/post-comment",
+        "command": "node --test test/*.test.cjs"
       }
     }
   }

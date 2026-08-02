@@ -1,0 +1,40 @@
+{
+  "name": "validate-review",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "root": "packages/validate-review",
+  "sourceRoot": "packages/validate-review/src",
+  "targets": {
+    "build": {
+      "executor": "@nx/esbuild:esbuild",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "main": "packages/validate-review/src/action.ts",
+        "outputPath": "packages/validate-review/dist",
+        "outputFileName": "main.cjs",
+        "tsConfig": "packages/validate-review/tsconfig.json",
+        "bundle": true,
+        "platform": "node",
+        "target": "node20",
+        "format": ["cjs"],
+        "thirdParty": true
+      }
+    },
+    "build-tests": {
+      "_comment": "packages/validate-review/dist-test/index.cjs is gitignored (see /.gitignore). It is rebuilt on demand before :test runs. Keeping it out of git prevents esbuild's cwd-relative path comment from drifting between local and CI builds.",
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/validate-review",
+        "command": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist-test/index.cjs"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build-tests"],
+      "options": {
+        "cwd": "packages/validate-review",
+        "command": "node --test test/*.test.cjs"
+      }
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "name": "previous-reviews",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "root": "packages/previous-reviews",
+  "sourceRoot": "packages/previous-reviews/src",
+  "targets": {
+    "build": {
+      "executor": "@nx/esbuild:esbuild",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "main": "packages/previous-reviews/src/index.ts",
+        "outputPath": "packages/previous-reviews/dist",
+        "outputFileName": "index.cjs",
+        "tsConfig": "packages/previous-reviews/tsconfig.json",
+        "bundle": true,
+        "platform": "node",
+        "target": "node20",
+        "format": ["cjs"],
+        "thirdParty": true
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build"],
+      "options": {
+        "cwd": "packages/previous-reviews",
+        "command": "node --test test/*.test.cjs"
+      }
+    }
+  }
+}

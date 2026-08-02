@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "../..",
+    "noEmit": false
+  },
+  "include": [
+    "src/**/*",
+    "../../packages/review-contract/src/**/*",
+    "../run-reviews/src/**/*"
+  ]
+}

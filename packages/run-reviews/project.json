@@ -9,7 +9,7 @@
       "executor": "@nx/esbuild:esbuild",
       "outputs": ["{options.outputPath}"],
       "options": {
-        "main": "packages/run-reviews/src/main.ts",
+        "main": "packages/run-reviews/src/action.ts",
         "outputPath": "packages/run-reviews/dist",
         "outputFileName": "main.cjs",
         "tsConfig": "packages/run-reviews/tsconfig.json",
@@ -18,6 +18,23 @@
         "target": "node20",
         "format": ["cjs"],
         "thirdParty": true
+      },
+      "dependsOn": ["^build", "build-tests"]
+    },
+    "build-tests": {
+      "_comment": "packages/run-reviews/dist-test/index.cjs is gitignored (see /.gitignore). It is rebuilt on demand before :test runs. Keeping it out of git prevents esbuild's cwd-relative path comment from drifting between local and CI builds.",
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/run-reviews",
+        "command": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist-test/index.cjs"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build-tests"],
+      "options": {
+        "cwd": "packages/run-reviews",
+        "command": "node --test test/*.test.cjs"
       }
     }
   }

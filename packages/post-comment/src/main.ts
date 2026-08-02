@@ -1,43 +1,48 @@
-import * as core from '@actions/core';
-import { context } from '@actions/github';
 import { Octokit } from '@octokit/rest';
 
-(async () => {
-  const postComment = core.getInput('post-comment');
-  if (postComment === 'false') {
-    core.setOutput('comment-url', '');
-    return;
+export interface PostCommentOptions {
+  token: string | undefined;
+  review: string;
+  postComment: boolean;
+  maxChars: number;
+}
+
+export interface PostCommentResult {
+  commentUrl: string;
+}
+
+export async function postComment(
+  options: PostCommentOptions,
+  repoContext: { owner: string; repo: string; issueNumber: number },
+  octokitFactory: (token: string | undefined) => Octokit = (token) => new Octokit({ auth: token }),
+): Promise<PostCommentResult> {
+  if (!options.postComment) {
+    return { commentUrl: '' };
+  }
+  if (!options.review) {
+    return { commentUrl: '' };
   }
 
-  const review = core.getInput('review');
-  if (!review) {
-    core.warning('review input is empty; skipping PR comment.');
-    core.setOutput('comment-url', '');
-    return;
-  }
+  const effectiveMax = Number.isFinite(options.maxChars) && options.maxChars > 0 ? options.maxChars : 65000;
 
-  const maxChars = parseInt(core.getInput('max-comment-chars') || '65000', 10);
-  const effectiveMax = isNaN(maxChars) ? 65000 : maxChars;
-
-  let body = review;
+  let body = options.review;
   if (body.length > effectiveMax) {
     const truncationMarker = `\n\n---\n*Review truncated at ${effectiveMax} characters.*`;
     const effectiveLimit = Math.max(0, effectiveMax - truncationMarker.length);
     body = body.slice(0, effectiveLimit) + truncationMarker;
   }
 
-  const token = core.getInput('github-token') || process.env.GITHUB_TOKEN;
-  const { owner, repo } = context.repo;
-  const issue_number = context.issue.number;
-
   try {
-    const octokit = new Octokit({ auth: token });
-    const response = await octokit.rest.issues.createComment({ owner, repo, issue_number, body });
-    const commentUrl = response.data.html_url;
-    core.setOutput('comment-url', commentUrl);
-    core.info(`Posted PR comment: ${commentUrl}`);
-  } catch (err) {
-    core.warning(`Failed to post PR comment; check token permissions. ${err}`);
-    core.setOutput('comment-url', '');
+    const octokit = octokitFactory(options.token);
+    const response = await octokit.rest.issues.createComment({
+      owner: repoContext.owner,
+      repo: repoContext.repo,
+      issue_number: repoContext.issueNumber,
+      body,
+    });
+    const commentUrl = response.data.html_url ?? '';
+    return { commentUrl };
+  } catch {
+    return { commentUrl: '' };
   }
-})();
+}
