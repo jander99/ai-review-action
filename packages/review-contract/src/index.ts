@@ -45,7 +45,12 @@ const SUMMARY_HEADING_PATTERN = /^## Summary\s*$/;
 const FINDINGS_HEADING_PATTERN = /^## Findings\s*$/;
 const FINDING_HEADING_PATTERN = /^### (🔴 Critical|🟡 Warning|🟢 Suggestion) —\s*(\S.*)$/;
 const FIELD_LINE_PATTERN = /^-\s*(Status|Location|Description):\s*(\S.*)$/;
-const LOCATION_LINE_PATTERN = /^([^:]+):(\d+)(?:-(\d+))?$/;
+// Matches a single Location item: `<path>:<line>` or `<path>:<line>-<line>`.
+// Multi-location fields split the field text on commas and require every
+// item to match this pattern. See `parseLocations` for the canonical
+// grammar (no `and` / `or` / `&` / `;`, no markdown links, no bullets,
+// no empty items).
+const LOCATION_ITEM_PATTERN = /^([^:]+):(\d+)(?:-(\d+))?$/;
 
 // Canonical order of finding block fields. Each block must list these in
 // this order with no other field lines interleaved. Surrounding blank
@@ -108,7 +113,7 @@ Output contract — strict, single canonical document:
     unresolved — from prior review, still applies.
     resolved — from prior review, addressed by latest commits.
     new variant — related but distinct issue.
-  Locations must be \`<path>:<line>\` or \`<path>:<line>-<line>\`. Line numbers must be positive.
+  Locations must be \`<path>:<line>\` or \`<path>:<line>-<line>\` with positive line numbers. When a finding cites multiple locations (e.g. a change that crosses files) the Location field MUST use a comma-separated list on a single line: \`Location: a.ts:12, b.ts:34-36\`. Multi-file findings MUST use comma-separated \`path:line\` entries; natural-language connectors such as \`and\` / \`or\` / \`&\`, semicolons, markdown links, bullets, and empty items are all invalid and will be rejected by the deterministic validator.
   Description must be a single non-empty line.
 - Counts: 'new' + 'new variant' count toward New; 'unresolved' toward Unresolved; 'resolved' toward Resolved.
 - No prose outside this shape. Reject duplicate, missing, or out-of-order fields; wrong section order; loose headings; an unterminated fenced code block; and content after the final finding other than blank lines.
@@ -148,7 +153,7 @@ Output contract — strict, single canonical document:
     unresolved — from prior review, still applies.
     resolved — from prior review, addressed by latest commits.
     new variant — related but distinct issue.
-  Locations must be \`<path>:<line>\` or \`<path>:<line>-<line>\`. Line numbers must be positive.
+  Locations must be \`<path>:<line>\` or \`<path>:<line>-<line>\` with positive line numbers. When a finding cites multiple locations (e.g. a change that crosses files) the Location field MUST use a comma-separated list on a single line: \`Location: a.ts:12, b.ts:34-36\`. Multi-file findings MUST use comma-separated \`path:line\` entries; natural-language connectors such as \`and\` / \`or\` / \`&\`, semicolons, markdown links, bullets, and empty items are all invalid and will be rejected by the deterministic validator.
   Description must be a single non-empty line.
 - Counts: 'new' + 'new variant' count toward New; 'unresolved' toward Unresolved; 'resolved' toward Resolved.
 - Deduplicate findings by normalized status, severity, location, title, and description. Preserve concrete file and line references.
@@ -175,7 +180,7 @@ The file must contain a single canonical document that follows the strict review
     - Description: <single-line text>
    Each finding block lists the ${CANONICAL_FIELD_ORDER_TEXT}. Surrounding blank lines are allowed. The 'Status:' line must come first, then 'Location:', then 'Description:'; no other field lines may appear in any other order.
    The severity column must be one of: Critical, Warning, Suggestion, with the matching emoji (🔴 / 🟡 / 🟢).
-   'Location:' must be '<path>:<line>' or '<path>:<line>-<line>' with positive line numbers.
+   'Location:' must be '<path>:<line>' or '<path>:<line>-<line>' with positive line numbers, OR a comma-separated list of such items on a single line (e.g. 'a.ts:12, b.ts:34-36'). Multi-location fields MUST use comma separators; natural-language connectors such as 'and' / 'or' / '&', semicolons, markdown links, bullets, and empty items are all invalid.
    'Description:' must be a single non-empty line.
 4. Counts: 'new' + 'new variant' count toward New; 'unresolved' toward Unresolved; 'resolved' toward Resolved.
 5. No arbitrary prose outside this shape (no content after the final finding other than blank lines; no extra subsections; no unterminated fenced code block).
@@ -273,25 +278,90 @@ function isPositiveInteger(value: number): boolean {
   return Number.isInteger(value) && value > 0;
 }
 
-function validateLocation(location: string): string | null {
-  const match = location.match(LOCATION_LINE_PATTERN);
-  if (!match) {
-    return 'Location must be <path>:<line> or <path>:<line>-<line>';
+/**
+ * Parse the value of a Location field into canonical items.
+ *
+ * The canonical grammar is a comma-separated list of items, each
+ * shaped as `<path>:<line>` or `<path>:<line>-<line>`. A single item
+ * is also valid. Natural-language connectors (`and`, `or`, `&`),
+ * semicolons, markdown links, bullets, and empty items are all
+ * rejected so the deterministic parser stays unambiguous; the model
+ * is steered toward this syntax by every prompt template.
+ *
+ * Returns the trimmed, whitespace-collapsed items so the caller can
+ * store a canonical string in `ParsedFinding.location`. This makes
+ * the document round-trip safe: `renderFinding` emits the canonical
+ * string verbatim and re-validation produces the same items.
+ */
+function parseLocations(raw: string): { ok: true; items: string[] } | { ok: false; reason: string } {
+  const trimmed = raw.trim();
+  if (trimmed === '') {
+    return {
+      ok: false,
+      reason: 'Location must be <path>:<line> or <path>:<line>-<line> (or a comma-separated list of such items)',
+    };
   }
-  const startLine = Number.parseInt(match[2], 10);
-  if (!isPositiveInteger(startLine)) {
-    return 'Location start line must be a positive integer';
+  // Reject semicolons outright. They look tempting as a delimiter
+  // but break round-trip and were never part of the canonical
+  // grammar; banning them here keeps the model honest.
+  if (trimmed.includes(';')) {
+    return {
+      ok: false,
+      reason: 'Location items must be separated by commas only; semicolons are not allowed',
+    };
   }
-  if (match[3] !== undefined) {
-    const endLine = Number.parseInt(match[3], 10);
-    if (!isPositiveInteger(endLine)) {
-      return 'Location end line must be a positive integer';
+  const parts = trimmed.split(',');
+  const items: string[] = [];
+  for (const part of parts) {
+    const item = part.trim();
+    if (item === '') {
+      return {
+        ok: false,
+        reason: 'Location must not contain empty items or a trailing/leading comma',
+      };
     }
-    if (endLine < startLine) {
-      return 'Location end line must be >= start line';
+    const match = item.match(LOCATION_ITEM_PATTERN);
+    if (!match) {
+      return {
+        ok: false,
+        reason: `Location item "${item}" must match <path>:<line> or <path>:<line>-<line> (use commas to separate multiple items; do not use "and", "or", "&", ";", markdown links, or bullets)`,
+      };
     }
+    const startLine = Number.parseInt(match[2], 10);
+    if (!isPositiveInteger(startLine)) {
+      return {
+        ok: false,
+        reason: `Location item "${item}" start line must be a positive integer`,
+      };
+    }
+    if (match[3] !== undefined) {
+      const endLine = Number.parseInt(match[3], 10);
+      if (!isPositiveInteger(endLine)) {
+        return {
+          ok: false,
+          reason: `Location item "${item}" end line must be a positive integer`,
+        };
+      }
+      if (endLine < startLine) {
+        return {
+          ok: false,
+          reason: `Location item "${item}" end line must be >= start line`,
+        };
+      }
+    }
+    items.push(item);
   }
-  return null;
+  return { ok: true, items };
+}
+
+/**
+ * Render the canonical Location field text for a parsed list of
+ * items. Always emits the form `item1, item2, ..., itemN` (or just
+ * `item` for a single-item location) so the output round-trips
+ * through `parseLocations` unchanged.
+ */
+export function formatLocations(items: ReadonlyArray<string>): string {
+  return items.join(', ');
 }
 
 function parseSummary(lines: string[], summaryStart: number): {
@@ -452,10 +522,13 @@ function parseFindings(lines: string[], findingsStart: number): {
     if (!fields.location) {
       return { findings, endLine: i, error: `finding at line ${i + 1} is missing Location field` };
     }
-    const locationError = validateLocation(fields.location);
-    if (locationError) {
-      return { findings, endLine: i, error: `finding at line ${i + 1} has invalid Location: ${locationError}` };
+    const locationParse = parseLocations(fields.location);
+    if (!locationParse.ok) {
+      return { findings, endLine: i, error: `finding at line ${i + 1} has invalid Location: ${locationParse.reason}` };
     }
+    // Store the canonical form so the document round-trips through
+    // `renderFinding` -> `validateReviewDocument` unchanged.
+    const canonicalLocation = formatLocations(locationParse.items);
     if (!fields.description) {
       return { findings, endLine: i, error: `finding at line ${i + 1} is missing Description field` };
     }
@@ -465,7 +538,7 @@ function parseFindings(lines: string[], findingsStart: number): {
       emoji,
       title,
       status: normalizedStatus as Status,
-      location: fields.location,
+      location: canonicalLocation,
       description: fields.description,
     });
 

@@ -27064,7 +27064,7 @@ var SUMMARY_HEADING_PATTERN = /^## Summary\s*$/;
 var FINDINGS_HEADING_PATTERN = /^## Findings\s*$/;
 var FINDING_HEADING_PATTERN = /^### (🔴 Critical|🟡 Warning|🟢 Suggestion) —\s*(\S.*)$/;
 var FIELD_LINE_PATTERN = /^-\s*(Status|Location|Description):\s*(\S.*)$/;
-var LOCATION_LINE_PATTERN = /^([^:]+):(\d+)(?:-(\d+))?$/;
+var LOCATION_ITEM_PATTERN = /^([^:]+):(\d+)(?:-(\d+))?$/;
 var FIELD_ORDER = [
   "status",
   "location",
@@ -27108,7 +27108,7 @@ Output contract \u2014 strict, single canonical document:
     unresolved \u2014 from prior review, still applies.
     resolved \u2014 from prior review, addressed by latest commits.
     new variant \u2014 related but distinct issue.
-  Locations must be \`<path>:<line>\` or \`<path>:<line>-<line>\`. Line numbers must be positive.
+  Locations must be \`<path>:<line>\` or \`<path>:<line>-<line>\` with positive line numbers. When a finding cites multiple locations (e.g. a change that crosses files) the Location field MUST use a comma-separated list on a single line: \`Location: a.ts:12, b.ts:34-36\`. Multi-file findings MUST use comma-separated \`path:line\` entries; natural-language connectors such as \`and\` / \`or\` / \`&\`, semicolons, markdown links, bullets, and empty items are all invalid and will be rejected by the deterministic validator.
   Description must be a single non-empty line.
 - Counts: 'new' + 'new variant' count toward New; 'unresolved' toward Unresolved; 'resolved' toward Resolved.
 - No prose outside this shape. Reject duplicate, missing, or out-of-order fields; wrong section order; loose headings; an unterminated fenced code block; and content after the final finding other than blank lines.
@@ -27147,7 +27147,7 @@ Output contract \u2014 strict, single canonical document:
     unresolved \u2014 from prior review, still applies.
     resolved \u2014 from prior review, addressed by latest commits.
     new variant \u2014 related but distinct issue.
-  Locations must be \`<path>:<line>\` or \`<path>:<line>-<line>\`. Line numbers must be positive.
+  Locations must be \`<path>:<line>\` or \`<path>:<line>-<line>\` with positive line numbers. When a finding cites multiple locations (e.g. a change that crosses files) the Location field MUST use a comma-separated list on a single line: \`Location: a.ts:12, b.ts:34-36\`. Multi-file findings MUST use comma-separated \`path:line\` entries; natural-language connectors such as \`and\` / \`or\` / \`&\`, semicolons, markdown links, bullets, and empty items are all invalid and will be rejected by the deterministic validator.
   Description must be a single non-empty line.
 - Counts: 'new' + 'new variant' count toward New; 'unresolved' toward Unresolved; 'resolved' toward Resolved.
 - Deduplicate findings by normalized status, severity, location, title, and description. Preserve concrete file and line references.
@@ -27173,7 +27173,7 @@ The file must contain a single canonical document that follows the strict review
     - Description: <single-line text>
    Each finding block lists the ${CANONICAL_FIELD_ORDER_TEXT}. Surrounding blank lines are allowed. The 'Status:' line must come first, then 'Location:', then 'Description:'; no other field lines may appear in any other order.
    The severity column must be one of: Critical, Warning, Suggestion, with the matching emoji (\u{1F534} / \u{1F7E1} / \u{1F7E2}).
-   'Location:' must be '<path>:<line>' or '<path>:<line>-<line>' with positive line numbers.
+   'Location:' must be '<path>:<line>' or '<path>:<line>-<line>' with positive line numbers, OR a comma-separated list of such items on a single line (e.g. 'a.ts:12, b.ts:34-36'). Multi-location fields MUST use comma separators; natural-language connectors such as 'and' / 'or' / '&', semicolons, markdown links, bullets, and empty items are all invalid.
    'Description:' must be a single non-empty line.
 4. Counts: 'new' + 'new variant' count toward New; 'unresolved' toward Unresolved; 'resolved' toward Resolved.
 5. No arbitrary prose outside this shape (no content after the final finding other than blank lines; no extra subsections; no unterminated fenced code block).
@@ -27220,25 +27220,65 @@ function isFenceOpenAt(lines, index) {
 function isPositiveInteger(value) {
   return Number.isInteger(value) && value > 0;
 }
-function validateLocation(location) {
-  const match = location.match(LOCATION_LINE_PATTERN);
-  if (!match) {
-    return "Location must be <path>:<line> or <path>:<line>-<line>";
+function parseLocations(raw) {
+  const trimmed = raw.trim();
+  if (trimmed === "") {
+    return {
+      ok: false,
+      reason: "Location must be <path>:<line> or <path>:<line>-<line> (or a comma-separated list of such items)"
+    };
   }
-  const startLine = Number.parseInt(match[2], 10);
-  if (!isPositiveInteger(startLine)) {
-    return "Location start line must be a positive integer";
+  if (trimmed.includes(";")) {
+    return {
+      ok: false,
+      reason: "Location items must be separated by commas only; semicolons are not allowed"
+    };
   }
-  if (match[3] !== void 0) {
-    const endLine = Number.parseInt(match[3], 10);
-    if (!isPositiveInteger(endLine)) {
-      return "Location end line must be a positive integer";
+  const parts = trimmed.split(",");
+  const items = [];
+  for (const part of parts) {
+    const item = part.trim();
+    if (item === "") {
+      return {
+        ok: false,
+        reason: "Location must not contain empty items or a trailing/leading comma"
+      };
     }
-    if (endLine < startLine) {
-      return "Location end line must be >= start line";
+    const match = item.match(LOCATION_ITEM_PATTERN);
+    if (!match) {
+      return {
+        ok: false,
+        reason: `Location item "${item}" must match <path>:<line> or <path>:<line>-<line> (use commas to separate multiple items; do not use "and", "or", "&", ";", markdown links, or bullets)`
+      };
     }
+    const startLine = Number.parseInt(match[2], 10);
+    if (!isPositiveInteger(startLine)) {
+      return {
+        ok: false,
+        reason: `Location item "${item}" start line must be a positive integer`
+      };
+    }
+    if (match[3] !== void 0) {
+      const endLine = Number.parseInt(match[3], 10);
+      if (!isPositiveInteger(endLine)) {
+        return {
+          ok: false,
+          reason: `Location item "${item}" end line must be a positive integer`
+        };
+      }
+      if (endLine < startLine) {
+        return {
+          ok: false,
+          reason: `Location item "${item}" end line must be >= start line`
+        };
+      }
+    }
+    items.push(item);
   }
-  return null;
+  return { ok: true, items };
+}
+function formatLocations(items) {
+  return items.join(", ");
 }
 function parseSummary(lines, summaryStart) {
   const result = { new: 0, unresolved: 0, resolved: 0 };
@@ -27376,10 +27416,11 @@ function parseFindings(lines, findingsStart) {
     if (!fields.location) {
       return { findings, endLine: i, error: `finding at line ${i + 1} is missing Location field` };
     }
-    const locationError = validateLocation(fields.location);
-    if (locationError) {
-      return { findings, endLine: i, error: `finding at line ${i + 1} has invalid Location: ${locationError}` };
+    const locationParse = parseLocations(fields.location);
+    if (!locationParse.ok) {
+      return { findings, endLine: i, error: `finding at line ${i + 1} has invalid Location: ${locationParse.reason}` };
     }
+    const canonicalLocation = formatLocations(locationParse.items);
     if (!fields.description) {
       return { findings, endLine: i, error: `finding at line ${i + 1} is missing Description field` };
     }
@@ -27388,7 +27429,7 @@ function parseFindings(lines, findingsStart) {
       emoji,
       title,
       status: normalizedStatus,
-      location: fields.location,
+      location: canonicalLocation,
       description: fields.description
     });
     i = j;

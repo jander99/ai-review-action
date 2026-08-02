@@ -12,6 +12,7 @@ const {
   mergeReviewDocuments,
   MAX_CHARS,
   renderDocument,
+  formatLocations,
   REVIEW_AGENT_PROMPT_TEMPLATE,
   SYNTHESIS_AGENT_PROMPT_TEMPLATE,
   VALIDATOR_AGENT_PROMPT_TEMPLATE,
@@ -654,4 +655,194 @@ test('review-contract project.json declares a test target that runs node --test'
     /test\/\*\.test\.cjs/,
     'test target command must include the test glob',
   );
+});
+
+// -----------------------------------------------------------------------------
+// Phase-6 bounded implementation: canonical multi-location support.
+//
+// The contract previously accepted only one `<path>:<line>(-<line>)` per
+// finding. Cross-file findings (e.g. the real rejected example from
+// AI Review run 30748322243) needed a way to cite multiple locations on
+// one line. The grammar is now a comma-separated list of items, each
+// independently matching the original path+line(/range) grammar.
+// -----------------------------------------------------------------------------
+
+const MULTI_LOCATION_PROLOGUE = [
+  `# Review — ${TITLE}`,
+  '',
+  '## Summary',
+  '',
+  '- New findings: 1',
+  '- Unresolved from prior review: 0',
+  '- Resolved by latest commits: 0',
+  '',
+  '## Findings',
+  '',
+];
+
+function buildDocument(locationLine) {
+  return [
+    ...MULTI_LOCATION_PROLOGUE,
+    '### 🔴 Critical — Cross-file regression',
+    '- Status: new',
+    `- Location: ${locationLine}`,
+    '- Description: helper called from two files',
+    '',
+  ].join('\n');
+}
+
+test('single-location finding remains valid (canonical grammar preserves one-location validity)', () => {
+  const doc = buildDocument('src/foo.ts:42');
+  const result = validateReviewDocument(doc);
+  assert.equal(result.valid, true, result.reason);
+  assert.equal(result.document.findings.length, 1);
+  assert.equal(result.document.findings[0].location, 'src/foo.ts:42');
+});
+
+test('comma-separated multi-location is valid and stored canonically', () => {
+  const doc = buildDocument('a.ts:1, b.ts:2-3');
+  const result = validateReviewDocument(doc);
+  assert.equal(result.valid, true, result.reason);
+  assert.equal(result.document.findings.length, 1);
+  // Canonical form: items trimmed, joined with ", ".
+  assert.equal(result.document.findings[0].location, 'a.ts:1, b.ts:2-3');
+});
+
+test('multi-location with three or more items is valid', () => {
+  const doc = buildDocument('a.ts:1, b.ts:2-3, c/d.ts:99');
+  const result = validateReviewDocument(doc);
+  assert.equal(result.valid, true, result.reason);
+  assert.equal(result.document.findings[0].location, 'a.ts:1, b.ts:2-3, c/d.ts:99');
+});
+
+test('real rejected example with natural-language "and" connector is invalid', () => {
+  // Reproduces the AI Review run that motivated this fix: the model
+  // emitted `Location: packages/run-reviews/src/agent-definition.ts:114
+  // and packages/run-reviews/src/prompt-composer.ts:51`. The
+  // deterministic validator must reject the "and" connector with a
+  // useful reason referencing comma separation.
+  const doc = buildDocument(
+    'packages/run-reviews/src/agent-definition.ts:114 and packages/run-reviews/src/prompt-composer.ts:51',
+  );
+  const result = validateReviewDocument(doc);
+  assert.equal(result.valid, false, 'natural-language "and" connector must be rejected');
+  assert.match(
+    result.reason,
+    /comma/i,
+    `invalid reason must reference comma-separated grammar; got: ${result.reason}`,
+  );
+});
+
+test('natural-language connectors "or" and "&" are rejected', () => {
+  for (const connector of ['or', '&']) {
+    const doc = buildDocument(`a.ts:1 ${connector} b.ts:2`);
+    const result = validateReviewDocument(doc);
+    assert.equal(result.valid, false, `connector "${connector}" must be rejected`);
+    assert.match(result.reason, /comma/i, `reason must reference comma-separated grammar; got: ${result.reason}`);
+  }
+});
+
+test('semicolon delimiter is rejected', () => {
+  const doc = buildDocument('a.ts:1; b.ts:2');
+  const result = validateReviewDocument(doc);
+  assert.equal(result.valid, false, 'semicolon delimiter must be rejected');
+  assert.match(result.reason, /comma/i, `reason must reference comma-separated grammar; got: ${result.reason}`);
+});
+
+test('trailing comma is rejected (empty item)', () => {
+  const doc = buildDocument('a.ts:1,');
+  const result = validateReviewDocument(doc);
+  assert.equal(result.valid, false, 'trailing comma must be rejected');
+  assert.match(result.reason, /empty|trailing|comma/i, `reason must reference empty item / trailing comma; got: ${result.reason}`);
+});
+
+test('leading comma is rejected (empty item)', () => {
+  const doc = buildDocument(', a.ts:1');
+  const result = validateReviewDocument(doc);
+  assert.equal(result.valid, false, 'leading comma must be rejected');
+  assert.match(result.reason, /empty|trailing|comma/i, `reason must reference empty item / trailing comma; got: ${result.reason}`);
+});
+
+test('malformed second item is rejected with a useful reason', () => {
+  const doc = buildDocument('a.ts:1, not-a-valid-location');
+  const result = validateReviewDocument(doc);
+  assert.equal(result.valid, false, 'malformed second item must be rejected');
+  assert.match(
+    result.reason,
+    /not-a-valid-location|item/i,
+    `reason must reference the malformed item; got: ${result.reason}`,
+  );
+});
+
+test('empty Location field is rejected', () => {
+  const doc = buildDocument('');
+  const result = validateReviewDocument(doc);
+  assert.equal(result.valid, false, 'empty Location must be rejected');
+  assert.match(result.reason, /Location/i, `reason must mention Location; got: ${result.reason}`);
+});
+
+test('round-trip: rendered multi-location document validates and re-canonicalizes', () => {
+  // Build a ParsedDocument with a multi-location finding, render it
+  // to canonical markdown, and confirm the rendered form re-validates
+  // and yields the same canonical location string. This is the
+  // round-trip guarantee the prompt-template changes depend on.
+  const rendered = renderDocument({
+    title: TITLE,
+    summary: { new: 1, unresolved: 0, resolved: 0 },
+    findings: [
+      {
+        severity: 'Critical',
+        emoji: '🔴',
+        title: 'Cross-file',
+        status: 'new',
+        location: 'a.ts:1, b.ts:2-3',
+        description: 'desc',
+      },
+    ],
+  });
+  const revalidation = validateReviewDocument(rendered);
+  assert.equal(revalidation.valid, true, revalidation.reason);
+  assert.equal(revalidation.document.findings[0].location, 'a.ts:1, b.ts:2-3');
+});
+
+test('formatLocations emits canonical comma-space joined form', () => {
+  assert.equal(formatLocations(['a.ts:1']), 'a.ts:1');
+  assert.equal(formatLocations(['a.ts:1', 'b.ts:2-3']), 'a.ts:1, b.ts:2-3');
+  assert.equal(
+    formatLocations(['a.ts:1', 'b.ts:2-3', 'c/d.ts:99']),
+    'a.ts:1, b.ts:2-3, c/d.ts:99',
+  );
+});
+
+test('mergeReviewDocuments dedupes by canonical multi-location string', () => {
+  const a = buildDocument('a.ts:1, b.ts:2-3');
+  const b = buildDocument('a.ts:1, b.ts:2-3');
+  const merged = mergeReviewDocuments([a, b], TITLE);
+  const validation = validateReviewDocument(merged);
+  assert.equal(validation.valid, true, validation.reason);
+  assert.equal(validation.document.findings.length, 1, 'identical multi-location findings must dedupe to one');
+  assert.equal(validation.document.summary.new, 1);
+});
+
+test('all three prompt templates declare the comma-separated multi-location grammar', () => {
+  for (const [name, template] of [
+    ['REVIEW_AGENT_PROMPT_TEMPLATE', REVIEW_AGENT_PROMPT_TEMPLATE],
+    ['SYNTHESIS_AGENT_PROMPT_TEMPLATE', SYNTHESIS_AGENT_PROMPT_TEMPLATE],
+    ['VALIDATOR_AGENT_PROMPT_TEMPLATE', VALIDATOR_AGENT_PROMPT_TEMPLATE],
+  ]) {
+    assert.match(
+      template,
+      /comma-separated/i,
+      `${name} must mention the comma-separated multi-location grammar`,
+    );
+    // The model must also be steered AWAY from natural-language
+    // connectors. Each template either spells out the literal
+    // connector tokens (`and` / `or` / `&`) or warns about
+    // semicolons / markdown links / bullets. Match any of those.
+    assert.match(
+      template,
+      /(and|or|&|semicolon|markdown|bullets?)/i,
+      `${name} must steer the model away from natural-language connectors`,
+    );
+  }
 });

@@ -4088,7 +4088,7 @@ Output contract \u2014 strict, single canonical document:
     unresolved \u2014 from prior review, still applies.
     resolved \u2014 from prior review, addressed by latest commits.
     new variant \u2014 related but distinct issue.
-  Locations must be \`<path>:<line>\` or \`<path>:<line>-<line>\`. Line numbers must be positive.
+  Locations must be \`<path>:<line>\` or \`<path>:<line>-<line>\` with positive line numbers. When a finding cites multiple locations (e.g. a change that crosses files) the Location field MUST use a comma-separated list on a single line: \`Location: a.ts:12, b.ts:34-36\`. Multi-file findings MUST use comma-separated \`path:line\` entries; natural-language connectors such as \`and\` / \`or\` / \`&\`, semicolons, markdown links, bullets, and empty items are all invalid and will be rejected by the deterministic validator.
   Description must be a single non-empty line.
 - Counts: 'new' + 'new variant' count toward New; 'unresolved' toward Unresolved; 'resolved' toward Resolved.
 - No prose outside this shape. Reject duplicate, missing, or out-of-order fields; wrong section order; loose headings; an unterminated fenced code block; and content after the final finding other than blank lines.
@@ -4127,7 +4127,7 @@ Output contract \u2014 strict, single canonical document:
     unresolved \u2014 from prior review, still applies.
     resolved \u2014 from prior review, addressed by latest commits.
     new variant \u2014 related but distinct issue.
-  Locations must be \`<path>:<line>\` or \`<path>:<line>-<line>\`. Line numbers must be positive.
+  Locations must be \`<path>:<line>\` or \`<path>:<line>-<line>\` with positive line numbers. When a finding cites multiple locations (e.g. a change that crosses files) the Location field MUST use a comma-separated list on a single line: \`Location: a.ts:12, b.ts:34-36\`. Multi-file findings MUST use comma-separated \`path:line\` entries; natural-language connectors such as \`and\` / \`or\` / \`&\`, semicolons, markdown links, bullets, and empty items are all invalid and will be rejected by the deterministic validator.
   Description must be a single non-empty line.
 - Counts: 'new' + 'new variant' count toward New; 'unresolved' toward Unresolved; 'resolved' toward Resolved.
 - Deduplicate findings by normalized status, severity, location, title, and description. Preserve concrete file and line references.
@@ -4153,7 +4153,7 @@ The file must contain a single canonical document that follows the strict review
     - Description: <single-line text>
    Each finding block lists the ${CANONICAL_FIELD_ORDER_TEXT}. Surrounding blank lines are allowed. The 'Status:' line must come first, then 'Location:', then 'Description:'; no other field lines may appear in any other order.
    The severity column must be one of: Critical, Warning, Suggestion, with the matching emoji (\u{1F534} / \u{1F7E1} / \u{1F7E2}).
-   'Location:' must be '<path>:<line>' or '<path>:<line>-<line>' with positive line numbers.
+   'Location:' must be '<path>:<line>' or '<path>:<line>-<line>' with positive line numbers, OR a comma-separated list of such items on a single line (e.g. 'a.ts:12, b.ts:34-36'). Multi-location fields MUST use comma separators; natural-language connectors such as 'and' / 'or' / '&', semicolons, markdown links, bullets, and empty items are all invalid.
    'Description:' must be a single non-empty line.
 4. Counts: 'new' + 'new variant' count toward New; 'unresolved' toward Unresolved; 'resolved' toward Resolved.
 5. No arbitrary prose outside this shape (no content after the final finding other than blank lines; no extra subsections; no unterminated fenced code block).
