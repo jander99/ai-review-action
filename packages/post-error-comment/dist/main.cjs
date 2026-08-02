@@ -17594,12 +17594,12 @@ var require_lib = __commonJS({
             throw new Error("Client has already been disposed.");
           }
           const parsedUrl = new URL(requestUrl);
-          let info2 = this._prepareRequest(verb, parsedUrl, headers);
+          let info = this._prepareRequest(verb, parsedUrl, headers);
           const maxTries = this._allowRetries && RetryableHttpVerbs.includes(verb) ? this._maxRetries + 1 : 1;
           let numTries = 0;
           let response;
           do {
-            response = yield this.requestRaw(info2, data);
+            response = yield this.requestRaw(info, data);
             if (response && response.message && response.message.statusCode === HttpCodes.Unauthorized) {
               let authenticationHandler;
               for (const handler2 of this.handlers) {
@@ -17609,7 +17609,7 @@ var require_lib = __commonJS({
                 }
               }
               if (authenticationHandler) {
-                return authenticationHandler.handleAuthentication(this, info2, data);
+                return authenticationHandler.handleAuthentication(this, info, data);
               } else {
                 return response;
               }
@@ -17632,8 +17632,8 @@ var require_lib = __commonJS({
                   }
                 }
               }
-              info2 = this._prepareRequest(verb, parsedRedirectUrl, headers);
-              response = yield this.requestRaw(info2, data);
+              info = this._prepareRequest(verb, parsedRedirectUrl, headers);
+              response = yield this.requestRaw(info, data);
               redirectsRemaining--;
             }
             if (!response.message.statusCode || !HttpResponseRetryCodes.includes(response.message.statusCode)) {
@@ -17662,7 +17662,7 @@ var require_lib = __commonJS({
        * @param info
        * @param data
        */
-      requestRaw(info2, data) {
+      requestRaw(info, data) {
         return __awaiter(this, void 0, void 0, function* () {
           return new Promise((resolve, reject) => {
             function callbackForResult(err, res) {
@@ -17674,7 +17674,7 @@ var require_lib = __commonJS({
                 resolve(res);
               }
             }
-            this.requestRawWithCallback(info2, data, callbackForResult);
+            this.requestRawWithCallback(info, data, callbackForResult);
           });
         });
       }
@@ -17684,12 +17684,12 @@ var require_lib = __commonJS({
        * @param data
        * @param onResult
        */
-      requestRawWithCallback(info2, data, onResult) {
+      requestRawWithCallback(info, data, onResult) {
         if (typeof data === "string") {
-          if (!info2.options.headers) {
-            info2.options.headers = {};
+          if (!info.options.headers) {
+            info.options.headers = {};
           }
-          info2.options.headers["Content-Length"] = Buffer.byteLength(data, "utf8");
+          info.options.headers["Content-Length"] = Buffer.byteLength(data, "utf8");
         }
         let callbackCalled = false;
         function handleResult(err, res) {
@@ -17698,7 +17698,7 @@ var require_lib = __commonJS({
             onResult(err, res);
           }
         }
-        const req = info2.httpModule.request(info2.options, (msg) => {
+        const req = info.httpModule.request(info.options, (msg) => {
           const res = new HttpClientResponse(msg);
           handleResult(void 0, res);
         });
@@ -17710,7 +17710,7 @@ var require_lib = __commonJS({
           if (socket) {
             socket.end();
           }
-          handleResult(new Error(`Request timeout: ${info2.options.path}`));
+          handleResult(new Error(`Request timeout: ${info.options.path}`));
         });
         req.on("error", function(err) {
           handleResult(err);
@@ -17746,27 +17746,27 @@ var require_lib = __commonJS({
         return this._getProxyAgentDispatcher(parsedUrl, proxyUrl);
       }
       _prepareRequest(method, requestUrl, headers) {
-        const info2 = {};
-        info2.parsedUrl = requestUrl;
-        const usingSsl = info2.parsedUrl.protocol === "https:";
-        info2.httpModule = usingSsl ? https : http;
+        const info = {};
+        info.parsedUrl = requestUrl;
+        const usingSsl = info.parsedUrl.protocol === "https:";
+        info.httpModule = usingSsl ? https : http;
         const defaultPort = usingSsl ? 443 : 80;
-        info2.options = {};
-        info2.options.host = info2.parsedUrl.hostname;
-        info2.options.port = info2.parsedUrl.port ? parseInt(info2.parsedUrl.port) : defaultPort;
-        info2.options.path = (info2.parsedUrl.pathname || "") + (info2.parsedUrl.search || "");
-        info2.options.method = method;
-        info2.options.headers = this._mergeHeaders(headers);
+        info.options = {};
+        info.options.host = info.parsedUrl.hostname;
+        info.options.port = info.parsedUrl.port ? parseInt(info.parsedUrl.port) : defaultPort;
+        info.options.path = (info.parsedUrl.pathname || "") + (info.parsedUrl.search || "");
+        info.options.method = method;
+        info.options.headers = this._mergeHeaders(headers);
         if (this.userAgent != null) {
-          info2.options.headers["user-agent"] = this.userAgent;
+          info.options.headers["user-agent"] = this.userAgent;
         }
-        info2.options.agent = this._getAgent(info2.parsedUrl);
+        info.options.agent = this._getAgent(info.parsedUrl);
         if (this.handlers) {
           for (const handler2 of this.handlers) {
-            handler2.prepareRequest(info2.options);
+            handler2.prepareRequest(info.options);
           }
         }
-        return info2;
+        return info;
       }
       _mergeHeaders(headers) {
         if (this.requestOptions && this.requestOptions.headers) {
@@ -19731,11 +19731,11 @@ Support boolean input list: \`true | True | TRUE | false | False | FALSE\``);
       (0, command_1.issue)("echo", enabled ? "on" : "off");
     }
     exports2.setCommandEcho = setCommandEcho;
-    function setFailed(message) {
+    function setFailed2(message) {
       process.exitCode = ExitCode.Failure;
       error(message);
     }
-    exports2.setFailed = setFailed;
+    exports2.setFailed = setFailed2;
     function isDebug() {
       return process.env["RUNNER_DEBUG"] === "1";
     }
@@ -19748,18 +19748,18 @@ Support boolean input list: \`true | True | TRUE | false | False | FALSE\``);
       (0, command_1.issueCommand)("error", (0, utils_1.toCommandProperties)(properties), message instanceof Error ? message.toString() : message);
     }
     exports2.error = error;
-    function warning2(message, properties = {}) {
+    function warning(message, properties = {}) {
       (0, command_1.issueCommand)("warning", (0, utils_1.toCommandProperties)(properties), message instanceof Error ? message.toString() : message);
     }
-    exports2.warning = warning2;
+    exports2.warning = warning;
     function notice(message, properties = {}) {
       (0, command_1.issueCommand)("notice", (0, utils_1.toCommandProperties)(properties), message instanceof Error ? message.toString() : message);
     }
     exports2.notice = notice;
-    function info2(message) {
+    function info(message) {
       process.stdout.write(message + os.EOL);
     }
-    exports2.info = info2;
+    exports2.info = info;
     function startGroup(name) {
       (0, command_1.issue)("group", name);
     }
@@ -23992,7 +23992,7 @@ var require_fast_content_type_parse = __commonJS({
   }
 });
 
-// packages/post-error-comment/src/main.ts
+// packages/post-error-comment/src/action.ts
 var core = __toESM(require_core());
 var import_github = __toESM(require_github());
 
@@ -27544,25 +27544,19 @@ var Octokit2 = Octokit.plugin(requestLog, legacyRestEndpointMethods, paginateRes
 );
 
 // packages/post-error-comment/src/main.ts
-(async () => {
-  const postComment = core.getInput("post-comment");
-  if (postComment === "false") {
-    core.setOutput("comment-url", "");
-    return;
+async function postErrorComment(options, repoContext, octokitFactory = (token) => new Octokit2({ auth: token })) {
+  if (!options.postComment) {
+    return { commentUrl: "" };
   }
-  const reason = core.getInput("reason");
-  if (!reason) {
-    core.warning("reason input is empty; skipping error comment.");
-    core.setOutput("comment-url", "");
-    return;
+  if (!options.reason) {
+    return { commentUrl: "" };
   }
-  const title = core.getInput("title") || "AI Review validator rejected the generated review.";
-  const maxChars = parseInt(core.getInput("max-comment-chars") || "65000", 10);
-  const effectiveMax = isNaN(maxChars) ? 65e3 : maxChars;
+  const title = options.title || "AI Review validator rejected the generated review.";
+  const effectiveMax = Number.isFinite(options.maxChars) && options.maxChars > 0 ? options.maxChars : 65e3;
   const body = [
     `> \u26A0\uFE0F **${title}**`,
     "",
-    `**Reason:** ${reason}`,
+    `**Reason:** ${options.reason}`,
     "",
     "The PR comment was not published. Check the workflow run for the validator output and the rejected review markdown."
   ].join("\n");
@@ -27575,20 +27569,49 @@ var Octokit2 = Octokit.plugin(requestLog, legacyRestEndpointMethods, paginateRes
     const limit = Math.max(0, effectiveMax - marker.length);
     truncated = truncated.slice(0, limit) + marker;
   }
-  const token = core.getInput("github-token") || process.env.GITHUB_TOKEN;
-  const { owner, repo } = import_github.context.repo;
-  const issue_number = import_github.context.issue.number;
   try {
-    const octokit = new Octokit2({ auth: token });
-    const response = await octokit.rest.issues.createComment({ owner, repo, issue_number, body: truncated });
-    const commentUrl = response.data.html_url;
-    core.setOutput("comment-url", commentUrl);
-    core.info(`Posted error comment: ${commentUrl}`);
-  } catch (err) {
-    core.warning(`Failed to post error comment; check token permissions. ${err}`);
-    core.setOutput("comment-url", "");
+    const octokit = octokitFactory(options.token);
+    const response = await octokit.rest.issues.createComment({
+      owner: repoContext.owner,
+      repo: repoContext.repo,
+      issue_number: repoContext.issueNumber,
+      body: truncated
+    });
+    const commentUrl = response.data.html_url ?? "";
+    return { commentUrl };
+  } catch {
+    return { commentUrl: "" };
   }
-})();
+}
+
+// packages/post-error-comment/src/action.ts
+function buildOptionsFromCore() {
+  return {
+    token: core.getInput("github-token") || process.env.GITHUB_TOKEN,
+    reason: core.getInput("reason"),
+    postComment: core.getInput("post-comment") !== "false",
+    maxChars: Number.parseInt(core.getInput("max-comment-chars") || "65000", 10),
+    title: core.getInput("title")
+  };
+}
+function writeOutputs(result) {
+  core.setOutput("comment-url", result.commentUrl);
+}
+async function run() {
+  const options = buildOptionsFromCore();
+  const result = await postErrorComment(options, {
+    owner: import_github.context.repo.owner,
+    repo: import_github.context.repo.repo,
+    issueNumber: import_github.context.issue.number
+  });
+  writeOutputs(result);
+}
+if (require.main === module) {
+  run().catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    core.setFailed(`post-error-comment failed: ${message}`);
+  });
+}
 /*! Bundled license information:
 
 undici/lib/fetch/body.js:

@@ -1,0 +1,11 @@
+{
+  "name": "@jander99/ai-review-root-action",
+  "version": "1.0.0",
+  "main": "dist/main.cjs",
+  "private": true,
+  "dependencies": {
+    "@actions/core": "^1.11.1",
+    "@actions/github": "^6.0.0",
+    "@octokit/rest": "^21.0.0"
+  }
+}

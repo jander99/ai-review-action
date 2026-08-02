@@ -3,6 +3,7 @@
   "compileOnSave": false,
   "compilerOptions": {
     "rootDir": ".",
+    "baseUrl": ".",
     "sourceMap": true,
     "declaration": false,
     "moduleResolution": "node",
@@ -15,7 +16,18 @@
     "skipLibCheck": true,
     "skipDefaultLibCheck": true,
     "strict": true,
-    "paths": {}
+    "paths": {
+      "@jander99/ai-review-review-contract": ["packages/review-contract/src/index.ts"],
+      "@jander99/ai-review-review-contract/dist": ["packages/review-contract/src/index.ts"],
+      "@jander99/ai-review-previous-reviews": ["packages/previous-reviews/src/index.ts"],
+      "@jander99/ai-review-previous-reviews/dist": ["packages/previous-reviews/src/index.ts"],
+      "@jander99/ai-review-run-reviews": ["packages/run-reviews/src/index.ts"],
+      "@jander99/ai-review-run-reviews/permissions": ["packages/run-reviews/src/permissions.ts"],
+      "@jander99/ai-review-validate-review": ["packages/validate-review/src/index.ts"],
+      "@jander99/ai-review-post-comment": ["packages/post-comment/src/index.ts"],
+      "@jander99/ai-review-post-check-run": ["packages/post-check-run/src/index.ts"],
+      "@jander99/ai-review-post-error-comment": ["packages/post-error-comment/src/index.ts"]
+    }
   },
   "exclude": ["node_modules", "tmp"]
 }

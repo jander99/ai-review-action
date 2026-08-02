@@ -4,7 +4,7 @@ Thank you for improving AI Review Action. The [design vision](docs/design-vision
 
 ## Local development
 
-The repository is an Nx monorepo managed with Yarn 4. Source lives under `packages/*/src`, and each action's committed bundle lives under `packages/*/dist`.
+The repository is an Nx monorepo managed with Yarn 4. Source lives under `packages/*/src`, and each action's committed bundle lives under `packages/*/dist`. The root action is a single JavaScript bundle under `packages/root-action/`.
 
 Prerequisites:
 
@@ -12,7 +12,7 @@ Prerequisites:
 - Node.js 20 or newer.
 - Corepack enabled.
 
-Install, build, and type-check all four packages:
+Install, build, and type-check every package:
 
 ```bash
 corepack enable
@@ -27,13 +27,20 @@ The built `dist/main.cjs` files are committed because consumers execute them dir
 
 ```bash
 git diff --exit-code \
+  packages/root-action/dist/ \
   packages/run-reviews/dist/ \
+  packages/validate-review/dist/ \
+  packages/setup-opencode/dist/ \
   packages/post-comment/dist/ \
   packages/post-check-run/dist/ \
-  packages/setup-opencode/dist/
+  packages/post-error-comment/dist/
 ```
 
 Documentation-only changes must not regenerate or modify `dist`.
+
+### Architecture
+
+The root action is a single JS bundle that wires the package APIs together. The bundled code uses `if (require.main === module)` to gate its top-level IIFE, so the same bundle can also be required as a library (e.g., by future tests) without running the action entrypoint. Each leaf package exports its pipeline as a plain TypeScript function (`runReviews`, `validateReview`, `postComment`, `postCheckRun`, `postErrorComment`) and the leaf action's `dist/main.cjs` is a thin wrapper that translates `@actions/core` inputs and outputs.
 
 ## Smoke tests
 

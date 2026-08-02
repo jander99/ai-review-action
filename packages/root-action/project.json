@@ -1,0 +1,32 @@
+{
+  "name": "root-action",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "root": "packages/root-action",
+  "sourceRoot": "packages/root-action/src",
+  "targets": {
+    "build": {
+      "executor": "@nx/esbuild:esbuild",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "main": "packages/root-action/src/main.ts",
+        "outputPath": "packages/root-action/dist",
+        "outputFileName": "main.cjs",
+        "tsConfig": "packages/root-action/tsconfig.json",
+        "bundle": true,
+        "platform": "node",
+        "target": "node20",
+        "format": ["cjs"],
+        "thirdParty": true
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "dependsOn": [],
+      "options": {
+        "cwd": "packages/root-action",
+        "command": "node --test test/*.test.cjs"
+      }
+    }
+  }
+}

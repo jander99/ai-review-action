@@ -1,6 +1,7 @@
 import { spawnSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import { extractReviewDocument, sanitizeModelText } from '@jander99/ai-review-review-contract';
 import type { ReviewResult } from './types';
 
 export interface DebugCapturePaths {
@@ -26,55 +27,6 @@ interface OpenCodeEvent {
     tokens?: { input?: number; output?: number };
     cost?: number;
   };
-}
-
-// The heading boundary (below) is the parser's primary defense: anything the
-// model emits before `# Review — <title-or-ref>` is sliced off, so reasoning
-// blocks, tool-call XML, and other model-internal markup never reach the PR
-// comment. The orphan-tag regex is a small safety net for the cross-event
-// case where a closing tag (e.g. `</think>`) lands in the same text region
-// as the heading and ends up after the boundary slice. Keep the patterns in
-// sync with the equivalents in `fusion.ts`.
-const ORPHAN_TAG_PATTERN =
-  /<\/?(?:think|tool_call|tool_result|mm:think)>|<!--|-->/g;
-
-// Parser boundary: the current contract requires `# Review — <title-or-ref>`.
-// The legacy PR heading remains accepted so existing callers do not regress.
-// Requiring the em dash and a non-empty suffix prevents scratch headings such
-// as `# Review plan` from becoming the boundary.
-const HEADING_LINE_PATTERN = /^# (?:Review — .+|PR #\d+ Review — .+)$/;
-const FENCE_LINE_PATTERN = /^```/;
-
-function findHeadingBoundary(text: string): string | null {
-  const lines = text.split('\n');
-  let fenceOpen = false;
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (FENCE_LINE_PATTERN.test(line)) {
-      fenceOpen = !fenceOpen;
-      continue;
-    }
-    if (fenceOpen) {
-      continue;
-    }
-    if (HEADING_LINE_PATTERN.test(line)) {
-      return lines.slice(i).join('\n');
-    }
-  }
-  return null;
-}
-
-// Process the joined text from all stream events: strip orphan tags as a
-// safety net, then slice from the heading boundary if present. If no heading
-// is found, return the orphan-stripped text so a model that forgot the
-// contract still publishes something usable.
-function processReviewText(text: string): string {
-  const stripped = text.replace(ORPHAN_TAG_PATTERN, '');
-  const boundary = findHeadingBoundary(stripped);
-  if (boundary !== null) {
-    return boundary.replace(ORPHAN_TAG_PATTERN, '');
-  }
-  return stripped;
 }
 
 export function invokeOpenCode(
@@ -156,8 +108,16 @@ export function invokeOpenCode(
     }
   }
 
+  const rawText = text.join('');
+  // Sanitize orphan tags as a safety net, then slice from the strict
+  // '# Review — <title-or-ref>' heading if one is present. If no
+  // strict heading exists, return the sanitized raw text so the caller
+  // can validate and report a structural failure rather than silently
+  // fabricating a review.
+  const sanitized = sanitizeModelText(rawText);
+  const extracted = extractReviewDocument(sanitized);
   return {
-    text: processReviewText(text.join('')),
+    text: extracted ?? sanitized,
     tokens: { input: inputTokens, output: outputTokens },
     cost,
     model,

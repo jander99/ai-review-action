@@ -1,29 +1,36 @@
-import * as core from '@actions/core';
-import { context } from '@actions/github';
 import { Octokit } from '@octokit/rest';
 
-(async () => {
-  const postComment = core.getInput('post-comment');
-  if (postComment === 'false') {
-    core.setOutput('comment-url', '');
-    return;
+export interface PostErrorCommentOptions {
+  token: string | undefined;
+  reason: string;
+  postComment: boolean;
+  maxChars: number;
+  title: string;
+}
+
+export interface PostErrorCommentResult {
+  commentUrl: string;
+}
+
+export async function postErrorComment(
+  options: PostErrorCommentOptions,
+  repoContext: { owner: string; repo: string; issueNumber: number },
+  octokitFactory: (token: string | undefined) => Octokit = (token) => new Octokit({ auth: token }),
+): Promise<PostErrorCommentResult> {
+  if (!options.postComment) {
+    return { commentUrl: '' };
+  }
+  if (!options.reason) {
+    return { commentUrl: '' };
   }
 
-  const reason = core.getInput('reason');
-  if (!reason) {
-    core.warning('reason input is empty; skipping error comment.');
-    core.setOutput('comment-url', '');
-    return;
-  }
-
-  const title = core.getInput('title') || 'AI Review validator rejected the generated review.';
-  const maxChars = parseInt(core.getInput('max-comment-chars') || '65000', 10);
-  const effectiveMax = isNaN(maxChars) ? 65000 : maxChars;
+  const title = options.title || 'AI Review validator rejected the generated review.';
+  const effectiveMax = Number.isFinite(options.maxChars) && options.maxChars > 0 ? options.maxChars : 65000;
 
   const body = [
     `> ⚠️ **${title}**`,
     '',
-    `**Reason:** ${reason}`,
+    `**Reason:** ${options.reason}`,
     '',
     'The PR comment was not published. Check the workflow run for the validator output and the rejected review markdown.',
   ].join('\n');
@@ -35,18 +42,17 @@ import { Octokit } from '@octokit/rest';
     truncated = truncated.slice(0, limit) + marker;
   }
 
-  const token = core.getInput('github-token') || process.env.GITHUB_TOKEN;
-  const { owner, repo } = context.repo;
-  const issue_number = context.issue.number;
-
   try {
-    const octokit = new Octokit({ auth: token });
-    const response = await octokit.rest.issues.createComment({ owner, repo, issue_number, body: truncated });
-    const commentUrl = response.data.html_url;
-    core.setOutput('comment-url', commentUrl);
-    core.info(`Posted error comment: ${commentUrl}`);
-  } catch (err) {
-    core.warning(`Failed to post error comment; check token permissions. ${err}`);
-    core.setOutput('comment-url', '');
+    const octokit = octokitFactory(options.token);
+    const response = await octokit.rest.issues.createComment({
+      owner: repoContext.owner,
+      repo: repoContext.repo,
+      issue_number: repoContext.issueNumber,
+      body: truncated,
+    });
+    const commentUrl = response.data.html_url ?? '';
+    return { commentUrl };
+  } catch {
+    return { commentUrl: '' };
   }
-})();
+}

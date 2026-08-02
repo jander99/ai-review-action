@@ -1,0 +1,135 @@
+name: Smoke
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'packages/root-action/**'
+      - 'action.yml'
+      - 'dist/**'
+      - '.github/workflows/smoke.yml'
+
+jobs:
+  consumer-smoke:
+    name: Consumer-style smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Build root-action and repo-root dist
+        run: |
+          yarn nx run root-action:build --skip-nx-cache
+          yarn nx run repo-root:build --skip-nx-cache
+
+      - name: Copy repo-root action to scratch consumer directory
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/ai-review-smoke
+          mkdir -p /tmp/ai-review-smoke
+          # Resolve the bundle path from the action.yml metadata at
+          # runtime so the smoke test always uses whatever the action
+          # actually declares as its main entrypoint.
+          MAIN_PATH=$(node -e "
+            const fs = require('fs');
+            const action = fs.readFileSync('action.yml', 'utf8');
+            const match = action.match(/^\\s*main:\\s*([^\\s]+)/m);
+            if (!match) {
+              console.error('action.yml must declare a main entrypoint');
+              process.exit(1);
+            }
+            console.log(match[1]);
+          ")
+          echo "Resolved main entrypoint: ${MAIN_PATH}"
+          # Preserve the full main path (e.g. dist/main.cjs) so the
+          # scratch dir mirrors the production layout. Earlier we used
+          # $(basename ${MAIN_PATH}) which dropped the dist/ prefix and
+          # broke `require('./' + MAIN_PATH)` below.
+          cp action.yml /tmp/ai-review-smoke/action.yml
+          mkdir -p "/tmp/ai-review-smoke/$(dirname ${MAIN_PATH})"
+          cp "${MAIN_PATH}" "/tmp/ai-review-smoke/${MAIN_PATH}"
+          ls -laR /tmp/ai-review-smoke/
+
+      - name: Verify the action.yml parses
+        run: |
+          set -euo pipefail
+          node -e "
+            const fs = require('fs');
+            const action = fs.readFileSync('/tmp/ai-review-smoke/action.yml', 'utf8');
+            if (!action.includes('using: node24')) {
+              console.error('action.yml must declare using: node24');
+              process.exit(1);
+            }
+            const inputs = ['opencode-version', 'debug', 'github-token', 'model', 'models', 'prompts', 'opencode-config', 'permission', 'timeout-minutes', 'fusion', 'fusion-model', 'fail-on-error', 'post-comment', 'post-check-run', 'max-comment-chars', 'check-name', 'check-conclusion', 'check-details-url'];
+            for (const name of inputs) {
+              if (!action.includes(name + ':')) {
+                console.error('action.yml must declare input: ' + name);
+                process.exit(1);
+              }
+            }
+            const outputs = ['review', 'review-output-path', 'config-json', 'comment-url', 'check-run-url', 'models-used', 'effective-model', 'cost', 'total-cost', 'validate-cost', 'tokens', 'cost-by-model', 'tokens-by-model', 'validate-tokens', 'debug-artifact-path', 'validate-status', 'validate-reason', 'failure-reason'];
+            for (const name of outputs) {
+              if (!action.includes(name + ':')) {
+                console.error('action.yml must declare output: ' + name);
+                process.exit(1);
+              }
+            }
+            console.log('action.yml shape is valid');
+          "
+
+      - name: Verify the bundle loads from the scratch directory
+        run: |
+          set -euo pipefail
+          cd /tmp/ai-review-smoke
+          # Resolve the main path again (we are in a different cwd).
+          MAIN_PATH=$(node -e "
+            const fs = require('fs');
+            const action = fs.readFileSync('action.yml', 'utf8');
+            const match = action.match(/^\\s*main:\\s*([^\\s]+)/m);
+            if (!match) {
+              console.error('action.yml must declare a main entrypoint');
+              process.exit(1);
+            }
+            console.log(match[1]);
+          ")
+          node -e "
+            require('./' + '$MAIN_PATH');
+            console.log('bundle loaded from scratch dir: $MAIN_PATH');
+          "
+
+      - name: Verify the bundle exposes the wired package APIs
+        run: |
+          set -euo pipefail
+          cd /tmp/ai-review-smoke
+          MAIN_PATH=$(node -e "
+            const fs = require('fs');
+            const action = fs.readFileSync('action.yml', 'utf8');
+            const match = action.match(/^\\s*main:\\s*([^\\s]+)/m);
+            if (!match) {
+              console.error('action.yml must declare a main entrypoint');
+              process.exit(1);
+            }
+            console.log(match[1]);
+          ")
+          node -e "
+            const exports = require('./' + '$MAIN_PATH');
+            const required = ['runReviews', 'validateReview', 'postComment', 'postCheckRun', 'postErrorComment'];
+            for (const name of required) {
+              if (typeof exports[name] !== 'function') {
+                console.error('bundle must export ' + name + ' as a function');
+                process.exit(1);
+              }
+            }
+            console.log('bundle exports the wired package APIs');
+          "

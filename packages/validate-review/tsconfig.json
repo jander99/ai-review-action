@@ -2,7 +2,8 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "../..",
+    "noEmit": false
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*", "../../packages/review-contract/src/**/*"]
 }

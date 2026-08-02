@@ -23,7 +23,6 @@ inputs:
 outputs:
   check-run-url:
     description: 'URL of the created check run'
-    value: ${{ steps.post.outputs.check-run-url }}
 runs:
   using: node24
   main: dist/main.cjs

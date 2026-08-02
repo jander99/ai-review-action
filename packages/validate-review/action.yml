@@ -20,19 +20,18 @@ inputs:
     description: 'Token used by the validator agent via OpenCode provider configuration.'
     required: false
     default: ''
+  config-json:
+    description: 'Deterministic JSON serialization of the validator-only OpenCode config produced by run-reviews. The config carries the __validator__: true marker, the resolved providers (with secret-bearing fields redacted), the effective model, the deny-all permission, and a single agent.validator definition. The validator uses this as its actual OPENCODE_CONFIG.'
+    required: true
 outputs:
   status:
     description: '"valid" or "invalid" depending on the validator outcome.'
-    value: ${{ steps.validate.outputs.status }}
   reason:
     description: 'Human-readable reason when the validator rejects the review.'
-    value: ${{ steps.validate.outputs.reason }}
   cost:
     description: 'Reported cost of the validator call in USD.'
-    value: ${{ steps.validate.outputs.cost }}
   tokens:
     description: 'JSON object with input/output tokens for the validator call.'
-    value: ${{ steps.validate.outputs.tokens }}
 runs:
   using: node24
   main: dist/main.cjs

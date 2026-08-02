@@ -1663,11 +1663,37 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@jander99/ai-review-previous-reviews@workspace:packages/previous-reviews":
+  version: 0.0.0-use.local
+  resolution: "@jander99/ai-review-previous-reviews@workspace:packages/previous-reviews"
+  dependencies:
+    "@jander99/ai-review-review-contract": "npm:1.0.0"
+    "@octokit/rest": "npm:^20.1.1"
+  languageName: unknown
+  linkType: soft
+
+"@jander99/ai-review-review-contract@npm:1.0.0, @jander99/ai-review-review-contract@workspace:packages/review-contract":
+  version: 0.0.0-use.local
+  resolution: "@jander99/ai-review-review-contract@workspace:packages/review-contract"
+  languageName: unknown
+  linkType: soft
+
+"@jander99/ai-review-root-action@workspace:packages/root-action":
+  version: 0.0.0-use.local
+  resolution: "@jander99/ai-review-root-action@workspace:packages/root-action"
+  dependencies:
+    "@actions/core": "npm:^1.11.1"
+    "@actions/github": "npm:^6.0.0"
+    "@octokit/rest": "npm:^21.0.0"
+  languageName: unknown
+  linkType: soft
+
 "@jander99/ai-review-validate-review@workspace:packages/validate-review":
   version: 0.0.0-use.local
   resolution: "@jander99/ai-review-validate-review@workspace:packages/validate-review"
   dependencies:
     "@actions/core": "npm:^1.11.1"
+    "@jander99/ai-review-review-contract": "npm:1.0.0"
   languageName: unknown
   linkType: soft
 

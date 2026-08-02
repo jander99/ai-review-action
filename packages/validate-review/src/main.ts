@@ -1,10 +1,9 @@
-import * as core from '@actions/core';
 import { spawnSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { gzipSync } from 'zlib';
-import { validateReviewStructure } from './structure';
+import { VALIDATOR_AGENT_PROMPT_TEMPLATE } from '@jander99/ai-review-review-contract';
+import { validateReviewDocument } from './structure';
 
 interface OpenCodeEvent {
   type?: string;
@@ -21,30 +20,27 @@ interface OpenCodeEvent {
 
 const DEFAULT_OPENCODE_VERSION = '1.18.5';
 const DEFAULT_TIMEOUT_MINUTES = 5;
-const VALIDATION_PROMPT = `You are a structural validator. Read the file at the path supplied below. Do not inspect the repository, do not call tools other than reading that file, and do not propose fixes.
+const VALIDATOR_PERMISSION = {
+  read: 'deny',
+  glob: 'deny',
+  grep: 'deny',
+  list: 'deny',
+  webfetch: 'deny',
+  edit: 'deny',
+  question: 'deny',
+  doom_loop: 'deny',
+  bash: 'deny',
+} as const;
+const FAILURE_REASON_MAX_CHARS = 1024;
+const FAILURE_REASON_ELLIPSIS = '...';
 
-The file must contain, in this order:
-
-1. A heading line that begins with '# Review — <title-or-ref>'.
-2. A '## Summary' section containing three bullet items with counts:
-   - New findings: <count>
-   - Unresolved from prior review: <count>
-   - Resolved by latest commits: <count>
-3. Optional '## Findings' section. When present, each finding must be a discrete block of the form:
-
-   ### <emoji> <severity> — <short title>
-   Status: <new | unresolved | resolved | new variant>
-   Location: <path>:<line>
-   Description: <text>
-
-   The severity column must be one of: Critical, Warning, Suggestion.
-   The 'Status:', 'Location:', and 'Description:' lines are mandatory for every finding.
-
-If the file matches the structure, reply with exactly one line: VALID
-If the file is missing or malformed, reply with exactly one line: INVALID <reason>
-where <reason> is a short human-readable cause (e.g. "missing ## Summary section", "finding 2 missing Status field"). Do not include any other text in your reply.
-
-Path to validate: <REVIEW_PATH>`;
+function capReason(message: string): string {
+  if (message.length <= FAILURE_REASON_MAX_CHARS) {
+    return message;
+  }
+  const keep = FAILURE_REASON_MAX_CHARS - FAILURE_REASON_ELLIPSIS.length;
+  return `${message.slice(0, keep)}${FAILURE_REASON_ELLIPSIS}`;
+}
 
 function assertOpenCodeVersion(expectedVersion: string): void {
   const result = spawnSync('opencode', ['--version'], {
@@ -87,47 +83,69 @@ function readReviewFile(reviewPath: string): string {
   return content;
 }
 
-function invokeValidator(
-  reviewPath: string,
-  reviewContent: string,
-  model: string,
-  timeoutMinutes: number,
-): { text: string; tokens: { input: number; output: number }; cost: number } {
+interface InvokeValidatorOptions {
+  reviewPath: string;
+  reviewContent: string;
+  model: string;
+  timeoutMinutes: number;
+  passedConfigJson: string;
+}
+
+interface InvokeValidatorResult {
+  text: string;
+  tokens: { input: number; output: number };
+  cost: number;
+}
+
+function invokeValidator(options: InvokeValidatorOptions): InvokeValidatorResult {
   const runnerTemp = process.env.RUNNER_TEMP ?? os.tmpdir();
   const homeDir = fs.mkdtempSync(path.join(runnerTemp, 'ai-review-validate-'));
   fs.chmodSync(homeDir, 0o700);
 
+  const prompt = VALIDATOR_AGENT_PROMPT_TEMPLATE
+    .replace('__REVIEW_PATH__', options.reviewPath)
+    .concat('\n\n---\n\nReview file contents:\n\n', options.reviewContent);
+
+  let baseConfig: Record<string, unknown> = {};
+  try {
+    const parsed = JSON.parse(options.passedConfigJson) as unknown;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      baseConfig = parsed as Record<string, unknown>;
+    } else {
+      throw new Error('passed config is not a JSON object');
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`failed to parse passed OpenCode config: ${message}`);
+  }
+
+  if (baseConfig.__validator__ !== true) {
+    throw new Error(
+      'passed config is not a validator-only config (missing __validator__: true marker)',
+    );
+  }
+
+  const provider =
+    baseConfig.provider && typeof baseConfig.provider === 'object' && !Array.isArray(baseConfig.provider)
+      ? (baseConfig.provider as Record<string, unknown>)
+      : {};
+
   const mergedConfig = {
+    provider,
     agent: {
       validator: {
         description: 'Validates the structural shape of a review markdown file.',
-        mode: 'primary',
-        prompt: VALIDATION_PROMPT.replace('<REVIEW_PATH>', reviewPath),
+        mode: 'primary' as const,
+        prompt,
       },
     },
     default_agent: 'validator',
-    model,
-    permission: {
-      read: 'deny',
-      glob: 'deny',
-      grep: 'deny',
-      list: 'deny',
-      webfetch: 'deny',
-      edit: 'deny',
-      question: 'deny',
-      doom_loop: 'deny',
-      bash: 'deny',
-    },
+    model: options.model,
+    permission: VALIDATOR_PERMISSION,
   };
 
   const configPath = path.join(homeDir, 'opencode.json');
   fs.writeFileSync(configPath, JSON.stringify(mergedConfig, null, 2), 'utf8');
-
-  // Inline the review content into the prompt so the model does not need
-  // the file: read permission. The validator's role is purely structural.
-  const prompt = VALIDATION_PROMPT
-    .replace('<REVIEW_PATH>', reviewPath)
-    .concat('\n\n---\n\nReview file contents:\n\n', reviewContent);
 
   const env = { ...process.env };
   for (const name of Object.keys(env)) {
@@ -138,13 +156,17 @@ function invokeValidator(
   env.OPENCODE_CONFIG = configPath;
   env.HOME = homeDir;
 
-  const result = spawnSync('opencode', ['run', prompt, '--model', model, '--format', 'json'], {
-    env,
-    encoding: 'utf8',
-    maxBuffer: 50 * 1024 * 1024,
-    timeout: timeoutMinutes * 60 * 1000,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  const result = spawnSync(
+    'opencode',
+    ['run', prompt, '--model', options.model, '--format', 'json'],
+    {
+      env,
+      encoding: 'utf8',
+      maxBuffer: 50 * 1024 * 1024,
+      timeout: options.timeoutMinutes * 60 * 1000,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  );
 
   if (result.error) {
     throw result.error;
@@ -199,89 +221,124 @@ function parseValidatorResponse(text: string): { status: 'valid' | 'invalid'; re
   };
 }
 
-function run(): void {
-  const expectedOpenCodeVersion = core.getInput('opencode-version') || DEFAULT_OPENCODE_VERSION;
+/**
+ * Options consumed by the programmatic validator. Callers MUST supply
+ * every input as a field on this object; the function does not
+ * touch `core` directly.
+ */
+export interface ValidateReviewOptions {
+  opencodeVersion: string;
+  reviewPath: string;
+  model: string;
+  timeoutMinutes: number;
+  passedConfigJson: string;
+}
+
+/**
+ * Result of the programmatic validator. Mirrors the action outputs
+ * so the standalone action wrapper can write them via
+ * `core.setOutput` and the root action can use them as plain fields.
+ */
+export interface ValidateReviewResult {
+  status: 'valid' | 'invalid';
+  reason: string;
+  cost: number;
+  tokens: { input: number; output: number };
+  failureReason: string;
+}
+
+const EMPTY_RESULT: ValidateReviewResult = {
+  status: 'invalid',
+  reason: '',
+  cost: 0,
+  tokens: { input: 0, output: 0 },
+  failureReason: '',
+};
+
+export async function validateReview(options: ValidateReviewOptions): Promise<ValidateReviewResult> {
   try {
-    assertOpenCodeVersion(expectedOpenCodeVersion);
+    assertOpenCodeVersion(options.opencodeVersion);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    core.setOutput('status', 'invalid');
-    core.setOutput('reason', `OpenCode version assertion failed: ${message}`);
-    core.setOutput('cost', 0);
-    core.setOutput('tokens', JSON.stringify({ input: 0, output: 0 }));
-    core.setFailed(`OpenCode version assertion failed: ${message}`);
-    return;
+    return {
+      ...EMPTY_RESULT,
+      reason: capReason(`OpenCode version assertion failed: ${message}`),
+      failureReason: `OpenCode version assertion failed: ${message}`,
+    };
   }
 
-  const reviewPath = core.getInput('review-path');
-  if (!reviewPath) {
-    core.setOutput('status', 'invalid');
-    core.setOutput('reason', 'review-path input is required');
-    core.setOutput('cost', 0);
-    core.setOutput('tokens', JSON.stringify({ input: 0, output: 0 }));
-    core.setFailed('review-path input is required');
-    return;
+  if (!options.reviewPath) {
+    const reason = 'review-path input is required';
+    return {
+      ...EMPTY_RESULT,
+      reason: capReason(reason),
+      failureReason: reason,
+    };
   }
 
-  const model = core.getInput('model') || 'anthropic/claude-sonnet-4.6';
-  const timeoutMinutes = Number.parseInt(core.getInput('timeout-minutes') || `${DEFAULT_TIMEOUT_MINUTES}`, 10);
-  if (!Number.isFinite(timeoutMinutes) || timeoutMinutes <= 0) {
-    core.setOutput('status', 'invalid');
-    core.setOutput('reason', 'timeout-minutes must be a positive integer');
-    core.setOutput('cost', 0);
-    core.setOutput('tokens', JSON.stringify({ input: 0, output: 0 }));
-    core.setFailed('timeout-minutes must be a positive integer');
-    return;
+  if (!Number.isFinite(options.timeoutMinutes) || options.timeoutMinutes <= 0) {
+    const reason = 'timeout-minutes must be a positive integer';
+    return {
+      ...EMPTY_RESULT,
+      reason: capReason(reason),
+      failureReason: reason,
+    };
+  }
+
+  if (!options.passedConfigJson) {
+    const reason = 'config-json input is required (resolved validator-only OpenCode config from run-reviews)';
+    return {
+      ...EMPTY_RESULT,
+      reason: capReason(reason),
+      failureReason: reason,
+    };
   }
 
   let reviewContent: string;
   try {
-    reviewContent = readReviewFile(reviewPath);
+    reviewContent = readReviewFile(options.reviewPath);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    core.setOutput('status', 'invalid');
-    core.setOutput('reason', message);
-    core.setOutput('cost', 0);
-    core.setOutput('tokens', JSON.stringify({ input: 0, output: 0 }));
-    core.setFailed(`Cannot read review file: ${message}`);
-    return;
+    return {
+      ...EMPTY_RESULT,
+      reason: capReason(message),
+      failureReason: `Cannot read review file: ${message}`,
+    };
   }
 
-  // Deterministic structural check first. The model validator is only
-  // useful when the file already has the right shape; relying on the
-  // model for primary validation allowed looped "thinking" output to
-  // pass.
-  const structural = validateReviewStructure(reviewContent);
+  const structural = validateReviewDocument(reviewContent);
   if (!structural.valid) {
-    core.setOutput('status', 'invalid');
-    core.setOutput('reason', structural.reason);
-    core.setOutput('cost', 0);
-    core.setOutput('tokens', JSON.stringify({ input: 0, output: 0 }));
-    core.setFailed(`Review failed structural validation: ${structural.reason}`);
-    return;
+    return {
+      ...EMPTY_RESULT,
+      reason: capReason(structural.reason),
+      failureReason: `Review failed structural validation: ${structural.reason}`,
+    };
   }
 
-  let result: { text: string; tokens: { input: number; output: number }; cost: number };
+  let result: InvokeValidatorResult;
   try {
-    result = invokeValidator(reviewPath, reviewContent, model, timeoutMinutes);
+    result = invokeValidator({
+      reviewPath: options.reviewPath,
+      reviewContent,
+      model: options.model,
+      timeoutMinutes: options.timeoutMinutes,
+      passedConfigJson: options.passedConfigJson,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    core.setOutput('status', 'invalid');
-    core.setOutput('reason', `validator invocation failed: ${message}`);
-    core.setOutput('cost', 0);
-    core.setOutput('tokens', JSON.stringify({ input: 0, output: 0 }));
-    core.setFailed(`Validator invocation failed: ${message}`);
-    return;
+    return {
+      ...EMPTY_RESULT,
+      reason: capReason(`validator invocation failed: ${message}`),
+      failureReason: `Validator invocation failed: ${message}`,
+    };
   }
 
   const verdict = parseValidatorResponse(result.text);
-  core.setOutput('status', verdict.status);
-  core.setOutput('reason', verdict.reason);
-  core.setOutput('cost', result.cost);
-  core.setOutput('tokens', JSON.stringify(result.tokens));
-  if (verdict.status === 'invalid') {
-    core.setFailed(`Review validation failed: ${verdict.reason}`);
-  }
+  return {
+    status: verdict.status,
+    reason: capReason(verdict.reason),
+    cost: result.cost,
+    tokens: result.tokens,
+    failureReason: verdict.status === 'invalid' ? `Review validation failed: ${verdict.reason}` : '',
+  };
 }
-
-run();
