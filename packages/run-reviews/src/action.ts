@@ -3,7 +3,7 @@ import { runReviews, type RunReviewsOptions, type RunReviewsResult } from './mai
 import { DEFAULT_PERMISSION } from './permissions';
 import type { Permission } from './types';
 
-const DEFAULT_OPENCODE_VERSION = '1.18.5';
+const DEFAULT_OPENCODE_VERSION = '1.18.4';
 const DEFAULT_MODEL = 'anthropic/claude-sonnet-4.6';
 const DEFAULT_TIMEOUT_MINUTES = 30;
 

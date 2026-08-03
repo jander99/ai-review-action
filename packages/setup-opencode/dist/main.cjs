@@ -19963,7 +19963,7 @@ async function installOpenCode(options) {
 }
 
 // packages/setup-opencode/src/action.ts
-var DEFAULT_VERSION = "1.18.5";
+var DEFAULT_VERSION = "1.18.4";
 var DEFAULT_INSTALL_DIR = "~/.opencode";
 function buildOptionsFromCore() {
   return {

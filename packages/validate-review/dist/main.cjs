@@ -20826,7 +20826,7 @@ async function validateReview(options) {
 }
 
 // packages/validate-review/src/action.ts
-var DEFAULT_OPENCODE_VERSION = "1.18.5";
+var DEFAULT_OPENCODE_VERSION = "1.18.4";
 var DEFAULT_MODEL = "anthropic/claude-sonnet-4.6";
 var DEFAULT_TIMEOUT_MINUTES2 = 5;
 function readStringInput(name, fallback) {

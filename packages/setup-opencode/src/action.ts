@@ -1,7 +1,7 @@
 import * as core from '@actions/core';
 import { installOpenCode, type InstallOpenCodeOptions, type InstallOpenCodeResult } from './main';
 
-const DEFAULT_VERSION = '1.18.5';
+const DEFAULT_VERSION = '1.18.4';
 const DEFAULT_INSTALL_DIR = '~/.opencode';
 
 function buildOptionsFromCore(): InstallOpenCodeOptions {
