@@ -33,7 +33,7 @@ The sub-actions remain available for callers who want fine-grained composition:
 
 ## Remaining work
 
-1. Add contract fixtures/tests for the pinned OpenCode 1.18.5 CLI and JSONL result ABI.
+1. Add contract fixtures/tests for the pinned OpenCode 1.18.4 CLI and JSONL result ABI.
 2. Decide whether merged OpenCode configuration should gain schema validation. Earlier design text described this, but the current implementation does not validate against `$schema`.
 3. Keep user-facing documentation aligned when action inputs, provider fallbacks, or OpenCode runtime contracts change.
 

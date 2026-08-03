@@ -20,7 +20,7 @@ import { DEFAULT_PERMISSION } from '@jander99/ai-review-run-reviews/permissions'
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const _DEFAULT_PERMISSION_SHAPE = DEFAULT_PERMISSION;
 
-const DEFAULT_OPENCODE_VERSION = '1.18.5';
+const DEFAULT_OPENCODE_VERSION = '1.18.4';
 const DEFAULT_MODEL = 'anthropic/claude-sonnet-4.6';
 const DEFAULT_TIMEOUT_MINUTES = 30;
 

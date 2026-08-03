@@ -34,8 +34,8 @@ jobs:
         # continue pinning released tags or full commit SHAs.
         uses: ./packages/setup-opencode
         with:
-          version: 1.18.5
-          checksum: cd4a2557a3d6550f27cb5c0257ebe8d73388bb34beda8b6121e6428a74c1eae2
+          version: 1.18.4
+          checksum: bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174
 
       - name: AI Review
         id: review

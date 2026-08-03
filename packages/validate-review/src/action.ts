@@ -1,7 +1,7 @@
 import * as core from '@actions/core';
 import { validateReview, type ValidateReviewOptions, type ValidateReviewResult } from './main';
 
-const DEFAULT_OPENCODE_VERSION = '1.18.5';
+const DEFAULT_OPENCODE_VERSION = '1.18.4';
 const DEFAULT_MODEL = 'anthropic/claude-sonnet-4.6';
 const DEFAULT_TIMEOUT_MINUTES = 5;
 

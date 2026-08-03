@@ -13,7 +13,7 @@ AI Review Action runs repository reviews through the OpenCode CLI using provider
 
 ## Quickstart
 
-The repository includes a minimal prompt at `examples/prompts/code-review.md`. Configure `ANTHROPIC_API_KEY` as an Actions secret, then add this workflow. It uses the [vetted OpenCode 1.18.5 checksum](#vetted-opencode-versions):
+The repository includes a minimal prompt at `examples/prompts/code-review.md`. Configure `ANTHROPIC_API_KEY` as an Actions secret, then add this workflow. It uses the [vetted OpenCode 1.18.4 checksum](#vetted-opencode-versions):
 
 ```yaml
 name: AI Review
@@ -36,8 +36,8 @@ jobs:
       # For production, replace v1 with a full ai-review-action commit SHA.
       - uses: jander99/ai-review-action/packages/setup-opencode@v1
         with:
-          version: 1.18.5
-          checksum: cd4a2557a3d6550f27cb5c0257ebe8d73388bb34beda8b6121e6428a74c1eae2
+          version: 1.18.4
+          checksum: bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174
 
       # Pin this to the same full commit SHA in production.
       - uses: jander99/ai-review-action@v1
@@ -54,7 +54,7 @@ The examples use `@v1` for readability. In production, resolve the `v1` release 
 
 | Input | Required | Default | Description |
 |---|---:|---|---|
-| `version` | No | `1.18.5` | OpenCode version to install. |
+| `version` | No | `1.18.4` | OpenCode version to install. |
 | `checksum` | **Yes** | None | SHA-256 of the selected OpenCode tarball. Use a value from [Vetted OpenCode versions](#vetted-opencode-versions). |
 | `install-dir` | No | `~/.opencode` | Directory where the `opencode` binary is placed. |
 
@@ -93,7 +93,7 @@ These are all inputs accepted by the root `jander99/ai-review-action` action.
 
 | Input | Required | Default | Description |
 |---|---:|---|---|
-| `opencode-version` | No | `1.18.5` | Exact version expected from `opencode --version`. Installation remains the workflow's responsibility. |
+| `opencode-version` | No | `1.18.4` | Exact version expected from `opencode --version`. Installation remains the workflow's responsibility. |
 | `debug` | No | `false` | Capture OpenCode stdout/stderr, apply best-effort redaction, gzip the files, and upload the `ai-review-debug` artifact for 7 days. |
 | `github-token` | No | `${{ github.token }}` | Token used to publish a PR comment or check run. Its permissions must match the event. |
 | `model` | No | `anthropic/claude-sonnet-4.6` | Single OpenCode model in `provider/model` form. Used when `models` is empty. |
@@ -181,7 +181,7 @@ A consumer can pin a sub-action exactly like the root action:
 
 The samples below cover the main supported workflows. They assume:
 
-- The vetted `1.18.5` checksum is embedded directly in each setup step.
+- The vetted `1.18.4` checksum is embedded directly in each setup step.
 - Prompt and configuration files are available under this repository's `examples/` directory; copy them when adapting a sample elsewhere.
 - Referenced provider keys are configured as Actions secrets.
 - `@v1` is replaced with one full action commit SHA for production use.
@@ -209,8 +209,8 @@ jobs:
 
       - uses: jander99/ai-review-action/packages/setup-opencode@v1
         with:
-          version: 1.18.5
-          checksum: cd4a2557a3d6550f27cb5c0257ebe8d73388bb34beda8b6121e6428a74c1eae2
+          version: 1.18.4
+          checksum: bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174
 
       - uses: jander99/ai-review-action@v1
         with:
@@ -239,8 +239,8 @@ jobs:
 
       - uses: jander99/ai-review-action/packages/setup-opencode@v1
         with:
-          version: 1.18.5
-          checksum: cd4a2557a3d6550f27cb5c0257ebe8d73388bb34beda8b6121e6428a74c1eae2
+          version: 1.18.4
+          checksum: bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174
 
       - uses: jander99/ai-review-action@v1
         with:
@@ -273,8 +273,8 @@ jobs:
 
       - uses: jander99/ai-review-action/packages/setup-opencode@v1
         with:
-          version: 1.18.5
-          checksum: cd4a2557a3d6550f27cb5c0257ebe8d73388bb34beda8b6121e6428a74c1eae2
+          version: 1.18.4
+          checksum: bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174
 
       - uses: jander99/ai-review-action@v1
         with:
@@ -310,8 +310,8 @@ jobs:
 
       - uses: jander99/ai-review-action/packages/setup-opencode@v1
         with:
-          version: 1.18.5
-          checksum: cd4a2557a3d6550f27cb5c0257ebe8d73388bb34beda8b6121e6428a74c1eae2
+          version: 1.18.4
+          checksum: bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174
 
       - uses: jander99/ai-review-action@v1
         with:
@@ -345,8 +345,8 @@ jobs:
 
       - uses: jander99/ai-review-action/packages/setup-opencode@v1
         with:
-          version: 1.18.5
-          checksum: cd4a2557a3d6550f27cb5c0257ebe8d73388bb34beda8b6121e6428a74c1eae2
+          version: 1.18.4
+          checksum: bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174
 
       - name: Install skills
         run: npx -y skills@1 add vercel-labs/agent-skills --agent opencode --yes
@@ -384,8 +384,8 @@ jobs:
 
       - uses: jander99/ai-review-action/packages/setup-opencode@v1
         with:
-          version: 1.18.5
-          checksum: cd4a2557a3d6550f27cb5c0257ebe8d73388bb34beda8b6121e6428a74c1eae2
+          version: 1.18.4
+          checksum: bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174
 
       - uses: jander99/ai-review-action@v1
         with:
@@ -418,8 +418,8 @@ jobs:
 
       - uses: jander99/ai-review-action/packages/setup-opencode@v1
         with:
-          version: 1.18.5
-          checksum: cd4a2557a3d6550f27cb5c0257ebe8d73388bb34beda8b6121e6428a74c1eae2
+          version: 1.18.4
+          checksum: bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174
 
       - uses: jander99/ai-review-action@v1
         with:
@@ -454,8 +454,8 @@ jobs:
 
       - uses: jander99/ai-review-action/packages/setup-opencode@v1
         with:
-          version: 1.18.5
-          checksum: cd4a2557a3d6550f27cb5c0257ebe8d73388bb34beda8b6121e6428a74c1eae2
+          version: 1.18.4
+          checksum: bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174
 
       - uses: jander99/ai-review-action@v1
         with:
@@ -501,11 +501,19 @@ Use the checksum below for the exact release asset named in the same row. Every 
 
 | OpenCode version | Asset | SHA-256 |
 |---|---|---|
-| `1.18.5` | `opencode-linux-x64.tar.gz` | `cd4a2557a3d6550f27cb5c0257ebe8d73388bb34beda8b6121e6428a74c1eae2` |
+| `1.18.4` | `opencode-linux-x64.tar.gz` | `bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174` |
 
-This value was computed from the [`v1.18.5` Linux x64 release asset](https://github.com/anomalyco/opencode/releases/download/v1.18.5/opencode-linux-x64.tar.gz). An independent calculation of that exact archive must match the published value. Do not reuse a checksum for another version, platform, filename, or rebuilt archive.
+This value was computed from the [`v1.18.4` Linux x64 release asset](https://github.com/anomalyco/opencode/releases/download/v1.18.4/opencode-linux-x64.tar.gz). An independent calculation of that exact archive must match the published value. Do not reuse a checksum for another version, platform, filename, or rebuilt archive.
 
 The action itself should also be pinned by full commit SHA in production. The OpenCode archive checksum protects the downloaded runtime; the action commit SHA protects the installer and review logic.
+
+## Permission model
+
+The action sets a deny-list `OPENCODE_PERMISSION` JSON before spawning the OpenCode CLI. The deny list covers the built-in filesystem and shell tools (`bash`, `read`, `glob`, `grep`, `list`, `webfetch`, `edit`, `write`) plus interaction controls (`question`, `doom_loop`). The action does NOT deny the built-in sub-agent tools (`task`, `todowrite`) — by design, so users adding MCP servers and plugins to their OpenCode config can opt into those tool capabilities without modifying the action.
+
+In OpenCode's permission resolver, **tool names not listed in the JSON default to allowed**. So MCP server tools (e.g. `codegraph_explore`, `codegraph_search`) and any user-added plugin tools work out of the box. The baked-in review prompt forbids the model from using `task`/`todowrite` under non-agentic invocation — see `REVIEW_AGENT_PROMPT_TEMPLATE` — but the permission layer stays extensible.
+
+To restrict an MCP tool that the model should not reach, the consumer's `opencode-config` input can override `OPENCODE_PERMISSION` with explicit allow/deny entries for those tool names.
 
 ## Security
 

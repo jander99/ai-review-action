@@ -6,7 +6,7 @@ import { VALIDATOR_AGENT_PROMPT_TEMPLATE } from '@jander99/ai-review-review-cont
 import { runOpenCodeRun } from '@jander99/ai-review-run-reviews';
 import { validateReviewDocument } from './structure';
 
-const DEFAULT_OPENCODE_VERSION = '1.18.5';
+const DEFAULT_OPENCODE_VERSION = '1.18.4';
 const DEFAULT_TIMEOUT_MINUTES = 5;
 const VALIDATOR_PERMISSION = {
   read: 'deny',

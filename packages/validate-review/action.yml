@@ -7,7 +7,7 @@ inputs:
   opencode-version:
     description: 'OpenCode version expected to be installed on PATH.'
     required: false
-    default: '1.18.5'
+    default: '1.18.4'
   model:
     description: 'OpenCode model in provider/model format used for the validator call.'
     required: false
