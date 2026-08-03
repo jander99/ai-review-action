@@ -25,6 +25,9 @@ const TITLE = 'My Pull Request';
 const CLEAN_DOCUMENT = [
   `# Review — ${TITLE}`,
   '',
+  '## Scope',
+  '- Reviewed test fixture',
+  '',
   '## Summary',
   '',
   '- New findings: 0',
@@ -34,6 +37,9 @@ const CLEAN_DOCUMENT = [
 
 const STANDARD_FINDING_DOCUMENT = [
   `# Review — ${TITLE}`,
+  '',
+  '## Scope',
+  '- Reviewed test fixture',
   '',
   '## Summary',
   '',
@@ -69,6 +75,9 @@ test('standard finding document is valid', () => {
 test('wrong section order is invalid', () => {
   const reordered = [
     `# Review — ${TITLE}`,
+    '',
+    '## Scope',
+    '- Reviewed test fixture',
     '',
     '## Findings',
     '',
@@ -110,6 +119,9 @@ test('extraction strips preamble', () => {
     'still thinking...',
     `${'# Review — '}${TITLE}`,
     '',
+    '## Scope',
+    '- Reviewed test fixture',
+    '',
     '## Summary',
     '',
     '- New findings: 0',
@@ -128,6 +140,9 @@ test('extraction ignores heading inside fenced code block', () => {
     `# Review — fake heading on purpose`,
     '```',
     `# Review — ${TITLE}`,
+    '',
+    '## Scope',
+    '- Reviewed test fixture',
     '',
     '## Summary',
     '',
@@ -150,6 +165,9 @@ test('missing Status field is invalid', () => {
   const doc = [
     `# Review — ${TITLE}`,
     '',
+    '## Scope',
+    '- Reviewed test fixture',
+    '',
     '## Summary',
     '',
     '- New findings: 1',
@@ -170,6 +188,9 @@ test('missing Status field is invalid', () => {
 test('duplicate Status field is invalid', () => {
   const doc = [
     `# Review — ${TITLE}`,
+    '',
+    '## Scope',
+    '- Reviewed test fixture',
     '',
     '## Summary',
     '',
@@ -194,6 +215,9 @@ test('invalid Status value is invalid', () => {
   const doc = [
     `# Review — ${TITLE}`,
     '',
+    '## Scope',
+    '- Reviewed test fixture',
+    '',
     '## Summary',
     '',
     '- New findings: 1',
@@ -215,6 +239,9 @@ test('invalid Status value is invalid', () => {
 test('invalid Location (no line) is invalid', () => {
   const doc = [
     `# Review — ${TITLE}`,
+    '',
+    '## Scope',
+    '- Reviewed test fixture',
     '',
     '## Summary',
     '',
@@ -238,6 +265,9 @@ test('Location accepting line range is valid', () => {
   const doc = [
     `# Review — ${TITLE}`,
     '',
+    '## Scope',
+    '- Reviewed test fixture',
+    '',
     '## Summary',
     '',
     '- New findings: 1',
@@ -259,6 +289,9 @@ test('mismatched severity emoji is invalid', () => {
   const doc = [
     `# Review — ${TITLE}`,
     '',
+    '## Scope',
+    '- Reviewed test fixture',
+    '',
     '## Summary',
     '',
     '- New findings: 1',
@@ -279,6 +312,9 @@ test('mismatched severity emoji is invalid', () => {
 test('count mismatch is invalid', () => {
   const doc = [
     `# Review — ${TITLE}`,
+    '',
+    '## Scope',
+    '- Reviewed test fixture',
     '',
     '## Summary',
     '',
@@ -302,6 +338,9 @@ test('arbitrary extra prose after final finding is invalid', () => {
   const doc = [
     `# Review — ${TITLE}`,
     '',
+    '## Scope',
+    '- Reviewed test fixture',
+    '',
     '## Summary',
     '',
     '- New findings: 1',
@@ -324,7 +363,7 @@ test('arbitrary extra prose after final finding is invalid', () => {
 
 test('document exceeding char cap is invalid', () => {
   const big = 'a'.repeat(MAX_CHARS + 1);
-  const doc = `# Review — ${TITLE}\n\n## Summary\n\n- New findings: 0\n- Unresolved from prior review: 0\n- Resolved by latest commits: 0\n${big}`;
+  const doc = `# Review — ${TITLE}\n\n## Scope\n- Reviewed test fixture\n\n## Summary\n\n- New findings: 0\n- Unresolved from prior review: 0\n- Resolved by latest commits: 0\n${big}`;
   const result = validateReviewDocument(doc);
   assert.equal(result.valid, false);
   assert.match(result.reason, /chars/);
@@ -348,6 +387,9 @@ test('mergeReviewDocuments dedupes and recomputes counts', () => {
   const a = [
     `# Review — ${TITLE}`,
     '',
+    '## Scope',
+    '- Reviewed test fixture',
+    '',
     '## Summary',
     '',
     '- New findings: 2',
@@ -369,6 +411,9 @@ test('mergeReviewDocuments dedupes and recomputes counts', () => {
 
   const b = [
     `# Review — ${TITLE}`,
+    '',
+    '## Scope',
+    '- Reviewed test fixture',
     '',
     '## Summary',
     '',
@@ -402,6 +447,9 @@ test('mergeReviewDocuments counts new variant as New', () => {
   const a = [
     `# Review — ${TITLE}`,
     '',
+    '## Scope',
+    '- Reviewed test fixture',
+    '',
     '## Summary',
     '',
     '- New findings: 1',
@@ -425,6 +473,9 @@ test('mergeReviewDocuments counts new variant as New', () => {
 test('mergeReviewDocuments handles unresolved and resolved statuses', () => {
   const a = [
     `# Review — ${TITLE}`,
+    '',
+    '## Scope',
+    '- Reviewed test fixture',
     '',
     '## Summary',
     '',
@@ -462,6 +513,9 @@ test('fusion-style merged output validates', () => {
   const original = [
     `# Review — ${TITLE}`,
     '',
+    '## Scope',
+    '- Reviewed test fixture',
+    '',
     '## Summary',
     '',
     '- New findings: 1',
@@ -484,6 +538,7 @@ test('fusion-style merged output validates', () => {
 test('renderDocument emits canonical shape', () => {
   const rendered = renderDocument({
     title: TITLE,
+    scope: ['Reviewed test fixture'],
     summary: { new: 1, unresolved: 0, resolved: 0 },
     findings: [
       {
@@ -512,6 +567,9 @@ test('empty `## Findings` section after the heading is invalid', () => {
   const doc = [
     `# Review — ${TITLE}`,
     '',
+    '## Scope',
+    '- Reviewed test fixture',
+    '',
     '## Summary',
     '',
     '- New findings: 1',
@@ -529,6 +587,9 @@ test('empty `## Findings` section after the heading is invalid', () => {
 test('Description before Status in a block is invalid (out of order)', () => {
   const doc = [
     `# Review — ${TITLE}`,
+    '',
+    '## Scope',
+    '- Reviewed test fixture',
     '',
     '## Summary',
     '',
@@ -552,6 +613,9 @@ test('Location before Status in a block is invalid (out of order)', () => {
   const doc = [
     `# Review — ${TITLE}`,
     '',
+    '## Scope',
+    '- Reviewed test fixture',
+    '',
     '## Summary',
     '',
     '- New findings: 1',
@@ -573,6 +637,9 @@ test('Location before Status in a block is invalid (out of order)', () => {
 test('unterminated fenced block containing Summary is invalid', () => {
   const doc = [
     `# Review — ${TITLE}`,
+    '',
+    '## Scope',
+    '- Reviewed test fixture',
     '',
     '```markdown',
     '## Summary',
@@ -664,6 +731,9 @@ test('review-contract project.json declares a test target that runs node --test'
 
 const MULTI_LOCATION_PROLOGUE = [
   `# Review — ${TITLE}`,
+  '',
+  '## Scope',
+  '- Reviewed test fixture',
   '',
   '## Summary',
   '',
@@ -783,6 +853,7 @@ test('round-trip: rendered multi-location document validates and re-canonicalize
   // round-trip guarantee the prompt-template changes depend on.
   const rendered = renderDocument({
     title: TITLE,
+    scope: ['Reviewed test fixture'],
     summary: { new: 1, unresolved: 0, resolved: 0 },
     findings: [
       {
@@ -864,6 +935,9 @@ test('valid review + sentinel + trailing prose extracts to the review with no se
   const doc = [
     `# Review — ${TITLE}`,
     '',
+    '## Scope',
+    '- Reviewed test fixture',
+    '',
     '## Summary',
     '',
     '- New findings: 0',
@@ -899,6 +973,9 @@ test('sentinel with trailing prose and a finding still validates and yields the 
   const doc = [
     `# Review — ${TITLE}`,
     '',
+    '## Scope',
+    '- Reviewed test fixture',
+    '',
     '## Summary',
     '',
     '- New findings: 1',
@@ -930,6 +1007,9 @@ test('text without a sentinel preserves existing behavior (input passes through 
   const doc = [
     `# Review — ${TITLE}`,
     '',
+    '## Scope',
+    '- Reviewed test fixture',
+    '',
     '## Summary',
     '',
     '- New findings: 0',
@@ -948,6 +1028,9 @@ test('text without a sentinel preserves existing behavior (input passes through 
 test('sentinel inside a fenced code block is ignored', () => {
   const doc = [
     `# Review — ${TITLE}`,
+    '',
+    '## Scope',
+    '- Reviewed test fixture',
     '',
     '## Summary',
     '',
@@ -987,6 +1070,9 @@ test('first eligible sentinel wins when more than one exists', () => {
   // reached.
   const doc = [
     `# Review — ${TITLE}`,
+    '',
+    '## Scope',
+    '- Reviewed test fixture',
     '',
     '## Summary',
     '',
@@ -1123,7 +1209,7 @@ test('unexpected heading between Scope and Summary is invalid', () => {
   assert.match(result.reason, /unexpected content between heading and ## Summary/);
 });
 
-test('renderDocument renders optional Scope before Summary', () => {
+test('renderDocument renders required Scope before Summary', () => {
   const rendered = renderDocument({
     title: TITLE,
     scope: ['Reviewed X'],
@@ -1166,4 +1252,31 @@ test('REVIEW and SYNTHESIS templates require the final-line sentinel; VALIDATOR 
     !VALIDATOR_AGENT_PROMPT_TEMPLATE.includes(SENTINEL),
     'VALIDATOR_AGENT_PROMPT_TEMPLATE must NOT mention the sentinel',
   );
+});
+
+test('document without a Scope section is invalid', () => {
+  const doc = [
+    `# Review — ${TITLE}`,
+    '',
+    '## Summary',
+    '',
+    '- New findings: 0',
+    '- Unresolved from prior review: 0',
+    '- Resolved by latest commits: 0',
+  ].join('\n');
+  const result = validateReviewDocument(doc);
+  assert.equal(result.valid, false);
+  assert.match(result.reason, /missing ## Scope section/);
+});
+
+test('Scope without Summary remains invalid with the missing Summary reason', () => {
+  const doc = [
+    `# Review — ${TITLE}`,
+    '',
+    '## Scope',
+    '- Reviewed the change.',
+  ].join('\n');
+  const result = validateReviewDocument(doc);
+  assert.equal(result.valid, false);
+  assert.match(result.reason, /missing ## Summary section/);
 });

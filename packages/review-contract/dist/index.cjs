@@ -114,8 +114,8 @@ Output contract \u2014 strict, single canonical document:
 - The document must begin with EXACTLY this heading on the first line:
     # Review \u2014 <title-or-ref>
   Use the PR title for 'pull_request' events, or the ref for other events. The text after the em dash must be non-empty.
-- Immediately after the heading (blank lines allowed), an OPTIONAL '## Scope' section. When present it must contain one or more bullet lines, each non-empty, that name the files, areas, or aspects of the change you actually examined. This section is observational \u2014 it documents your work so downstream readers can see what you reviewed. Emit it when you reviewed something specific; omit it when the change is trivial. Only one '## Scope' section is permitted.
-- Immediately after '## Scope' (or after the heading if '## Scope' is omitted), a '## Summary' section containing exactly three bullet lines:
+- Immediately after the heading (blank lines allowed), a REQUIRED '## Scope' section. It must contain one or more bullet lines, each non-empty, that name the files, areas, or aspects of the change you actually examined. This section documents your work \u2014 emit it on every review. Do not omit it. Boilerplate is acceptable when there is nothing specific to say ("Reviewed the change."), but specific references to files and areas are preferred. Only one '## Scope' section is permitted.
+- Immediately after '## Scope', a '## Summary' section containing exactly three bullet lines:
     - New findings: <integer>
     - Unresolved from prior review: <integer>
     - Resolved by latest commits: <integer>
@@ -157,8 +157,8 @@ Output contract \u2014 strict, single canonical document:
 - The document must begin with EXACTLY this heading on the first line:
     # Review \u2014 <title-or-ref>
   Use the title or ref supplied in the task prompt.
-- Immediately after the heading (blank lines allowed), an OPTIONAL '## Scope' section. When present it must contain one or more bullet lines, each non-empty, that name the files, areas, or aspects of the change you actually examined. This section is observational \u2014 it documents your work so downstream readers can see what you reviewed. Emit it when you reviewed something specific; omit it when the change is trivial. Only one '## Scope' section is permitted.
-- Immediately after '## Scope' (or after the heading if '## Scope' is omitted), a '## Summary' section containing exactly three bullet lines:
+- Immediately after the heading (blank lines allowed), a REQUIRED '## Scope' section. It must contain one or more bullet lines, each non-empty, that name the files, areas, or aspects of the change you actually examined. This section documents your work \u2014 emit it on every review. Do not omit it. Boilerplate is acceptable when there is nothing specific to say ("Reviewed the change."), but specific references to files and areas are preferred. Only one '## Scope' section is permitted.
+- Immediately after '## Scope', a '## Summary' section containing exactly three bullet lines:
     - New findings: <integer>
     - Unresolved from prior review: <integer>
     - Resolved by latest commits: <integer>
@@ -195,8 +195,8 @@ var VALIDATOR_AGENT_PROMPT_TEMPLATE = `You are a structural validator. The file 
 The file must contain a single canonical document that follows the strict review contract:
 
 1. First line: '# Review \u2014 <title-or-ref>' with a non-empty title-or-ref after the em dash. No other form is accepted.
-2. Optional '## Scope' section between the heading and '## Summary'. When present it must contain one or more bullet lines, each non-empty. Only one '## Scope' section is permitted. The section is observational \u2014 its content is not strictly validated, only its structural presence and ordering.
-3. Immediately after '## Scope' (or after the heading if '## Scope' is omitted), a '## Summary' section containing exactly three bullet lines:
+2. Immediately after the heading (blank lines allowed), a REQUIRED '## Scope' section. It must contain one or more bullet lines, each non-empty, that name the files, areas, or aspects of the change you actually examined. This section documents your work \u2014 emit it on every review. Do not omit it. Boilerplate is acceptable when there is nothing specific to say ("Reviewed the change."), but specific references to files and areas are preferred. Only one '## Scope' section is permitted.
+3. Immediately after '## Scope', a '## Summary' section containing exactly three bullet lines:
     - New findings: <integer>
     - Unresolved from prior review: <integer>
     - Resolved by latest commits: <integer>
@@ -537,6 +537,9 @@ function validateReviewDocument(content) {
       return { valid: false, reason: "duplicate ## Scope section" };
     }
     if (SUMMARY_HEADING_PATTERN.test(line)) {
+      if (!scope) {
+        return { valid: false, reason: "missing ## Scope section" };
+      }
       summaryIdx = i;
       break;
     }
@@ -683,10 +686,19 @@ function mergeReviewDocuments(documents, titleOrRef) {
   const seen = /* @__PURE__ */ new Set();
   const merged = [];
   const counts = { new: 0, unresolved: 0, resolved: 0 };
+  const mergedScope = [];
+  const scopeSeen = /* @__PURE__ */ new Set();
   for (const document of documents) {
     const validation = validateReviewDocument(document);
     if (!validation.valid || !validation.document) {
       continue;
+    }
+    for (const item of validation.document.scope ?? []) {
+      const normalized = normalizeForKey(item);
+      if (!scopeSeen.has(normalized)) {
+        scopeSeen.add(normalized);
+        mergedScope.push(item.trim());
+      }
     }
     for (const finding of validation.document.findings) {
       const key = makeFindingKey(finding);
@@ -706,6 +718,7 @@ function mergeReviewDocuments(documents, titleOrRef) {
   }
   return renderDocument({
     title: titleOrRef,
+    scope: mergedScope.length > 0 ? mergedScope : ["Reviewed the change."],
     summary: counts,
     findings: merged
   });

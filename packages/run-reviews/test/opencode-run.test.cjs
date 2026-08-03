@@ -56,7 +56,7 @@ test('runOpenCodeRun returns terminal text after a successful process exit', asy
   const { result, spawnCalls } = runWithEvents([
     { type: 'text', part: { type: 'text', text: 'draft' } },
     { type: 'step_finish', part: { type: 'step-finish', reason: 'tool-calls' } },
-    { type: 'text', part: { type: 'text', text: '# Review — title\n\n## Summary' } },
+    { type: 'text', part: { type: 'text', text: '# Review — title\n\n## Scope\n- Reviewed X\n\n## Summary' } },
     {
       type: 'step_finish',
       part: {
@@ -69,7 +69,7 @@ test('runOpenCodeRun returns terminal text after a successful process exit', asy
   ]);
   const resultValue = await result;
 
-  assert.equal(resultValue.text, '# Review — title\n\n## Summary');
+  assert.equal(resultValue.text, '# Review — title\n\n## Scope\n- Reviewed X\n\n## Summary');
   assert.equal(resultValue.model, MODEL);
   assert.equal(spawnCalls.length, 1);
   assert.equal(spawnCalls[0].command, 'opencode');
