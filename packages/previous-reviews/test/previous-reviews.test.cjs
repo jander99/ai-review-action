@@ -21,7 +21,7 @@ function makeComment(overrides) {
     {
       id: 1,
       user: { login: PRIOR_REVIEW_BOT_LOGIN },
-      body: '# Review — PR Title\n\n## Summary\n\n- New findings: 0\n- Unresolved from prior review: 0\n- Resolved by latest commits: 0',
+      body: '# Review — PR Title\n\n## Scope\n- Reviewed test fixture\n\n## Summary\n\n- New findings: 0\n- Unresolved from prior review: 0\n- Resolved by latest commits: 0',
       created_at: '2026-08-01T12:00:00Z',
     },
     overrides,
@@ -85,6 +85,9 @@ test('formatPriorReviews caps to PRIOR_REVIEW_LIMIT comments', () => {
 test('formatPriorReviews truncates oversized comments on a non-fence line boundary', () => {
   const oversizedBody = [
     '# Review — Title',
+    '',
+    '## Scope',
+    '- Reviewed test fixture',
     '',
     '## Summary',
     '',
@@ -218,7 +221,7 @@ test('fetchPriorReviews returns null when all bot bodies are trimmed away', asyn
 
 test('formatPriorReviews preserves a short body verbatim ("abc" not truncated)', () => {
   const comment = toPriorComment(
-    makeComment({ id: 10, body: '# Review — PR Title\n\n## Summary\n\n- New findings: 0\n- Unresolved from prior review: 0\n- Resolved by latest commits: 0' }),
+    makeComment({ id: 10, body: '# Review — PR Title\n\n## Scope\n- Reviewed test fixture\n\n## Summary\n\n- New findings: 0\n- Unresolved from prior review: 0\n- Resolved by latest commits: 0' }),
   );
   const result = formatPriorReviews([comment]);
   // The header is present, the body is present, and the body matches the
@@ -273,6 +276,9 @@ test('formatPriorReviews truncates cleanly when a comment body opens an untermin
   // an unterminated ``` block.
   const body = [
     '# Review — Title',
+    '',
+    '## Scope',
+    '- Reviewed test fixture',
     '',
     '## Summary',
     '',
@@ -384,6 +390,24 @@ test('formatPriorReviews preserves a plain ASCII string (abc)', () => {
   );
 });
 
+test('formatPriorReviews preserves Scope content verbatim', () => {
+  const body = [
+    '# Review — PR Title',
+    '',
+    '## Scope',
+    '- packages/review-contract/src/index.ts',
+    '- Structural validation',
+    '',
+    '## Summary',
+    '- New findings: 0',
+    '- Unresolved from prior review: 0',
+    '- Resolved by latest commits: 0',
+  ].join('\n');
+  const result = formatPriorReviews([
+    toPriorComment(makeComment({ id: 40, body })),
+  ]);
+  assert.ok(result.includes(body));
+});
 test('formatPriorReviews preserves a single emoji as a complete pair', () => {
   // Body is just one emoji - the entire string is a single
   // high/low surrogate pair. Truncation must keep it intact.

@@ -388,6 +388,36 @@ test('missing github-token -> warning is emitted, no throw, publishError skips t
 // Phase-5 bounded fix Part 3: rejectedDocuments previews surface as warnings.
 // -----------------------------------------------------------------------------
 
+test('document with Scope but missing Summary still rejects with missing Summary section', async () => {
+  setUp();
+  const stdoutSpy = captureStdoutWrites();
+  try {
+    const bundle = loadBundle();
+    const preview = '# Review — Test PR\n\n## Scope\n- Reviewed X';
+    mock.method(bundle.runDeps, 'runReviews', async () =>
+      emptyReviewResult({
+        failureReason: 'all 1 review invocation(s) produced invalid documents',
+        rejectedDocuments: [
+          { model: 'minimax/minimax-m3', reason: 'missing ## Summary section', preview },
+        ],
+      }),
+    );
+    mock.method(bundle.runDeps, 'validateReview', async () => ({ status: 'valid', reason: '', cost: 0, tokens: { input: 0, output: 0 }, failureReason: '' }));
+    mock.method(bundle.runDeps, 'postErrorComment', async () => ({ commentUrl: '' }));
+    mock.method(bundle.runDeps, 'postCheckRun', async () => ({ checkRunUrl: '' }));
+    mock.method(bundle.runDeps, 'postComment', async () => ({ commentUrl: '' }));
+
+    await bundle.runWithDeps(bundle.runDeps);
+
+    assert.match(
+      stdoutSpy.captured.join(''),
+      /reason=missing ## Summary section\):%0A# Review — Test PR%0A%0A## Scope%0A- Reviewed X/,
+    );
+  } finally {
+    stdoutSpy.restore();
+    tearDown();
+  }
+});
 test('runFailed with rejectedDocuments -> core.warning emitted per entry with the preview', async () => {
   setUp();
   const stdoutSpy = captureStdoutWrites();
