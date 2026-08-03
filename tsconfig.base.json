@@ -27,7 +27,13 @@
       "@jander99/ai-review-post-comment": ["packages/post-comment/src/index.ts"],
       "@jander99/ai-review-post-check-run": ["packages/post-check-run/src/index.ts"],
       "@jander99/ai-review-post-error-comment": ["packages/post-error-comment/src/index.ts"]
-    }
+    },
+    "noUncheckedSideEffectImports": false,
+    "types": [
+      "*"
+    ],
+    "esModuleInterop": false,
+    "ignoreDeprecations": "6.0"
   },
   "exclude": ["node_modules", "tmp"]
 }
