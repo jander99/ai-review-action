@@ -1031,6 +1031,108 @@ test('stripSentinelBoundary inside a fenced code block is ignored', () => {
   assert.equal(stripSentinelBoundary(before), before);
 });
 
+test('Scope section with bullet lines validates before Summary', () => {
+  const doc = [
+    `# Review — ${TITLE}`,
+    '',
+    '## Scope',
+    '- packages/review-contract/src/index.ts',
+    '- Validator ordering and rendering',
+    '',
+    '## Summary',
+    '- New findings: 0',
+    '- Unresolved from prior review: 0',
+    '- Resolved by latest commits: 0',
+  ].join('\n');
+  const result = validateReviewDocument(doc);
+  assert.deepEqual({ valid: result.valid, reason: result.reason }, { valid: true, reason: '' });
+  assert.deepEqual(result.document.scope, [
+    'packages/review-contract/src/index.ts',
+    'Validator ordering and rendering',
+  ]);
+});
+
+test('Scope section with no bullets is invalid', () => {
+  const doc = [
+    `# Review — ${TITLE}`,
+    '',
+    '## Scope',
+    '',
+    '## Summary',
+    '- New findings: 0',
+    '- Unresolved from prior review: 0',
+    '- Resolved by latest commits: 0',
+  ].join('\n');
+  const result = validateReviewDocument(doc);
+  assert.equal(result.valid, false);
+  assert.match(result.reason, /## Scope section is present but contains no bullets/);
+});
+
+test('duplicate Scope sections are invalid', () => {
+  const doc = [
+    `# Review — ${TITLE}`,
+    '',
+    '## Scope',
+    '- First area',
+    '',
+    '## Scope',
+    '- Second area',
+    '',
+    '## Summary',
+    '- New findings: 0',
+    '- Unresolved from prior review: 0',
+    '- Resolved by latest commits: 0',
+  ].join('\n');
+  const result = validateReviewDocument(doc);
+  assert.equal(result.valid, false);
+  assert.match(result.reason, /duplicate ## Scope section/);
+});
+
+test('Scope after Summary is invalid', () => {
+  const doc = [
+    `# Review — ${TITLE}`,
+    '',
+    '## Summary',
+    '- New findings: 0',
+    '- Unresolved from prior review: 0',
+    '- Resolved by latest commits: 0',
+    '',
+    '## Scope',
+    '- Reviewed X',
+  ].join('\n');
+  const result = validateReviewDocument(doc);
+  assert.equal(result.valid, false);
+});
+
+test('unexpected heading between Scope and Summary is invalid', () => {
+  const doc = [
+    `# Review — ${TITLE}`,
+    '',
+    '## Scope',
+    '- Reviewed X',
+    '',
+    '## Random',
+    '',
+    '## Summary',
+    '- New findings: 0',
+    '- Unresolved from prior review: 0',
+    '- Resolved by latest commits: 0',
+  ].join('\n');
+  const result = validateReviewDocument(doc);
+  assert.equal(result.valid, false);
+  assert.match(result.reason, /unexpected content between heading and ## Summary/);
+});
+
+test('renderDocument renders optional Scope before Summary', () => {
+  const rendered = renderDocument({
+    title: TITLE,
+    scope: ['Reviewed X'],
+    summary: { new: 0, unresolved: 0, resolved: 0 },
+    findings: [],
+  });
+  assert.match(rendered, /^# Review — My Pull Request\n\n## Scope\n- Reviewed X\n\n## Summary\n/);
+  assert.equal(validateReviewDocument(rendered).valid, true);
+});
 test('REVIEW and SYNTHESIS templates require the final-line sentinel; VALIDATOR template does not', () => {
   // Both model templates must instruct the model to emit the exact
   // token on its own line and treat it as a stand-alone completion

@@ -19863,6 +19863,7 @@ function selectTerminalText(parts) {
 }
 var HEADING_LINE_PATTERN = /^# Review — \S.*$/;
 var FENCE_LINE_PATTERN = /^```/;
+var SCOPE_HEADING_PATTERN = /^## Scope\s*$/;
 var SUMMARY_HEADING_PATTERN = /^## Summary\s*$/;
 var FINDINGS_HEADING_PATTERN = /^## Findings\s*$/;
 var FINDING_HEADING_PATTERN = /^### (🔴 Critical|🟡 Warning|🟢 Suggestion) —\s*(\S.*)$/;
@@ -19891,7 +19892,8 @@ Output contract \u2014 strict, single canonical document:
 - The document must begin with EXACTLY this heading on the first line:
     # Review \u2014 <title-or-ref>
   Use the PR title for 'pull_request' events, or the ref for other events. The text after the em dash must be non-empty.
-- Immediately after the heading (blank lines allowed), a '## Summary' section containing exactly three bullet lines:
+- Immediately after the heading (blank lines allowed), an OPTIONAL '## Scope' section. When present it must contain one or more bullet lines, each non-empty, that name the files, areas, or aspects of the change you actually examined. This section is observational \u2014 it documents your work so downstream readers can see what you reviewed. Emit it when you reviewed something specific; omit it when the change is trivial. Only one '## Scope' section is permitted.
+- Immediately after '## Scope' (or after the heading if '## Scope' is omitted), a '## Summary' section containing exactly three bullet lines:
     - New findings: <integer>
     - Unresolved from prior review: <integer>
     - Resolved by latest commits: <integer>
@@ -19933,7 +19935,8 @@ Output contract \u2014 strict, single canonical document:
 - The document must begin with EXACTLY this heading on the first line:
     # Review \u2014 <title-or-ref>
   Use the title or ref supplied in the task prompt.
-- Immediately after the heading (blank lines allowed), a '## Summary' section containing exactly three bullet lines:
+- Immediately after the heading (blank lines allowed), an OPTIONAL '## Scope' section. When present it must contain one or more bullet lines, each non-empty, that name the files, areas, or aspects of the change you actually examined. This section is observational \u2014 it documents your work so downstream readers can see what you reviewed. Emit it when you reviewed something specific; omit it when the change is trivial. Only one '## Scope' section is permitted.
+- Immediately after '## Scope' (or after the heading if '## Scope' is omitted), a '## Summary' section containing exactly three bullet lines:
     - New findings: <integer>
     - Unresolved from prior review: <integer>
     - Resolved by latest commits: <integer>
@@ -19970,12 +19973,13 @@ var VALIDATOR_AGENT_PROMPT_TEMPLATE = `You are a structural validator. The file 
 The file must contain a single canonical document that follows the strict review contract:
 
 1. First line: '# Review \u2014 <title-or-ref>' with a non-empty title-or-ref after the em dash. No other form is accepted.
-2. Immediately after the heading (blank lines allowed), a '## Summary' section containing exactly three bullet lines:
+2. Optional '## Scope' section between the heading and '## Summary'. When present it must contain one or more bullet lines, each non-empty. Only one '## Scope' section is permitted. The section is observational \u2014 its content is not strictly validated, only its structural presence and ordering.
+3. Immediately after '## Scope' (or after the heading if '## Scope' is omitted), a '## Summary' section containing exactly three bullet lines:
     - New findings: <integer>
     - Unresolved from prior review: <integer>
     - Resolved by latest commits: <integer>
    The counts must match the finding blocks below.
-3. Optional '## Findings' section AFTER Summary. Omit the section only when all three counts are zero. When present it must contain one or more blocks. Each block:
+4. Optional '## Findings' section AFTER Summary. Omit the section only when all three counts are zero. When present it must contain one or more blocks. Each block:
     ### <emoji> <severity> \u2014 <short title>
     - Status: <new | unresolved | resolved | new variant>
     - Location: <path>:<line or line-range>
@@ -19984,8 +19988,8 @@ The file must contain a single canonical document that follows the strict review
    The severity column must be one of: Critical, Warning, Suggestion, with the matching emoji (\u{1F534} / \u{1F7E1} / \u{1F7E2}).
    'Location:' must be '<path>:<line>' or '<path>:<line>-<line>' with positive line numbers, OR a comma-separated list of such items on a single line (e.g. 'a.ts:12, b.ts:34-36'). Multi-location fields MUST use comma separators; natural-language connectors such as 'and' / 'or' / '&', semicolons, markdown links, bullets, and empty items are all invalid.
    'Description:' must be a single non-empty line.
-4. Counts: 'new' + 'new variant' count toward New; 'unresolved' toward Unresolved; 'resolved' toward Resolved.
-5. No arbitrary prose outside this shape (no content after the final finding other than blank lines; no extra subsections; no unterminated fenced code block).
+5. Counts: 'new' + 'new variant' count toward New; 'unresolved' toward Unresolved; 'resolved' toward Resolved.
+6. No arbitrary prose outside this shape (no content after the final finding other than blank lines; no extra subsections; no unterminated fenced code block).
 
 If the file matches the structure, reply with exactly one line: VALID
 If the file is missing or malformed, reply with exactly one line: INVALID <reason>
@@ -20234,13 +20238,41 @@ function validateReviewDocument(content) {
   }
   let summaryIdx = -1;
   let findingsIdx = -1;
-  for (let i = 1; i < lines.length; i++) {
+  let scope;
+  let i = 1;
+  while (i < lines.length && lines[i].trim() === "") {
+    i += 1;
+  }
+  if (i < lines.length && SCOPE_HEADING_PATTERN.test(lines[i])) {
+    scope = [];
+    i += 1;
+    while (i < lines.length) {
+      const line = lines[i];
+      if (line.trim() === "") {
+        i += 1;
+        continue;
+      }
+      const bulletMatch = line.match(/^-\s+(\S.*)$/);
+      if (!bulletMatch) {
+        break;
+      }
+      scope.push(bulletMatch[1]);
+      i += 1;
+    }
+    if (scope.length === 0) {
+      return { valid: false, reason: "## Scope section is present but contains no bullets" };
+    }
+  }
+  for (; i < lines.length; i++) {
     const line = lines[i];
     if (FENCE_LINE_PATTERN.test(line)) {
       continue;
     }
     if (isFenceOpenAt(lines, i)) {
       return { valid: false, reason: "malformed fenced code block before ## Summary" };
+    }
+    if (SCOPE_HEADING_PATTERN.test(line)) {
+      return { valid: false, reason: "duplicate ## Scope section" };
     }
     if (SUMMARY_HEADING_PATTERN.test(line)) {
       summaryIdx = i;
@@ -20258,19 +20290,22 @@ function validateReviewDocument(content) {
   if (summary.error) {
     return { valid: false, reason: summary.error };
   }
-  for (let i = summary.endLine + 1; i < lines.length; i++) {
-    const line = lines[i];
+  for (let i2 = summary.endLine + 1; i2 < lines.length; i2++) {
+    const line = lines[i2];
     if (FENCE_LINE_PATTERN.test(line)) {
       continue;
     }
     if (line.trim() === "") {
       continue;
     }
-    if (isFenceOpenAt(lines, i)) {
+    if (isFenceOpenAt(lines, i2)) {
       return { valid: false, reason: "malformed fenced code block before ## Findings" };
     }
+    if (SCOPE_HEADING_PATTERN.test(line)) {
+      return { valid: false, reason: "duplicate ## Scope section" };
+    }
     if (FINDINGS_HEADING_PATTERN.test(line)) {
-      findingsIdx = i;
+      findingsIdx = i2;
       break;
     }
     return { valid: false, reason: `unexpected content between ## Summary and ## Findings: ${line.slice(0, 80)}` };
@@ -20295,12 +20330,12 @@ function validateReviewDocument(content) {
         actualCounts.resolved += 1;
       }
     }
-    for (let i = parsed.endLine; i < lines.length; i++) {
-      const line = lines[i];
+    for (let i2 = parsed.endLine; i2 < lines.length; i2++) {
+      const line = lines[i2];
       if (line.trim() === "") {
         continue;
       }
-      if (isFenceOpenAt(lines, i)) {
+      if (isFenceOpenAt(lines, i2)) {
         continue;
       }
       return { valid: false, reason: `unexpected content after final finding: ${line.slice(0, 80)}` };
@@ -20323,6 +20358,7 @@ function validateReviewDocument(content) {
     reason: "",
     document: {
       title,
+      scope,
       summary: summary.document,
       findings
     }

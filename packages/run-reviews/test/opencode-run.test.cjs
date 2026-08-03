@@ -82,6 +82,26 @@ test('runOpenCodeRun returns terminal text after a successful process exit', asy
   ]);
 });
 
+test('runOpenCodeRun preserves a terminal document with Scope', async () => {
+  const body = [
+    '# Review — title',
+    '',
+    '## Scope',
+    '- Reviewed X',
+    '',
+    '## Summary',
+    '- New findings: 0',
+    '- Unresolved from prior review: 0',
+    '- Resolved by latest commits: 0',
+  ].join('\n');
+  const { result } = runWithEvents([
+    { type: 'text', part: { type: 'text', text: body } },
+    { type: 'step_finish', part: { type: 'step-finish', reason: 'stop' } },
+  ]);
+
+  const resultValue = await result;
+  assert.equal(resultValue.text, body);
+});
 test('runOpenCodeRun reports stderr when the process exits non-zero', async () => {
   const { result } = runWithEvents([], {
     process: { events: [], stderr: 'plugin installation failed', exitCode: 7 },

@@ -384,6 +384,24 @@ test('formatPriorReviews preserves a plain ASCII string (abc)', () => {
   );
 });
 
+test('formatPriorReviews preserves Scope content verbatim', () => {
+  const body = [
+    '# Review — PR Title',
+    '',
+    '## Scope',
+    '- packages/review-contract/src/index.ts',
+    '- Structural validation',
+    '',
+    '## Summary',
+    '- New findings: 0',
+    '- Unresolved from prior review: 0',
+    '- Resolved by latest commits: 0',
+  ].join('\n');
+  const result = formatPriorReviews([
+    toPriorComment(makeComment({ id: 40, body })),
+  ]);
+  assert.ok(result.includes(body));
+});
 test('formatPriorReviews preserves a single emoji as a complete pair', () => {
   // Body is just one emoji - the entire string is a single
   // high/low surrogate pair. Truncation must keep it intact.
