@@ -507,6 +507,14 @@ This value was computed from the [`v1.18.4` Linux x64 release asset](https://git
 
 The action itself should also be pinned by full commit SHA in production. The OpenCode archive checksum protects the downloaded runtime; the action commit SHA protects the installer and review logic.
 
+## Permission model
+
+The action sets a deny-list `OPENCODE_PERMISSION` JSON before spawning the OpenCode CLI. The deny list covers the built-in filesystem and shell tools (`bash`, `read`, `glob`, `grep`, `list`, `webfetch`, `edit`, `write`) plus interaction controls (`question`, `doom_loop`). The action does NOT deny the built-in sub-agent tools (`task`, `todowrite`) — by design, so users adding MCP servers and plugins to their OpenCode config can opt into those tool capabilities without modifying the action.
+
+In OpenCode's permission resolver, **tool names not listed in the JSON default to allowed**. So MCP server tools (e.g. `codegraph_explore`, `codegraph_search`) and any user-added plugin tools work out of the box. The baked-in review prompt forbids the model from using `task`/`todowrite` under non-agentic invocation — see `REVIEW_AGENT_PROMPT_TEMPLATE` — but the permission layer stays extensible.
+
+To restrict an MCP tool that the model should not reach, the consumer's `opencode-config` input can override `OPENCODE_PERMISSION` with explicit allow/deny entries for those tool names.
+
 ## Security
 
 See [SECURITY.md](SECURITY.md) for the trust model, permissions, supply-chain guidance, and operational limitations.
