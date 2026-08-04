@@ -171,7 +171,13 @@ function buildEnvironment(options: RunOpenCodeRunOptions): NodeJS.ProcessEnv {
     write: 'deny',
     question: 'deny',
     doom_loop: 'deny',
-    bash: 'deny',
+    bash: {
+      '*': 'ask',
+      'git diff *': 'allow',
+      'git show *': 'allow',
+      'git log *': 'allow',
+      'git rev-parse *': 'allow',
+    },
   });
   return env;
 }
