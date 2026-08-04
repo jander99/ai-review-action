@@ -7,6 +7,7 @@ The system prompt owns the output format. This file defines only the review focu
 ## Scope of the change
 
 - Review **the diff** first. The diff is the change. The surrounding file is context.
+- **If the diff is not in your runtime context, STOP.** Do not infer what changed from the PR title, the changed-files list, or the commit messages. Emit zero findings; the Summary counts stay at zero; the Scope section honestly states what you could and could not see (e.g. `Reviewed but found nothing to flag`). An invented finding is worse than no finding.
 - Read the diff top-to-bottom, then re-read it bottom-to-top. Most shallow reviews come from reading once.
 - After reading the diff, expand to surrounding code only when you need to assess **impact**: does this break a caller, violate an invariant, miss a code path, or change observable behavior elsewhere?
 - Treat deletions with the same weight as additions. Removing code is a design decision; review it as one.

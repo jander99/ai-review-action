@@ -7,6 +7,7 @@ The system prompt owns the output format. This file defines only the review focu
 ## Scope of the change
 
 - Review the repository **as a whole**, not as a diff. The runtime context provides the directory tree, the entry points, and the major files.
+- **If the repository contents are not in your runtime context, STOP.** Do not infer the directory structure, dependencies, or architecture from the repository name, README, or any other metadata. Emit zero findings; the Summary counts stay at zero; the Scope section honestly states what you could and could not see (e.g. `Reviewed but found nothing to flag`). An invented architectural finding is worse than no finding — it sends the team chasing ghosts.
 - Start from the top: read the README, the package manifest(s), the CI config, the directory structure. Form a mental model of what this system does and how it is organized.
 - Then drill into the modules that carry the most weight: the public API surface, the data model, the I/O boundary, the auth/authz layer, the error handling patterns, the test strategy.
 - Prioritize findings that are **systemic** — issues that recur across files, indicate a missing abstraction, or reveal an undocumented contract. A single typo in one function is not a repo-review finding; the same typo across forty files is.
