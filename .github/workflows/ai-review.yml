@@ -42,7 +42,10 @@ jobs:
         uses: ./packages/root-action
         with:
           model: minimax/minimax-m3
-          prompts: file:examples/prompts/code-review.md
+          # Run code-review and security-review against every PR; the
+          # action deterministically merges both results into one
+          # canonical document before posting the PR comment.
+          prompts: file:examples/prompts/code-review.md,file:examples/prompts/security-review.md
           fusion: false
           # Capture redacted, gzipped OpenCode stdout/stderr so the
           # follow-up step can upload it as a workflow artifact when

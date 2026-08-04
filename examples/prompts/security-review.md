@@ -7,6 +7,7 @@ The system prompt owns the output format. This file defines only the review focu
 ## Scope of the change
 
 - Review **the diff** first. The diff is the change. Treat every new line as a potential entry point.
+- **If the diff is not in your runtime context, STOP.** Do not infer what changed from the PR title, the changed-files list, or the commit messages. Emit zero findings; the Summary counts stay at zero; the Scope section honestly states what you could and could not see (e.g. `Reviewed but found nothing to flag`). An invented security finding is worse than no finding — it is a false positive that teaches the team to ignore real ones.
 - Read the diff with the question: *what is the smallest input that makes this code do something the author did not intend?*
 - For each new endpoint, new exported function, new config knob, new dependency: enumerate the trust boundary it crosses.
 - Pay extra attention to **deletions** in security-sensitive files (auth middleware, input validation, rate limiting, CSRF/origin checks). Removing a defense is a finding even when the new code is fine.

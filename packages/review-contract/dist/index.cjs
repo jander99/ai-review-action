@@ -97,7 +97,7 @@ var FIELD_ORDER = [
 ];
 var CANONICAL_FIELD_ORDER_TEXT = "mandatory Status/Location/Description fields, in that order";
 var REVIEW_DONE_SENTINEL = "<!-- AI_REVIEW_DONE -->";
-var REVIEW_AGENT_PROMPT_TEMPLATE = `FIRST LINE OF YOUR REPLY \u2014 emit this exact line with no preamble, no explanation, no markdown backticks, no XML, no whitespace before it, and nothing inside a  'think' block before it:
+var REVIEW_AGENT_PROMPT_TEMPLATE = `FIRST LINE OF YOUR REPLY \u2014 emit this exact line with no preamble, no explanation, no markdown backticks, no XML, no whitespace before it, and NO <think>...</think> blocks anywhere in your output. All reasoning happens internally before you emit any text; the visible reply is only the canonical review document. Do not spend output budget on visible thinking \u2014 that budget is for the review itself.
 
     # Review \u2014 <title-or-ref>
 
@@ -108,8 +108,8 @@ You are the privileged AI review agent for this GitHub Actions run.
 Runtime context:
 - You are running inside a GitHub Actions Linux x64 runner, invoked non-interactively by the AI Review Action.
 - Each invocation is stateless. There is no interactive user; do not ask follow-up questions.
-- The action installed a pinned OpenCode CLI in non-agentic mode. The built-in filesystem and shell tools (bash, read, glob, grep, list, webfetch, edit, write) are denied by the action's permission config. The built-in task/todowrite sub-agent tools are NOT denied by the action \u2014 they remain available \u2014 but you MUST NOT use them: they are for interactive use only and, under non-agentic permission inheritance, would delegate to a sub-agent with no useful tools, loop on empty results, and prevent this reply from ever being produced.
-- The runtime context and prior-reviews sections below already contain everything you need to write the review: the event payload, the diff, prior comments, and event-specific metadata. Do not run any tool. Do not spawn any sub-agent. Do not explore the filesystem. Your final reply must be the canonical review document itself \u2014 no preamble, no exploration chatter, no tool-call XML, no agentic narration.
+- The action installed a pinned OpenCode CLI in non-agentic mode. The built-in filesystem tools (read, glob, grep, list, webfetch, edit, write) are denied by the action's permission config. Bash is permitted ONLY for read-only git commands ('git diff', 'git show', 'git log', 'git rev-parse'); every other bash invocation is rejected by the runtime. The built-in task/todowrite sub-agent tools are NOT denied by the action \u2014 they remain available \u2014 but you MUST NOT use them: they are for interactive use only and, under non-agentic permission inheritance, would delegate to a sub-agent with no useful tools, loop on empty results, and prevent this reply from ever being produced.
+- The runtime context and prior-reviews sections below contain the event payload, prior comments, and event-specific metadata. The diff is NOT in the runtime context \u2014 retrieve it yourself by running 'git diff <base-sha>..<head-sha>' or 'git show <head-sha>' via bash (the runtime context supplies the SHAs). Other bash commands are denied; the filesystem tools are denied. Do not spawn any sub-agent. Your final reply must be the canonical review document itself \u2014 no preamble, no exploration chatter, no tool-call XML, no agentic narration.
 - Do not modify the repository. Do not commit, push, create branches, or rewrite history. Do not run the project's build, tests, or scripts. Do not install dependencies.
 - Provider credentials live in environment variables and are referenced through OpenCode's '{env:VAR}' configuration. Read them only as needed for the review.
 
@@ -132,7 +132,7 @@ Follow this shape verbatim. Each numbered rule below details one part of it.
 1. The document must begin with EXACTLY this heading on the first line:
     # Review \u2014 <title-or-ref>
    Use the PR title for 'pull_request' events, or the ref for other events. The text after the em dash must be non-empty. The hash, space, "Review", space, em dash, and space are literal \u2014 the heading pattern is /^# Review \u2014 S.*$/ and the validator rejects anything else.
-2. Immediately after the heading (blank lines allowed), a REQUIRED '## Scope' section. It must contain one or more bullet lines, each non-empty, that name the files, areas, or aspects of the change you actually examined. This section documents your work \u2014 emit it on every review. Do not omit it. Boilerplate is acceptable when there is nothing specific to say ("Reviewed the change."), but specific references to files and areas are preferred. Only one '## Scope' section is permitted.
+2. Immediately after the heading (blank lines allowed), a REQUIRED '## Scope' section. It must contain one or more top-level bullet lines, each non-empty, that name the files, areas, or aspects of the change you actually examined. This section documents your work \u2014 emit it on every review. Do not omit it. Boilerplate is acceptable when there is nothing specific to say ("Reviewed the change."), but specific references to files and areas are preferred. Scope bullets must be FLAT (single level): do not nest sub-bullets under a parent bullet \u2014 list each item as its own top-level \`-\` line. The validator tolerates indented continuations by folding them into the parent bullet, but flat is the contract. Only one '## Scope' section is permitted.
 3. Immediately after '## Scope', a '## Summary' section containing exactly three bullet lines:
     - New findings: <integer>
     - Unresolved from prior review: <integer>
@@ -553,12 +553,20 @@ function validateReviewDocument(content) {
         i += 1;
         continue;
       }
-      const bulletMatch = line.match(/^-\s+(\S.*)$/);
-      if (!bulletMatch) {
-        break;
+      const topBulletMatch = line.match(/^-\s+(\S.*)$/);
+      if (topBulletMatch) {
+        scope.push(topBulletMatch[1]);
+        i += 1;
+        continue;
       }
-      scope.push(bulletMatch[1]);
-      i += 1;
+      const subBulletMatch = line.match(/^\s+-\s+(\S.*)$/);
+      if (subBulletMatch && scope.length > 0) {
+        scope[scope.length - 1] = `${scope[scope.length - 1]}
+  ${subBulletMatch[1]}`;
+        i += 1;
+        continue;
+      }
+      break;
     }
     if (scope.length === 0) {
       return { valid: false, reason: "## Scope section is present but contains no bullets" };
