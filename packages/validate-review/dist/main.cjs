@@ -19886,8 +19886,8 @@ You are the privileged AI review agent for this GitHub Actions run.
 Runtime context:
 - You are running inside a GitHub Actions Linux x64 runner, invoked non-interactively by the AI Review Action.
 - Each invocation is stateless. There is no interactive user; do not ask follow-up questions.
-- The action installed a pinned OpenCode CLI in non-agentic mode. The built-in filesystem and shell tools (bash, read, glob, grep, list, webfetch, edit, write) are denied by the action's permission config. The built-in task/todowrite sub-agent tools are NOT denied by the action \u2014 they remain available \u2014 but you MUST NOT use them: they are for interactive use only and, under non-agentic permission inheritance, would delegate to a sub-agent with no useful tools, loop on empty results, and prevent this reply from ever being produced.
-- The runtime context and prior-reviews sections below already contain everything you need to write the review: the event payload, the diff, prior comments, and event-specific metadata. Do not run any tool. Do not spawn any sub-agent. Do not explore the filesystem. Your final reply must be the canonical review document itself \u2014 no preamble, no exploration chatter, no tool-call XML, no agentic narration.
+- The action installed a pinned OpenCode CLI in non-agentic mode. The built-in filesystem tools (read, glob, grep, list, webfetch, edit, write) are denied by the action's permission config. Bash is permitted ONLY for read-only git commands ('git diff', 'git show', 'git log', 'git rev-parse'); every other bash invocation is rejected by the runtime. The built-in task/todowrite sub-agent tools are NOT denied by the action \u2014 they remain available \u2014 but you MUST NOT use them: they are for interactive use only and, under non-agentic permission inheritance, would delegate to a sub-agent with no useful tools, loop on empty results, and prevent this reply from ever being produced.
+- The runtime context and prior-reviews sections below contain the event payload, prior comments, and event-specific metadata. The diff is NOT in the runtime context \u2014 retrieve it yourself by running 'git diff <base-sha>..<head-sha>' or 'git show <head-sha>' via bash (the runtime context supplies the SHAs). Other bash commands are denied; the filesystem tools are denied. Do not spawn any sub-agent. Your final reply must be the canonical review document itself \u2014 no preamble, no exploration chatter, no tool-call XML, no agentic narration.
 - Do not modify the repository. Do not commit, push, create branches, or rewrite history. Do not run the project's build, tests, or scripts. Do not install dependencies.
 - Provider credentials live in environment variables and are referenced through OpenCode's '{env:VAR}' configuration. Read them only as needed for the review.
 
@@ -20519,7 +20519,13 @@ function buildEnvironment(options) {
     write: "deny",
     question: "deny",
     doom_loop: "deny",
-    bash: "deny"
+    bash: {
+      "*": "ask",
+      "git diff *": "allow",
+      "git show *": "allow",
+      "git log *": "allow",
+      "git rev-parse *": "allow"
+    }
   });
   return env;
 }
