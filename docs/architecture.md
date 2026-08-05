@@ -9,7 +9,7 @@ AI Review Action is an Nx monorepo with one root JavaScript action and six stand
 ├── packages/
 │   ├── review-contract/      shared TypeScript helpers (sanitization, validation, prompts)
 │   ├── previous-reviews/     fetch & sanitize prior bot-authored review comments
-│   ├── run-reviews/          review + fusion pipeline; writes the canonical review
+│   ├── run-reviews/          review pipeline; writes the canonical review
 │   ├── validate-review/      structural + model-based validator
 │   ├── setup-opencode/       install pinned OpenCode after SHA-256 verification
 │   ├── post-comment/         publish a PR comment from a review document
