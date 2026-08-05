@@ -27665,12 +27665,18 @@ function mergeReviewDocuments(documents, titleOrRef) {
       }
     }
   }
-  return renderDocument({
+  const merged_document = renderDocument({
     title: titleOrRef,
     scope: mergedScope.length > 0 ? mergedScope : ["Reviewed the change."],
     summary: counts,
     findings: merged
   });
+  if (merged_document.length > MAX_CHARS) {
+    throw new Error(
+      `Merged review document exceeds ${MAX_CHARS} chars (got ${merged_document.length}); reduce the number or size of reviews`
+    );
+  }
+  return merged_document;
 }
 
 // packages/previous-reviews/src/index.ts
@@ -28521,12 +28527,13 @@ async function runReviews(options) {
       if (validResults.length === 1) {
         canonicalDocument = validResults[0].document;
       } else {
-        canonicalDocument = mergeReviewDocuments(
-          validResults.map((entry) => entry.document),
-          titleOrRef
-        );
-        if (canonicalDocument.length > MAX_CHARS) {
-          failureMessage = `Merged review document exceeds ${MAX_CHARS} chars (got ${canonicalDocument.length}); reduce the number or size of reviews`;
+        try {
+          canonicalDocument = mergeReviewDocuments(
+            validResults.map((entry) => entry.document),
+            titleOrRef
+          );
+        } catch (error) {
+          failureMessage = error instanceof Error ? error.message : String(error);
           canonicalDocument = void 0;
         }
       }

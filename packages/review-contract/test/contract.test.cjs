@@ -557,15 +557,41 @@ test('deterministic merge output validates', () => {
     '',
     '## Findings',
     '',
-    '### 🔴 Critical — Fused finding',
+    '### 🔴 Critical — Merged finding',
     '- Status: new',
     '- Location: src/foo.ts:42',
-    '- Description: Fused.',
+    '- Description: Merged.',
   ].join('\n');
-  const fused = mergeReviewDocuments([original], TITLE);
-  const validation = validateReviewDocument(fused);
+  const merged = mergeReviewDocuments([original], TITLE);
+  const validation = validateReviewDocument(merged);
   assert.equal(validation.valid, true, validation.reason);
   assert.equal(validation.document.findings[0].severity, 'Critical');
+});
+
+test('mergeReviewDocuments throws when merged output exceeds MAX_CHARS', () => {
+  // Regression: the merge must enforce the 256 KB contract cap on the
+  // combined output. Two inputs near the cap can sum past the limit; the
+  // merge itself throws so direct programmatic callers cannot silently
+  // receive an invalid oversized document. Scope items must differ
+  // across inputs so the deterministic dedup does not collapse them
+  // back to a single item.
+  const bigDoc = (suffix) => [
+    `# Review — ${TITLE}`,
+    '',
+    '## Scope',
+    `- ${'a'.repeat(MAX_CHARS / 2 + 100)}${suffix}`,
+    '',
+    '## Summary',
+    '',
+    '- New findings: 0',
+    '- Unresolved from prior review: 0',
+    '- Resolved by latest commits: 0',
+  ].join('\n');
+
+  assert.throws(
+    () => mergeReviewDocuments([bigDoc('1'), bigDoc('2')], TITLE),
+    /exceeds \d+ chars/,
+  );
 });
 
 test('renderDocument emits canonical shape', () => {

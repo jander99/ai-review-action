@@ -859,6 +859,12 @@ export function renderDocument(document: ParsedDocument): string {
  * status, severity, location, title, and description. Recomputes counts
  * from the deduplicated finding set. Emits a single valid canonical
  * document.
+ *
+ * Throws if the merged document would exceed `MAX_CHARS` (256 KB). Two
+ * inputs near the cap can sum past the contract limit; the merge itself
+ * enforces the cap so direct programmatic callers cannot silently
+ * receive an invalid oversized document. Callers that want to surface
+ * the failure should catch and report the message.
  */
 export function mergeReviewDocuments(documents: string[], titleOrRef: string): string {
   const seen = new Set<string>();
@@ -902,12 +908,18 @@ export function mergeReviewDocuments(documents: string[], titleOrRef: string): s
     }
   }
 
-  return renderDocument({
+  const merged_document = renderDocument({
     title: titleOrRef,
     scope: mergedScope.length > 0 ? mergedScope : ['Reviewed the change.'],
     summary: counts,
     findings: merged,
   });
+  if (merged_document.length > MAX_CHARS) {
+    throw new Error(
+      `Merged review document exceeds ${MAX_CHARS} chars (got ${merged_document.length}); reduce the number or size of reviews`,
+    );
+  }
+  return merged_document;
 }
 
 // -----------------------------------------------------------------------------

@@ -94,7 +94,8 @@ outputs:
       a valid document, that document is returned. When multiple
       invocations succeed, the documents are deterministically merged
       into one canonical document. Empty when no invocation produced a
-      valid document.
+      valid document, or when valid invocations merged past the
+      contract maximum (see `failure-reason`).
   comment-url:
     description: >-
       URL of the posted PR comment (pull_request events). Empty when

@@ -445,12 +445,17 @@ export async function runReviews(options: RunReviewsOptions): Promise<RunReviews
       if (validResults.length === 1) {
         canonicalDocument = validResults[0].document;
       } else {
-        canonicalDocument = mergeReviewDocuments(
-          validResults.map((entry) => entry.document),
-          titleOrRef,
-        );
-        if (canonicalDocument.length > MAX_CHARS) {
-          failureMessage = `Merged review document exceeds ${MAX_CHARS} chars (got ${canonicalDocument.length}); reduce the number or size of reviews`;
+        try {
+          canonicalDocument = mergeReviewDocuments(
+            validResults.map((entry) => entry.document),
+            titleOrRef,
+          );
+        } catch (error) {
+          // mergeReviewDocuments enforces the MAX_CHARS cap; surface the
+          // message via failureReason and skip the write/read so the
+          // action's downstream consumers see the failure cleanly
+          // instead of an oversized invalid document.
+          failureMessage = error instanceof Error ? error.message : String(error);
           canonicalDocument = undefined;
         }
       }

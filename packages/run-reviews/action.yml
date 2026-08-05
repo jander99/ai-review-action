@@ -60,7 +60,7 @@ outputs:
   effective-model:
     description: 'The effective first model (provider/model format) selected from the inputs.model or inputs.models list. Downstream actions should pass this to the validator as the model input.'
   failure-reason:
-    description: 'Latest failure message produced by the action (empty on success). Captures both pre-document failures (all invocations failed or returned invalid documents) and post-document failures (file write/read errors).'
+    description: 'Latest failure message produced by the action (empty on success). Captures pre-document failures (all invocations failed or returned invalid documents, or the deterministic merge exceeded the 256 KB contract maximum), and post-document failures (file write/read errors).'
 runs:
   using: node24
   main: dist/main.cjs

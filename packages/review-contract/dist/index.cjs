@@ -702,12 +702,18 @@ function mergeReviewDocuments(documents, titleOrRef) {
       }
     }
   }
-  return renderDocument({
+  const merged_document = renderDocument({
     title: titleOrRef,
     scope: mergedScope.length > 0 ? mergedScope : ["Reviewed the change."],
     summary: counts,
     findings: merged
   });
+  if (merged_document.length > MAX_CHARS) {
+    throw new Error(
+      `Merged review document exceeds ${MAX_CHARS} chars (got ${merged_document.length}); reduce the number or size of reviews`
+    );
+  }
+  return merged_document;
 }
 function normalizeTitleForHeading(titleOrRef) {
   return titleOrRef.trim();
