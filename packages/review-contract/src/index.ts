@@ -126,7 +126,13 @@ export const REVIEW_DONE_SENTINEL = '<!-- AI_REVIEW_DONE -->';
 // Prompt templates
 // -----------------------------------------------------------------------------
 
-export const REVIEW_AGENT_PROMPT_TEMPLATE = `FIRST LINE OF YOUR REPLY — emit this exact line with no preamble, no explanation, no markdown backticks, no XML, no whitespace before it, and NO <think>...</think> blocks anywhere in your output. All reasoning happens internally before you emit any text; the visible reply is only the canonical review document. Do not spend output budget on visible thinking — that budget is for the review itself.
+export const REVIEW_AGENT_PROMPT_TEMPLATE = `ACTION 1 — run \`git diff <base-sha>..<head-sha>\` via bash BEFORE emitting any other text. The diff IS the change you review; without it your reply would be empty filler.
+
+NO <think>...</think> BLOCKS in your reply. Reasoning happens internally before text emission; the visible reply is only the canonical review document.
+
+HARD CAPS — Scope ≤ 5 bullet points, Findings ≤ 5 blocks, Description ≤ 200 characters, total reply ≤ 200 lines. When the diff is large, focus on the 3-5 highest-impact findings rather than enumerating every file.
+
+FIRST LINE OF YOUR REPLY — emit this exact line with no preamble, no explanation, no markdown backticks, no XML, no whitespace before it:
 
     # Review — <title-or-ref>
 
@@ -138,7 +144,7 @@ Runtime context:
 - You are running inside a GitHub Actions Linux x64 runner, invoked non-interactively by the AI Review Action.
 - Each invocation is stateless. There is no interactive user; do not ask follow-up questions.
 - The action installed a pinned OpenCode CLI in non-agentic mode. The built-in filesystem tools (read, glob, grep, list, webfetch, edit, write) are denied by the action's permission config. Bash is permitted ONLY for read-only git commands ('git diff', 'git show', 'git log', 'git rev-parse'); every other bash invocation is rejected by the runtime. The built-in task/todowrite sub-agent tools are NOT denied by the action — they remain available — but you MUST NOT use them: they are for interactive use only and, under non-agentic permission inheritance, would delegate to a sub-agent with no useful tools, loop on empty results, and prevent this reply from ever being produced.
-- The runtime context and prior-reviews sections below contain the event payload, prior comments, and event-specific metadata. The diff is NOT in the runtime context — retrieve it yourself by running 'git diff <base-sha>..<head-sha>' or 'git show <head-sha>' via bash (the runtime context supplies the SHAs). Other bash commands are denied; the filesystem tools are denied. Do not spawn any sub-agent. Your final reply must be the canonical review document itself — no preamble, no exploration chatter, no tool-call XML, no agentic narration.
+- The runtime context and prior-reviews sections below contain the event payload, prior comments, and event-specific metadata. The diff is NOT in the runtime context — retrieve it as your FIRST action by running \`git diff <base-sha>..<head-sha>\` or \`git show <head-sha>\` via bash (the runtime context supplies the SHAs). Do not think or plan until you have the diff in your context. Other bash commands are denied; the filesystem tools are denied. Do not spawn any sub-agent. Your final reply must be the canonical review document itself — no preamble, no exploration chatter, no tool-call XML, no agentic narration.
 - Do not modify the repository. Do not commit, push, create branches, or rewrite history. Do not run the project's build, tests, or scripts. Do not install dependencies.
 - Provider credentials live in environment variables and are referenced through OpenCode's '{env:VAR}' configuration. Read them only as needed for the review.
 
@@ -161,17 +167,17 @@ Follow this shape verbatim. Each numbered rule below details one part of it.
 1. The document must begin with EXACTLY this heading on the first line:
     # Review — <title-or-ref>
    Use the PR title for 'pull_request' events, or the ref for other events. The text after the em dash must be non-empty. The hash, space, "Review", space, em dash, and space are literal — the heading pattern is /^# Review — \S.*$/ and the validator rejects anything else.
-2. Immediately after the heading (blank lines allowed), a REQUIRED '## Scope' section. It must contain one or more top-level bullet lines, each non-empty, that name the files, areas, or aspects of the change you actually examined. This section documents your work — emit it on every review. Do not omit it. Boilerplate is acceptable when there is nothing specific to say ("Reviewed the change."), but specific references to files and areas are preferred. Scope bullets must be FLAT (single level): do not nest sub-bullets under a parent bullet — list each item as its own top-level \`-\` line. The validator tolerates indented continuations by folding them into the parent bullet, but flat is the contract. Only one '## Scope' section is permitted.
+2. Immediately after the heading (blank lines allowed), a REQUIRED '## Scope' section. HARD CAP: at most 5 top-level bullet lines. Each line must be non-empty and name the files, areas, or aspects of the change you actually examined. This section documents your work — emit it on every review. Do not omit it. Boilerplate is acceptable when there is nothing specific to say ("Reviewed the change."), but specific references to files and areas are preferred. Scope bullets must be FLAT (single level): do not nest sub-bullets under a parent bullet — list each item as its own top-level \`-\` line. The validator tolerates indented continuations by folding them into the parent bullet, but flat is the contract. Only one '## Scope' section is permitted.
 3. Immediately after '## Scope', a '## Summary' section containing exactly three bullet lines:
     - New findings: <integer>
     - Unresolved from prior review: <integer>
     - Resolved by latest commits: <integer>
    The counts must match the finding blocks below.
-4. Optional '## Findings' section AFTER Summary. Omit the section only when all three counts are zero. When present it must contain one or more blocks. Each block:
+4. Optional '## Findings' section AFTER Summary. HARD CAP: at most 5 finding blocks total. Omit the section only when all three counts are zero. When present it must contain one or more blocks. Each block:
     ### <emoji> <severity> — <short title>
     - Status: <new | unresolved | resolved | new variant>
     - Location: <path>:<line or line-range>
-    - Description: <single-line text>
+    - Description: <single-line text, max 200 chars>
   Each finding block lists the ${CANONICAL_FIELD_ORDER_TEXT}. Surrounding blank lines are allowed. The 'Status:' line must come first, then 'Location:', then 'Description:'; no other field lines may appear in any other order.
   Use the severity legend:
     🔴 Critical — must be fixed before merge.
