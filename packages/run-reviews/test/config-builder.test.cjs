@@ -53,7 +53,6 @@ test('buildValidatorConfig never embeds reviewer agent prompts or reviewOutputPa
   assert.ok(result.config.agent, 'config must include an agent block');
   assert.ok(result.config.agent.validator, 'config must include agent.validator');
   assert.ok(!result.config.agent.review, 'config must NOT include agent.review');
-  assert.ok(!result.config.agent.synthesis, 'config must NOT include agent.synthesis');
   assert.equal(result.config.agent.validator.prompt, validatorPrompt);
 });
 

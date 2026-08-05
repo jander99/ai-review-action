@@ -51,8 +51,6 @@ const REQUIRED_INPUTS = [
   'opencode-config',
   'permission',
   'timeout-minutes',
-  'fusion',
-  'fusion-model',
   'fail-on-error',
   'post-comment',
   'post-check-run',

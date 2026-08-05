@@ -15,7 +15,6 @@ const {
   formatLocations,
   REVIEW_DONE_SENTINEL,
   REVIEW_AGENT_PROMPT_TEMPLATE,
-  SYNTHESIS_AGENT_PROMPT_TEMPLATE,
   VALIDATOR_AGENT_PROMPT_TEMPLATE,
   CANONICAL_FIELD_ORDER_TEXT,
 } = require('../dist/index.cjs');
@@ -509,7 +508,41 @@ test('mergeReviewDocuments handles unresolved and resolved statuses', () => {
   assert.equal(validation.document.summary.resolved, 1);
 });
 
-test('fusion-style merged output validates', () => {
+test('mergeReviewDocuments flattens nested Scope bullets so the merged document round-trips through validateReviewDocument', () => {
+  // Regression: before the flatten-on-merge fix, two valid documents
+  // whose Scope sections contained nested bullets (which the validator's
+  // nested-bullet fold accepts by appending '\n  sub-item' to the parent)
+  // produced a merged document whose scope items had embedded newlines.
+  // renderDocument emitted each as one bullet, the re-validation's outer
+  // loop then saw the indented continuation as 'unexpected content
+  // between heading and ## Summary', and the merge was rejected. Merge
+  // must normalize scope items to single-line bullets so the round-trip
+  // is stable.
+  const docWithNested = [
+    `# Review — ${TITLE}`,
+    '',
+    '## Scope',
+    '- Reviewed file A',
+    '  - sub item A1',
+    '  - sub item A2',
+    '- Reviewed file B',
+    '',
+    '## Summary',
+    '',
+    '- New findings: 0',
+    '- Unresolved from prior review: 0',
+    '- Resolved by latest commits: 0',
+  ].join('\n');
+
+  const merged = mergeReviewDocuments([docWithNested, docWithNested], TITLE);
+  const validation = validateReviewDocument(merged);
+  assert.equal(validation.valid, true, validation.reason);
+  for (const item of validation.document.scope || []) {
+    assert.ok(!item.includes('\n'), `scope item must be flat (no embedded newlines), got: ${JSON.stringify(item)}`);
+  }
+});
+
+test('deterministic merge output validates', () => {
   const original = [
     `# Review — ${TITLE}`,
     '',
@@ -653,25 +686,15 @@ test('unterminated fenced block containing Summary is invalid', () => {
   assert.match(result.reason, /malformed fenced code block before ## Summary/);
 });
 
-test('all three prompt templates reference the canonical field order text', () => {
+test('prompt templates reference the canonical field order text', () => {
   for (const [name, template] of [
     ['REVIEW_AGENT_PROMPT_TEMPLATE', REVIEW_AGENT_PROMPT_TEMPLATE],
-    ['SYNTHESIS_AGENT_PROMPT_TEMPLATE', SYNTHESIS_AGENT_PROMPT_TEMPLATE],
     ['VALIDATOR_AGENT_PROMPT_TEMPLATE', VALIDATOR_AGENT_PROMPT_TEMPLATE],
   ]) {
     assert.ok(
       template.includes(CANONICAL_FIELD_ORDER_TEXT),
       `${name} must reference the canonical field order text: "${CANONICAL_FIELD_ORDER_TEXT}"`,
     );
-  }
-});
-
-test('review agent and synthesis agent prompts share a "no prose outside this shape" rule', () => {
-  for (const [name, template] of [
-    ['REVIEW_AGENT_PROMPT_TEMPLATE', REVIEW_AGENT_PROMPT_TEMPLATE],
-    ['SYNTHESIS_AGENT_PROMPT_TEMPLATE', SYNTHESIS_AGENT_PROMPT_TEMPLATE],
-  ]) {
-    assert.match(template, /No prose outside this shape/, `${name} must declare the no-prose rule`);
   }
 });
 
@@ -682,14 +705,12 @@ test('review agent prompt declares the heading-first reply constraint', () => {
   // model sees it before any other guidance.
   assert.match(
     REVIEW_AGENT_PROMPT_TEMPLATE,
-    /Your final reply MUST begin with the heading "# Review — <title-or-ref>" on the very first line; emit no preamble, no explanation, and no tool-call XML before the heading\./,
+    /FIRST LINE OF YOUR REPLY.*emit this exact line.*no preamble.*no explanation.*no markdown backticks.*no XML.*no whitespace before it/s,
     'REVIEW_AGENT_PROMPT_TEMPLATE must declare the heading-first reply constraint',
   );
   // The constraint must appear before any other rule. Locate the
   // "Runtime context:" header and assert the constraint precedes it.
-  const constraintIdx = REVIEW_AGENT_PROMPT_TEMPLATE.indexOf(
-    'Your final reply MUST begin with the heading',
-  );
+  const constraintIdx = REVIEW_AGENT_PROMPT_TEMPLATE.indexOf('FIRST LINE OF YOUR REPLY');
   const runtimeContextIdx = REVIEW_AGENT_PROMPT_TEMPLATE.indexOf('Runtime context:');
   assert.ok(constraintIdx >= 0, 'constraint must be present');
   assert.ok(runtimeContextIdx >= 0, 'Runtime context: header must be present');
@@ -890,10 +911,9 @@ test('mergeReviewDocuments dedupes by canonical multi-location string', () => {
   assert.equal(validation.document.summary.new, 1);
 });
 
-test('all three prompt templates declare the comma-separated multi-location grammar', () => {
+test('prompt templates declare the comma-separated multi-location grammar', () => {
   for (const [name, template] of [
     ['REVIEW_AGENT_PROMPT_TEMPLATE', REVIEW_AGENT_PROMPT_TEMPLATE],
-    ['SYNTHESIS_AGENT_PROMPT_TEMPLATE', SYNTHESIS_AGENT_PROMPT_TEMPLATE],
     ['VALIDATOR_AGENT_PROMPT_TEMPLATE', VALIDATOR_AGENT_PROMPT_TEMPLATE],
   ]) {
     assert.match(
@@ -916,7 +936,7 @@ test('all three prompt templates declare the comma-separated multi-location gram
 // -----------------------------------------------------------------------------
 // Phase-7 bounded implementation: completion sentinel.
 //
-// The review and synthesis models may emit
+// The review model may emit
 //   <!-- AI_REVIEW_DONE -->
 // as the final line of their reply. The deterministic parser strips
 // the sentinel plus everything after it (outside a fenced code
@@ -1219,14 +1239,13 @@ test('renderDocument renders required Scope before Summary', () => {
   assert.match(rendered, /^# Review — My Pull Request\n\n## Scope\n- Reviewed X\n\n## Summary\n/);
   assert.equal(validateReviewDocument(rendered).valid, true);
 });
-test('REVIEW and SYNTHESIS templates require the final-line sentinel; VALIDATOR template does not', () => {
-  // Both model templates must instruct the model to emit the exact
+test('REVIEW template requires the final-line sentinel; VALIDATOR template does not', () => {
+  // The review template must instruct the model to emit the exact
   // token on its own line and treat it as a stand-alone completion
-  // marker. The exact token MUST appear in each prompt so the model
+  // marker. The exact token MUST appear in the prompt so the model
   // does not invent a near-miss variant.
   for (const [name, template] of [
     ['REVIEW_AGENT_PROMPT_TEMPLATE', REVIEW_AGENT_PROMPT_TEMPLATE],
-    ['SYNTHESIS_AGENT_PROMPT_TEMPLATE', SYNTHESIS_AGENT_PROMPT_TEMPLATE],
   ]) {
     assert.ok(
       template.includes(SENTINEL),

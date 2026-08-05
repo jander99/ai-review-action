@@ -9,13 +9,11 @@
 export {
   buildMergedConfigObject,
   buildMergedConfig,
-  buildFusionConfig,
   buildValidatorConfig,
 } from './config-builder';
 export type {
   BuildMergedConfigOptions,
   BuildMergedConfigResult,
-  BuildFusionConfigOptions,
   BuildValidatorConfigOptions,
   BuildValidatorConfigResult,
 } from './config-builder';

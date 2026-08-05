@@ -34,14 +34,6 @@ inputs:
     description: 'Timeout for each OpenCode invocation'
     required: false
     default: '30'
-  fusion:
-    description: 'Synthesize successful reviews into one result'
-    required: false
-    default: 'false'
-  fusion-model:
-    description: 'Model used for fusion; defaults to the first effective model'
-    required: false
-    default: ''
   fail-on-error:
     description: 'Fail the action when any review fails'
     required: false
@@ -64,7 +56,7 @@ outputs:
   review-output-path:
     description: 'Runner-local path to the authoritative review markdown file written by the action from a validated model response'
   config-json:
-    description: 'Deterministic JSON serialization of a validator-only OpenCode config. Contains the resolved providers (built-in and user-supplied, with secret-bearing fields redacted), the effective first model, the deny-all validator permission, and a single agent.validator definition. The config carries a __validator__: true marker and does NOT include agent.review, agent.synthesis, or any prompt that embeds reviewOutputPath.'
+    description: 'Deterministic JSON serialization of a validator-only OpenCode config. Contains the resolved providers (built-in and user-supplied, with secret-bearing fields redacted), the effective first model, the deny-all validator permission, and a single agent.validator definition. The config carries a __validator__: true marker and does NOT include agent.review or any prompt that embeds reviewOutputPath.'
   effective-model:
     description: 'The effective first model (provider/model format) selected from the inputs.model or inputs.models list. Downstream actions should pass this to the validator as the model input.'
   failure-reason:

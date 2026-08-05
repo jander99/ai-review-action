@@ -3,7 +3,6 @@ import * as os from 'os';
 import * as path from 'path';
 import {
   REVIEW_AGENT_PROMPT_TEMPLATE,
-  SYNTHESIS_AGENT_PROMPT_TEMPLATE,
   VALIDATOR_AGENT_PROMPT_TEMPLATE,
 } from '@jander99/ai-review-review-contract';
 import type { AgentConfig, AgentDefinition, EventContext } from './types';
@@ -109,11 +108,6 @@ export function buildAgentDefinition(options: BuildAgentDefinitionOptions): Agen
       prompt: REVIEW_AGENT_PROMPT_TEMPLATE
         .replace('__RUNTIME_CONTEXT__', runtimeContext)
         .replace('__PRIOR_REVIEWS__', priorReviewsBlock),
-    },
-    synthesis: {
-      description: 'Synthesizes completed reviews into one canonical review document without inspecting the repository or using tools.',
-      mode: 'primary',
-      prompt: SYNTHESIS_AGENT_PROMPT_TEMPLATE,
     },
   };
 }

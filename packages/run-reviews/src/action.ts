@@ -24,8 +24,6 @@ function buildOptionsFromCore(): RunReviewsOptions {
     debug: core.getBooleanInput('debug'),
     model: core.getInput('model') || DEFAULT_MODEL,
     modelsInput: core.getInput('models'),
-    fusionEnabled: core.getBooleanInput('fusion'),
-    fusionModel: core.getInput('fusion-model'),
     failOnError: core.getBooleanInput('fail-on-error'),
     timeoutMinutes: Number.parseInt(core.getInput('timeout-minutes') || `${DEFAULT_TIMEOUT_MINUTES}`, 10),
     prompts: core.getInput('prompts'),
