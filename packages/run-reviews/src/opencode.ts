@@ -1,16 +1,20 @@
 import { extractReviewDocument } from '@jander99/ai-review-review-contract';
 import type { ReviewResult } from './types';
 import {
-  runOpenCodeRun,
+  runReview,
   type DebugCapturePaths,
-  type OpenCodeRunRuntime,
-  type RunOpenCodeRunOptions,
-  type RunOpenCodeRunResult,
-} from './opencode-run';
+  type ReviewRuntime,
+  type ReviewRuntimeResult,
+  type ReviewRuntimeSpawn,
+  type ReviewTool,
+} from './runtime';
+import { OpenCodeRuntime } from './opencode-run';
+import { ClaudeCodeRuntime } from './claude-run';
 
-export type { DebugCapturePaths } from './opencode-run';
+export type { DebugCapturePaths } from './runtime';
+export type { ReviewTool, ReviewRuntime } from './runtime';
 
-export interface InvokeOpenCodeOptions {
+export interface InvokeReviewOptions {
   homeDir: string;
   timeoutMinutes?: number;
   disableTools?: boolean;
@@ -23,13 +27,23 @@ export interface InvokeOpenCodeOptions {
 }
 
 /**
- * Optional dependency-injection seam for `invokeOpenCode`. Mirrors the
- * pattern used by `runOpenCodeRun`: callers can pass a custom `spawn`
- * to script the OpenCode CLI in tests. The 4-argument form is the
- * documented public surface; this 5th argument is a non-breaking
+ * Optional dependency-injection seam for `invokeOpenCode` / `invokeReview`.
+ * Mirrors the pattern used by `runOpenCodeRun`: callers can pass a custom
+ * `spawn` to script the OpenCode CLI in tests. The 4/5-argument form is the
+ * documented public surface; the optional runtime argument is a non-breaking
  * extension used by the test suite and any future test fixtures.
  */
-export type InvokeOpenCodeRuntime = OpenCodeRunRuntime;
+export type InvokeOpenCodeRuntime = ReviewRuntimeSpawn;
+
+// Re-export the opencode-specific InvokeOpenCodeOptions shape as an
+// alias of InvokeReviewOptions for back-compat with callers that
+// imported the original name. The dispatcher ignores opencode-only
+// fields when running with tool='claude'.
+export type InvokeOpenCodeOptions = InvokeReviewOptions;
+
+function resolveRuntime(tool: ReviewTool): ReviewRuntime {
+  return tool === 'claude' ? new ClaudeCodeRuntime() : new OpenCodeRuntime();
+}
 
 /**
  * Canonical review-document shape, inlined as a focused format
@@ -84,7 +98,20 @@ ${CANONICAL_FORMAT_TEMPLATE}`;
 }
 
 /**
- * Run a single OpenCode invocation with the caller's options.
+ * Sum the tokens and cost of two reviewer invocations into the shape
+ * `ReviewResult` expects. The `reasoning` field on the per-call
+ * result is intentionally dropped: `ReviewResult.tokens` does not
+ * surface it and the contract validator does not require it.
+ */
+function combineResults(first: ReviewRuntimeResult, second: ReviewRuntimeResult): ReviewResult['tokens'] {
+  return {
+    input: first.tokens.input + second.tokens.input,
+    output: first.tokens.output + second.tokens.output,
+  };
+}
+
+/**
+ * Run a single reviewer invocation through the selected runtime.
  * Internal helper that does NOT trigger the format fallback - the
  * caller decides whether to retry.
  *
@@ -99,11 +126,12 @@ async function runOnce(
   prompt: string,
   model: string,
   configPath: string,
-  options: InvokeOpenCodeOptions,
+  options: InvokeReviewOptions,
   debugCapture: DebugCapturePaths | undefined,
-  runtime: InvokeOpenCodeRuntime | undefined,
-): Promise<RunOpenCodeRunResult> {
-  const callOptions: RunOpenCodeRunOptions = {
+  runtime: ReviewRuntime,
+  spawnOverride: ReviewRuntimeSpawn | undefined,
+): Promise<ReviewRuntimeResult> {
+  const callOptions = {
     configPath,
     homeDir: options.homeDir,
     model,
@@ -112,46 +140,50 @@ async function runOnce(
     disableTools: options.disableTools,
     debugCapture,
   };
-  return runOpenCodeRun(callOptions, runtime);
+  return runReview(callOptions, runtime, spawnOverride?.spawn);
 }
 
 /**
- * Sum the tokens and cost of two OpenCode invocations into the
- * shape `ReviewResult` expects. The `reasoning` field on the per-call
- * result is intentionally dropped: `ReviewResult.tokens` does not
- * surface it and the contract validator does not require it.
- */
-function combineResults(first: RunOpenCodeRunResult, second: RunOpenCodeRunResult): ReviewResult['tokens'] {
-  return {
-    input: first.tokens.input + second.tokens.input,
-    output: first.tokens.output + second.tokens.output,
-  };
-}
-
-/**
- * Invoke OpenCode through the one-shot `opencode run --format=json` transport.
- * The transport owns process and stream handling; this wrapper preserves the
- * review pipeline's sanitization and canonical document extraction.
+ * Invoke the selected reviewer CLI through the shared `runReview`
+ * transport. Picks the OpenCode CLI (`opencode run --format=json`) for
+ * `tool: 'opencode'` and the Claude Code CLI (`claude -p
+ * --output-format stream-json`) for `tool: 'claude'`.
  *
- * Two-call retry strategy: when the first call's output does not begin
- * with a `# Review — <title-or-ref>` heading (e.g. the model burned
- * its output budget on `<think>` blocks and emitted nothing visible,
- * or stopped without producing the heading), a second call is
- * dispatched with a focused format-conversion prompt that uses the
- * first call's text as context. Tokens and cost are summed across
- * both calls so downstream accounting reflects the full spend. If the
- * retry also fails to produce a valid heading, the action's
- * downstream validation surfaces the failure cleanly via
+ * The transport owns process and stream handling; this wrapper
+ * preserves the review pipeline's sanitization and canonical document
+ * extraction regardless of which CLI produced the events.
+ *
+ * Two-call retry strategy: when the first call's output does not
+ * begin with a `# Review — <title-or-ref>` heading (e.g. the model
+ * burned its output budget on `<think>` blocks and emitted nothing
+ * visible, or stopped without producing the heading), a second call
+ * is dispatched with a focused format-conversion prompt that uses
+ * the first call's text as context. Tokens and cost are summed
+ * across both calls so downstream accounting reflects the full
+ * spend. If the retry also fails to produce a valid heading, the
+ * action's downstream validation surfaces the failure cleanly via
  * `failure-reason`; this wrapper never throws on a missing heading.
+ *
+ * The optional 6th argument is a non-breaking extension for tests
+ * that script the underlying CLI spawn. Existing callers that pass
+ * only 5 arguments keep working unchanged.
  */
-export async function invokeOpenCode(
+export async function invokeReview(
   prompt: string,
   model: string,
   configPath: string,
-  options: InvokeOpenCodeOptions,
-  runtime?: InvokeOpenCodeRuntime,
+  options: InvokeReviewOptions,
+  tool: ReviewTool,
+  runtime?: ReviewRuntimeSpawn,
 ): Promise<ReviewResult> {
-  const firstResult = await runOnce(prompt, model, configPath, options, options.debugCapture, runtime);
+  const runtimeImpl = resolveRuntime(tool);
+
+  const firstResult = await runOnce(
+    prompt, model, configPath, options,
+    options.debugCapture,
+    runtimeImpl,
+    runtime,
+  );
   const firstText = firstResult.text;
   const firstExtracted = extractReviewDocument(firstText);
   if (firstExtracted !== null) {
@@ -171,7 +203,12 @@ export async function invokeOpenCode(
   // retry is either a fix or a known failure that downstream
   // validation will surface.
   const retryPrompt = buildRetryPrompt(prompt, firstText);
-  const secondResult = await runOnce(retryPrompt, model, configPath, options, undefined, runtime);
+  const secondResult = await runOnce(
+    retryPrompt, model, configPath, options,
+    undefined,
+    runtimeImpl,
+    runtime,
+  );
   const secondExtracted = extractReviewDocument(secondResult.text);
 
   return {
@@ -184,4 +221,25 @@ export async function invokeOpenCode(
     cost: firstResult.cost + secondResult.cost,
     model: secondResult.model,
   };
+}
+
+/**
+ * Back-compat thin wrapper around `invokeReview` that pins the
+ * OpenCode runtime. Preserved so existing internal callers continue
+ * to work without modification; new code should call `invokeReview`
+ * directly with an explicit `tool` argument.
+ *
+ * The optional 5th argument is preserved from PR #36's
+ * dependency-injection seam: callers (and the test suite) can pass
+ * a custom `spawn` to script the OpenCode CLI. Existing 4-argument
+ * callers keep working unchanged.
+ */
+export async function invokeOpenCode(
+  prompt: string,
+  model: string,
+  configPath: string,
+  options: InvokeOpenCodeOptions,
+  runtime?: InvokeOpenCodeRuntime,
+): Promise<ReviewResult> {
+  return invokeReview(prompt, model, configPath, options, 'opencode', runtime);
 }

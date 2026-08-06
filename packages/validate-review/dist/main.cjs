@@ -181,7 +181,7 @@ var require_file_command = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.prepareKeyValueMessage = exports2.issueFileCommand = void 0;
     var crypto = __importStar(require("crypto"));
-    var fs3 = __importStar(require("fs"));
+    var fs4 = __importStar(require("fs"));
     var os3 = __importStar(require("os"));
     var utils_1 = require_utils();
     function issueFileCommand(command, message) {
@@ -189,10 +189,10 @@ var require_file_command = __commonJS({
       if (!filePath) {
         throw new Error(`Unable to find environment variable for file command ${command}`);
       }
-      if (!fs3.existsSync(filePath)) {
+      if (!fs4.existsSync(filePath)) {
         throw new Error(`Missing file at path: ${filePath}`);
       }
-      fs3.appendFileSync(filePath, `${(0, utils_1.toCommandValue)(message)}${os3.EOL}`, {
+      fs4.appendFileSync(filePath, `${(0, utils_1.toCommandValue)(message)}${os3.EOL}`, {
         encoding: "utf8"
       });
     }
@@ -18518,12 +18518,12 @@ var require_io_util = __commonJS({
     var _a;
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.getCmdPath = exports2.tryGetExecutablePath = exports2.isRooted = exports2.isDirectory = exports2.exists = exports2.READONLY = exports2.UV_FS_O_EXLOCK = exports2.IS_WINDOWS = exports2.unlink = exports2.symlink = exports2.stat = exports2.rmdir = exports2.rm = exports2.rename = exports2.readlink = exports2.readdir = exports2.open = exports2.mkdir = exports2.lstat = exports2.copyFile = exports2.chmod = void 0;
-    var fs3 = __importStar(require("fs"));
+    var fs4 = __importStar(require("fs"));
     var path3 = __importStar(require("path"));
-    _a = fs3.promises, exports2.chmod = _a.chmod, exports2.copyFile = _a.copyFile, exports2.lstat = _a.lstat, exports2.mkdir = _a.mkdir, exports2.open = _a.open, exports2.readdir = _a.readdir, exports2.readlink = _a.readlink, exports2.rename = _a.rename, exports2.rm = _a.rm, exports2.rmdir = _a.rmdir, exports2.stat = _a.stat, exports2.symlink = _a.symlink, exports2.unlink = _a.unlink;
+    _a = fs4.promises, exports2.chmod = _a.chmod, exports2.copyFile = _a.copyFile, exports2.lstat = _a.lstat, exports2.mkdir = _a.mkdir, exports2.open = _a.open, exports2.readdir = _a.readdir, exports2.readlink = _a.readlink, exports2.rename = _a.rename, exports2.rm = _a.rm, exports2.rmdir = _a.rmdir, exports2.stat = _a.stat, exports2.symlink = _a.symlink, exports2.unlink = _a.unlink;
     exports2.IS_WINDOWS = process.platform === "win32";
     exports2.UV_FS_O_EXLOCK = 268435456;
-    exports2.READONLY = fs3.constants.O_RDONLY;
+    exports2.READONLY = fs4.constants.O_RDONLY;
     function exists(fsPath) {
       return __awaiter(this, void 0, void 0, function* () {
         try {
@@ -19426,12 +19426,12 @@ var require_exec = __commonJS({
     var tr = __importStar(require_toolrunner());
     function exec(commandLine, args, options) {
       return __awaiter(this, void 0, void 0, function* () {
-        const commandArgs2 = tr.argStringToArray(commandLine);
-        if (commandArgs2.length === 0) {
+        const commandArgs = tr.argStringToArray(commandLine);
+        if (commandArgs.length === 0) {
           throw new Error(`Parameter 'commandLine' cannot be null or empty.`);
         }
-        const toolPath = commandArgs2[0];
-        args = commandArgs2.slice(1).concat(args || []);
+        const toolPath = commandArgs[0];
+        args = commandArgs.slice(1).concat(args || []);
         const runner = new tr.ToolRunner(toolPath, args, options);
         return runner.exec();
       });
@@ -19825,8 +19825,8 @@ Support boolean input list: \`true | True | TRUE | false | False | FALSE\``);
 var core2 = __toESM(require_core());
 
 // packages/validate-review/src/main.ts
-var import_child_process = require("child_process");
-var fs2 = __toESM(require("fs"));
+var import_child_process2 = require("child_process");
+var fs3 = __toESM(require("fs"));
 var os2 = __toESM(require("os"));
 var path2 = __toESM(require("path"));
 
@@ -20371,14 +20371,13 @@ var core = __toESM(require_core());
 var PRIOR_REVIEW_PER_COMMENT_CHARS = 4 * 1024;
 var PRIOR_REVIEW_TOTAL_CHARS = 16 * 1024;
 
-// packages/run-reviews/src/opencode-run.ts
+// packages/run-reviews/src/runtime.ts
 var childProcess = __toESM(require("child_process"));
 var fs = __toESM(require("fs"));
 var os = __toESM(require("os"));
 var path = __toESM(require("path"));
-var EVENT_TYPES = /* @__PURE__ */ new Set(["text", "step_finish", "step_use", "tool_use", "reasoning"]);
 var DEFAULT_TIMEOUT_MINUTES = 30;
-var TEMP_DEBUG_PREFIX = "ai-review-opencode-run-";
+var TEMP_DEBUG_PREFIX = "ai-review-review-run-";
 var LineBufferedWriter = class {
   constructor(filePath) {
     this.pending = "";
@@ -20420,6 +20419,123 @@ function diagnostics(stdoutPath, stderrPath) {
   const stderr = fs.existsSync(stderrPath) ? fs.readFileSync(stderrPath, "utf8") : "";
   return `last stdout line: ${lastNonEmptyLine(stdout)}; last stderr line: ${lastNonEmptyLine(stderr)}`;
 }
+function closeCapture(writer) {
+  writer?.close();
+}
+function waitForProcess(proc, binary, timeoutMs, getDiagnostics) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let timeoutHandle;
+    const finish = (code, signal) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
+      resolve({ code, signal });
+    };
+    proc.on("error", (error) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      reject(new Error(`could not execute ${binary}: ${message}; ${getDiagnostics()}`));
+    });
+    proc.on("close", (code, signal) => {
+      finish(
+        typeof code === "number" ? code : null,
+        typeof signal === "string" ? signal : null
+      );
+    });
+    timeoutHandle = setTimeout(() => {
+      if (settled) {
+        return;
+      }
+      try {
+        proc.kill("SIGTERM");
+      } catch {
+      }
+      const message = `${binary} timed out after ${timeoutMs} ms; ${getDiagnostics()}`;
+      reject(new Error(message));
+      settled = true;
+      const killHandle = setTimeout(() => {
+        try {
+          proc.kill("SIGKILL");
+        } catch {
+        }
+      }, 3e3);
+      killHandle.unref?.();
+    }, timeoutMs);
+    timeoutHandle.unref?.();
+  });
+}
+async function runReview(options, runtime, spawnOverride) {
+  if (!options || typeof options !== "object") {
+    throw new Error("runReview requires an options object");
+  }
+  if (!options.prompt) {
+    throw new Error("runReview requires options.prompt");
+  }
+  if (!options.model) {
+    throw new Error("runReview requires options.model");
+  }
+  const timeoutMinutes = options.timeoutMinutes ?? DEFAULT_TIMEOUT_MINUTES;
+  if (!Number.isFinite(timeoutMinutes) || timeoutMinutes <= 0) {
+    throw new Error("runReview requires a positive options.timeoutMinutes");
+  }
+  const resolvedModel = runtime.resolveModel(options.model);
+  const args = runtime.commandArgs(resolvedModel, options.prompt);
+  const binary = runtime.tool;
+  const temporaryDebugDirectory = options.debugCapture ? null : fs.mkdtempSync(path.join(os.tmpdir(), TEMP_DEBUG_PREFIX));
+  const stdoutPath = options.debugCapture?.stdoutPath ?? path.join(temporaryDebugDirectory, "stdout.jsonl");
+  const stderrPath = options.debugCapture?.stderrPath ?? path.join(temporaryDebugDirectory, "stderr.log");
+  const stdoutWriter = new LineBufferedWriter(stdoutPath);
+  const stderrWriter = new LineBufferedWriter(stderrPath);
+  const getDiagnostics = () => diagnostics(stdoutPath, stderrPath);
+  try {
+    const env = runtime.buildEnvironment(options);
+    let proc;
+    try {
+      proc = (spawnOverride ?? childProcess.spawn)(binary, args, {
+        env,
+        stdio: ["ignore", "pipe", "pipe"]
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`could not execute ${binary}: ${message}; ${getDiagnostics()}`);
+    }
+    proc.stdout?.on("data", (chunk) => stdoutWriter.write(chunk));
+    proc.stderr?.on("data", (chunk) => stderrWriter.write(chunk));
+    const exit = await waitForProcess(proc, binary, timeoutMinutes * 60 * 1e3, getDiagnostics);
+    stdoutWriter.close();
+    stderrWriter.close();
+    const stdout = fs.readFileSync(stdoutPath, "utf8");
+    if (exit.code !== 0 || exit.signal) {
+      throw new Error(
+        `${binary} exited unsuccessfully${exit.code !== null ? ` with status ${exit.code}` : ` with signal ${exit.signal}`}; ${getDiagnostics()}`
+      );
+    }
+    const parsed = runtime.parseEvents(stdout, stdoutPath, stderrPath);
+    return { ...parsed, model: options.model };
+  } finally {
+    closeCapture(stdoutWriter);
+    closeCapture(stderrWriter);
+    if (temporaryDebugDirectory) {
+      fs.rmSync(temporaryDebugDirectory, { recursive: true, force: true });
+    }
+  }
+}
+
+// packages/run-reviews/src/opencode-run.ts
+var import_child_process = require("child_process");
+var fs2 = __toESM(require("fs"));
+var EVENT_TYPES = /* @__PURE__ */ new Set(["text", "step_finish", "step_use", "tool_use", "reasoning"]);
 function normalizeEventType(type) {
   if (typeof type !== "string") {
     return null;
@@ -20452,208 +20568,130 @@ function readTokens(event, part) {
   const reasoning = readNumber(rawTokens?.reasoning);
   return reasoning === void 0 ? { input, output } : { input, output, reasoning };
 }
-function buildEnvironment(options) {
-  const env = { ...process.env };
-  for (const name of Object.keys(env)) {
-    if (name.startsWith("OPENCODE_")) {
-      delete env[name];
-    }
+var OpenCodeRuntime = class {
+  constructor() {
+    this.tool = "opencode";
   }
-  if (options.configPath) {
-    env.OPENCODE_CONFIG = options.configPath;
-  }
-  if (options.homeDir) {
-    fs.mkdirSync(options.homeDir, { recursive: true, mode: 448 });
-    env.HOME = options.homeDir;
-  }
-  env.OPENCODE_PERMISSION = JSON.stringify({
-    read: "deny",
-    glob: "deny",
-    grep: "deny",
-    list: "deny",
-    webfetch: "deny",
-    edit: "deny",
-    write: "deny",
-    question: "deny",
-    doom_loop: "deny",
-    bash: {
-      // The action embeds a pathspec-filtered diff in the reviewer
-      // prompt (see REVIEW_DIFF_EXCLUDE_PATHSPECS in main.ts).
-      // `git diff` and `git show` are denied so the model cannot
-      // bypass that filter by re-fetching the raw diff via bash
-      // (which would otherwise expose the auto-generated dist
-      // bundles that the filter intentionally excludes).
-      "*": "ask",
-      "git log *": "allow",
-      "git rev-parse *": "allow"
-    }
-  });
-  return env;
-}
-function commandArgs(model, prompt) {
-  return [
-    `--model=${model}`,
-    "run",
-    "--format=json",
-    "--",
-    prompt
-  ];
-}
-function modelFromCommand(args) {
-  const modelArg = args.find((arg) => arg.startsWith("--model="));
-  return modelArg ? modelArg.slice("--model=".length) : "";
-}
-function parseEvents(stdout, stdoutPath, stderrPath) {
-  const parts = [];
-  let finalStepFinish;
-  for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
-    let parsed;
-    try {
-      parsed = JSON.parse(line);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`could not parse OpenCode JSON event: ${message}; ${diagnostics(stdoutPath, stderrPath)}`);
-    }
-    const eventType = normalizeEventType(parsed.type);
-    const partRecord = asRecord(parsed.part);
-    const partType = normalizeEventType(partRecord?.type);
-    const filteredType = eventType ?? partType;
-    if (!filteredType || !EVENT_TYPES.has(filteredType)) {
-      continue;
-    }
-    const normalized = normalizePart(parsed, filteredType);
-    parts.push(normalized);
-    if (filteredType === "step_finish") {
-      finalStepFinish = {
-        event: asRecord(parsed) ?? {},
-        part: normalized
-      };
-    }
-  }
-  const selection = selectTerminalText(parts);
-  const finalEvent = finalStepFinish?.event;
-  const finalPart = finalStepFinish?.part;
-  const cost = readNumber(finalEvent?.cost) ?? readNumber(finalPart?.cost) ?? 0;
-  const tokens = finalStepFinish ? readTokens(finalEvent, finalPart) : { input: 0, output: 0 };
-  return {
-    text: selection.text,
-    cost,
-    tokens,
-    model: "",
-    parts
-  };
-}
-function closeCapture(writer) {
-  writer?.close();
-}
-function waitForProcess(proc, timeoutMs, getDiagnostics) {
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    let timeoutHandle;
-    const finish = (code, signal) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      if (timeoutHandle) {
-        clearTimeout(timeoutHandle);
-      }
-      resolve({ code, signal });
-    };
-    proc.on("error", (error) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      if (timeoutHandle) {
-        clearTimeout(timeoutHandle);
-      }
-      const message = error instanceof Error ? error.message : String(error);
-      reject(new Error(`could not execute opencode run: ${message}; ${getDiagnostics()}`));
+  assertVersion(expectedVersion) {
+    const result = (0, import_child_process.spawnSync)("opencode", ["--version"], {
+      encoding: "utf8",
+      maxBuffer: 1024 * 1024,
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 1e4
     });
-    proc.on("close", (code, signal) => {
-      finish(
-        typeof code === "number" ? code : null,
-        typeof signal === "string" ? signal : null
-      );
-    });
-    timeoutHandle = setTimeout(() => {
-      if (settled) {
-        return;
-      }
-      try {
-        proc.kill("SIGTERM");
-      } catch {
-      }
-      const message = `opencode run timed out after ${timeoutMs} ms; ${getDiagnostics()}`;
-      reject(new Error(message));
-      settled = true;
-      const killHandle = setTimeout(() => {
-        try {
-          proc.kill("SIGKILL");
-        } catch {
-        }
-      }, 3e3);
-      killHandle.unref?.();
-    }, timeoutMs);
-    timeoutHandle.unref?.();
-  });
-}
-async function runOpenCodeRun(options, runtime) {
-  if (!options || typeof options !== "object") {
-    throw new Error("runOpenCodeRun requires an options object");
-  }
-  if (!options.prompt) {
-    throw new Error("runOpenCodeRun requires options.prompt");
-  }
-  if (!options.model) {
-    throw new Error("runOpenCodeRun requires options.model");
-  }
-  const timeoutMinutes = options.timeoutMinutes ?? DEFAULT_TIMEOUT_MINUTES;
-  if (!Number.isFinite(timeoutMinutes) || timeoutMinutes <= 0) {
-    throw new Error("runOpenCodeRun requires a positive options.timeoutMinutes");
-  }
-  const args = commandArgs(options.model, options.prompt);
-  const model = modelFromCommand(args);
-  const temporaryDebugDirectory = options.debugCapture ? null : fs.mkdtempSync(path.join(os.tmpdir(), TEMP_DEBUG_PREFIX));
-  const stdoutPath = options.debugCapture?.stdoutPath ?? path.join(temporaryDebugDirectory, "stdout.jsonl");
-  const stderrPath = options.debugCapture?.stderrPath ?? path.join(temporaryDebugDirectory, "stderr.log");
-  const stdoutWriter = new LineBufferedWriter(stdoutPath);
-  const stderrWriter = new LineBufferedWriter(stderrPath);
-  const getDiagnostics = () => diagnostics(stdoutPath, stderrPath);
-  try {
-    const env = buildEnvironment(options);
-    let proc;
-    try {
-      proc = (runtime?.spawn ?? childProcess.spawn)("opencode", args, {
-        env,
-        stdio: ["ignore", "pipe", "pipe"]
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`could not execute opencode run: ${message}; ${getDiagnostics()}`);
+    const stdout = typeof result.stdout === "string" ? result.stdout.trim() : "";
+    const stderr = typeof result.stderr === "string" ? result.stderr.trim() : "";
+    if (result.error) {
+      throw new Error(`could not execute 'opencode --version': ${result.error.message}`);
     }
-    proc.stdout?.on("data", (chunk) => stdoutWriter.write(chunk));
-    proc.stderr?.on("data", (chunk) => stderrWriter.write(chunk));
-    const exit = await waitForProcess(proc, timeoutMinutes * 60 * 1e3, getDiagnostics);
-    stdoutWriter.close();
-    stderrWriter.close();
-    const stdout = fs.readFileSync(stdoutPath, "utf8");
-    if (exit.code !== 0 || exit.signal) {
+    if (result.status !== 0) {
       throw new Error(
-        `opencode run exited unsuccessfully${exit.code !== null ? ` with status ${exit.code}` : ` with signal ${exit.signal}`}; ${getDiagnostics()}`
+        `'opencode --version' exited with status ${result.status}${stderr ? `: ${stderr}` : ""}`
       );
     }
-    const parsed = parseEvents(stdout, stdoutPath, stderrPath);
-    parsed.model = model;
-    return parsed;
-  } finally {
-    closeCapture(stdoutWriter);
-    closeCapture(stderrWriter);
-    if (temporaryDebugDirectory) {
-      fs.rmSync(temporaryDebugDirectory, { recursive: true, force: true });
+    const reportedVersion = stdout || stderr;
+    const versionMatch = reportedVersion.match(/v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)/);
+    const installedVersion = (versionMatch?.[1] ?? reportedVersion.replace(/^v/, "")).trim();
+    const normalizedExpectedVersion = expectedVersion.replace(/^v/, "");
+    if (!installedVersion || installedVersion !== normalizedExpectedVersion) {
+      throw new Error(
+        `expected OpenCode ${normalizedExpectedVersion}, but 'opencode --version' reported '${reportedVersion || "<empty>"}'`
+      );
     }
   }
+  resolveModel(rawModel) {
+    return rawModel;
+  }
+  buildEnvironment(options) {
+    const env = { ...process.env };
+    for (const name of Object.keys(env)) {
+      if (name.startsWith("OPENCODE_")) {
+        delete env[name];
+      }
+    }
+    if (options.configPath) {
+      env.OPENCODE_CONFIG = options.configPath;
+    }
+    if (options.homeDir) {
+      fs2.mkdirSync(options.homeDir, { recursive: true, mode: 448 });
+      env.HOME = options.homeDir;
+    }
+    env.OPENCODE_PERMISSION = JSON.stringify({
+      read: "deny",
+      glob: "deny",
+      grep: "deny",
+      list: "deny",
+      webfetch: "deny",
+      edit: "deny",
+      write: "deny",
+      question: "deny",
+      doom_loop: "deny",
+      bash: {
+        // The action embeds a pathspec-filtered diff in the reviewer
+        // prompt (see REVIEW_DIFF_EXCLUDE_PATHSPECS in main.ts).
+        // `git diff` and `git show` are denied so the model cannot
+        // bypass that filter by re-fetching the raw diff via bash
+        // (which would otherwise expose the auto-generated dist
+        // bundles that the filter intentionally excludes).
+        "*": "ask",
+        "git log *": "allow",
+        "git rev-parse *": "allow"
+      }
+    });
+    return env;
+  }
+  commandArgs(model, prompt) {
+    return [
+      `--model=${model}`,
+      "run",
+      "--format=json",
+      "--",
+      prompt
+    ];
+  }
+  parseEvents(stdout, stdoutPath, stderrPath) {
+    const parts = [];
+    let finalStepFinish;
+    for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
+      let parsed;
+      try {
+        parsed = JSON.parse(line);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(`could not parse OpenCode JSON event: ${message}; ${diagnostics(stdoutPath, stderrPath)}`);
+      }
+      const eventType = normalizeEventType(parsed.type);
+      const partRecord = asRecord(parsed.part);
+      const partType = normalizeEventType(partRecord?.type);
+      const filteredType = eventType ?? partType;
+      if (!filteredType || !EVENT_TYPES.has(filteredType)) {
+        continue;
+      }
+      const normalized = normalizePart(parsed, filteredType);
+      parts.push(normalized);
+      if (filteredType === "step_finish") {
+        finalStepFinish = {
+          event: asRecord(parsed) ?? {},
+          part: normalized
+        };
+      }
+    }
+    const selection = selectTerminalText(parts);
+    const finalEvent = finalStepFinish?.event;
+    const finalPart = finalStepFinish?.part;
+    const cost = readNumber(finalEvent?.cost) ?? readNumber(finalPart?.cost) ?? 0;
+    const tokens = finalStepFinish ? readTokens(finalEvent, finalPart) : { input: 0, output: 0 };
+    return {
+      text: selection.text,
+      cost,
+      tokens,
+      model: "",
+      parts
+    };
+  }
+};
+async function runOpenCodeRun(options, runtime) {
+  return runReview(options, new OpenCodeRuntime(), runtime?.spawn);
 }
 
 // packages/validate-review/src/main.ts
@@ -20681,7 +20719,7 @@ function stripThinkingBlocks(text) {
   return text.replace(/<think>[\s\S]*?<\/think>/g, "");
 }
 function assertOpenCodeVersion(expectedVersion) {
-  const result = (0, import_child_process.spawnSync)("opencode", ["--version"], {
+  const result = (0, import_child_process2.spawnSync)("opencode", ["--version"], {
     encoding: "utf8",
     maxBuffer: 1024 * 1024,
     stdio: ["ignore", "pipe", "pipe"],
@@ -20708,10 +20746,10 @@ function assertOpenCodeVersion(expectedVersion) {
   }
 }
 function readReviewFile(reviewPath) {
-  if (!fs2.existsSync(reviewPath)) {
+  if (!fs3.existsSync(reviewPath)) {
     throw new Error(`review file not found at ${reviewPath}`);
   }
-  const content = fs2.readFileSync(reviewPath, "utf8");
+  const content = fs3.readFileSync(reviewPath, "utf8");
   if (!content.trim()) {
     throw new Error(`review file at ${reviewPath} is empty`);
   }
@@ -20719,8 +20757,8 @@ function readReviewFile(reviewPath) {
 }
 function invokeValidator(options) {
   const runnerTemp = process.env.RUNNER_TEMP ?? os2.tmpdir();
-  const homeDir = fs2.mkdtempSync(path2.join(runnerTemp, "ai-review-validate-"));
-  fs2.chmodSync(homeDir, 448);
+  const homeDir = fs3.mkdtempSync(path2.join(runnerTemp, "ai-review-validate-"));
+  fs3.chmodSync(homeDir, 448);
   const prompt = VALIDATOR_AGENT_PROMPT_TEMPLATE.replace("__REVIEW_PATH__", options.reviewPath).concat("\n\n---\n\nReview file contents:\n\n", options.reviewContent);
   let baseConfig = {};
   try {
@@ -20754,7 +20792,7 @@ function invokeValidator(options) {
     permission: VALIDATOR_PERMISSION
   };
   const configPath = path2.join(homeDir, "opencode.json");
-  fs2.writeFileSync(configPath, JSON.stringify(mergedConfig, null, 2), "utf8");
+  fs3.writeFileSync(configPath, JSON.stringify(mergedConfig, null, 2), "utf8");
   return runOpenCodeRun({
     configPath,
     homeDir,

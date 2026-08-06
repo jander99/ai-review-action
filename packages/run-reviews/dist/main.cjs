@@ -181,7 +181,7 @@ var require_file_command = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.prepareKeyValueMessage = exports2.issueFileCommand = void 0;
     var crypto = __importStar(require("crypto"));
-    var fs6 = __importStar(require("fs"));
+    var fs7 = __importStar(require("fs"));
     var os4 = __importStar(require("os"));
     var utils_1 = require_utils();
     function issueFileCommand(command, message) {
@@ -189,10 +189,10 @@ var require_file_command = __commonJS({
       if (!filePath) {
         throw new Error(`Unable to find environment variable for file command ${command}`);
       }
-      if (!fs6.existsSync(filePath)) {
+      if (!fs7.existsSync(filePath)) {
         throw new Error(`Missing file at path: ${filePath}`);
       }
-      fs6.appendFileSync(filePath, `${(0, utils_1.toCommandValue)(message)}${os4.EOL}`, {
+      fs7.appendFileSync(filePath, `${(0, utils_1.toCommandValue)(message)}${os4.EOL}`, {
         encoding: "utf8"
       });
     }
@@ -18518,12 +18518,12 @@ var require_io_util = __commonJS({
     var _a;
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.getCmdPath = exports2.tryGetExecutablePath = exports2.isRooted = exports2.isDirectory = exports2.exists = exports2.READONLY = exports2.UV_FS_O_EXLOCK = exports2.IS_WINDOWS = exports2.unlink = exports2.symlink = exports2.stat = exports2.rmdir = exports2.rm = exports2.rename = exports2.readlink = exports2.readdir = exports2.open = exports2.mkdir = exports2.lstat = exports2.copyFile = exports2.chmod = void 0;
-    var fs6 = __importStar(require("fs"));
+    var fs7 = __importStar(require("fs"));
     var path6 = __importStar(require("path"));
-    _a = fs6.promises, exports2.chmod = _a.chmod, exports2.copyFile = _a.copyFile, exports2.lstat = _a.lstat, exports2.mkdir = _a.mkdir, exports2.open = _a.open, exports2.readdir = _a.readdir, exports2.readlink = _a.readlink, exports2.rename = _a.rename, exports2.rm = _a.rm, exports2.rmdir = _a.rmdir, exports2.stat = _a.stat, exports2.symlink = _a.symlink, exports2.unlink = _a.unlink;
+    _a = fs7.promises, exports2.chmod = _a.chmod, exports2.copyFile = _a.copyFile, exports2.lstat = _a.lstat, exports2.mkdir = _a.mkdir, exports2.open = _a.open, exports2.readdir = _a.readdir, exports2.readlink = _a.readlink, exports2.rename = _a.rename, exports2.rm = _a.rm, exports2.rmdir = _a.rmdir, exports2.stat = _a.stat, exports2.symlink = _a.symlink, exports2.unlink = _a.unlink;
     exports2.IS_WINDOWS = process.platform === "win32";
     exports2.UV_FS_O_EXLOCK = 268435456;
-    exports2.READONLY = fs6.constants.O_RDONLY;
+    exports2.READONLY = fs7.constants.O_RDONLY;
     function exists(fsPath) {
       return __awaiter(this, void 0, void 0, function* () {
         try {
@@ -19426,12 +19426,12 @@ var require_exec = __commonJS({
     var tr = __importStar(require_toolrunner());
     function exec(commandLine, args, options) {
       return __awaiter(this, void 0, void 0, function* () {
-        const commandArgs2 = tr.argStringToArray(commandLine);
-        if (commandArgs2.length === 0) {
+        const commandArgs = tr.argStringToArray(commandLine);
+        if (commandArgs.length === 0) {
           throw new Error(`Parameter 'commandLine' cannot be null or empty.`);
         }
-        const toolPath = commandArgs2[0];
-        args = commandArgs2.slice(1).concat(args || []);
+        const toolPath = commandArgs[0];
+        args = commandArgs.slice(1).concat(args || []);
         const runner = new tr.ToolRunner(toolPath, args, options);
         return runner.exec();
       });
@@ -23825,8 +23825,8 @@ var require_dist_node12 = __commonJS({
 var core2 = __toESM(require_core());
 
 // packages/run-reviews/src/main.ts
-var import_child_process = require("child_process");
-var fs5 = __toESM(require("fs"));
+var import_child_process3 = require("child_process");
+var fs6 = __toESM(require("fs"));
 var os3 = __toESM(require("os"));
 var path5 = __toESM(require("path"));
 var import_zlib = require("zlib");
@@ -24999,14 +24999,13 @@ function buildValidatorConfig(options) {
   };
 }
 
-// packages/run-reviews/src/opencode-run.ts
+// packages/run-reviews/src/runtime.ts
 var childProcess = __toESM(require("child_process"));
 var fs3 = __toESM(require("fs"));
 var os2 = __toESM(require("os"));
 var path3 = __toESM(require("path"));
-var EVENT_TYPES = /* @__PURE__ */ new Set(["text", "step_finish", "step_use", "tool_use", "reasoning"]);
 var DEFAULT_TIMEOUT_MINUTES = 30;
-var TEMP_DEBUG_PREFIX = "ai-review-opencode-run-";
+var TEMP_DEBUG_PREFIX = "ai-review-review-run-";
 var LineBufferedWriter = class {
   constructor(filePath) {
     this.pending = "";
@@ -25048,6 +25047,123 @@ function diagnostics(stdoutPath, stderrPath) {
   const stderr = fs3.existsSync(stderrPath) ? fs3.readFileSync(stderrPath, "utf8") : "";
   return `last stdout line: ${lastNonEmptyLine(stdout)}; last stderr line: ${lastNonEmptyLine(stderr)}`;
 }
+function closeCapture(writer) {
+  writer?.close();
+}
+function waitForProcess(proc, binary, timeoutMs, getDiagnostics) {
+  return new Promise((resolve3, reject) => {
+    let settled = false;
+    let timeoutHandle;
+    const finish = (code, signal) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
+      resolve3({ code, signal });
+    };
+    proc.on("error", (error) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      reject(new Error(`could not execute ${binary}: ${message}; ${getDiagnostics()}`));
+    });
+    proc.on("close", (code, signal) => {
+      finish(
+        typeof code === "number" ? code : null,
+        typeof signal === "string" ? signal : null
+      );
+    });
+    timeoutHandle = setTimeout(() => {
+      if (settled) {
+        return;
+      }
+      try {
+        proc.kill("SIGTERM");
+      } catch {
+      }
+      const message = `${binary} timed out after ${timeoutMs} ms; ${getDiagnostics()}`;
+      reject(new Error(message));
+      settled = true;
+      const killHandle = setTimeout(() => {
+        try {
+          proc.kill("SIGKILL");
+        } catch {
+        }
+      }, 3e3);
+      killHandle.unref?.();
+    }, timeoutMs);
+    timeoutHandle.unref?.();
+  });
+}
+async function runReview(options, runtime, spawnOverride) {
+  if (!options || typeof options !== "object") {
+    throw new Error("runReview requires an options object");
+  }
+  if (!options.prompt) {
+    throw new Error("runReview requires options.prompt");
+  }
+  if (!options.model) {
+    throw new Error("runReview requires options.model");
+  }
+  const timeoutMinutes = options.timeoutMinutes ?? DEFAULT_TIMEOUT_MINUTES;
+  if (!Number.isFinite(timeoutMinutes) || timeoutMinutes <= 0) {
+    throw new Error("runReview requires a positive options.timeoutMinutes");
+  }
+  const resolvedModel = runtime.resolveModel(options.model);
+  const args = runtime.commandArgs(resolvedModel, options.prompt);
+  const binary = runtime.tool;
+  const temporaryDebugDirectory = options.debugCapture ? null : fs3.mkdtempSync(path3.join(os2.tmpdir(), TEMP_DEBUG_PREFIX));
+  const stdoutPath = options.debugCapture?.stdoutPath ?? path3.join(temporaryDebugDirectory, "stdout.jsonl");
+  const stderrPath = options.debugCapture?.stderrPath ?? path3.join(temporaryDebugDirectory, "stderr.log");
+  const stdoutWriter = new LineBufferedWriter(stdoutPath);
+  const stderrWriter = new LineBufferedWriter(stderrPath);
+  const getDiagnostics = () => diagnostics(stdoutPath, stderrPath);
+  try {
+    const env = runtime.buildEnvironment(options);
+    let proc;
+    try {
+      proc = (spawnOverride ?? childProcess.spawn)(binary, args, {
+        env,
+        stdio: ["ignore", "pipe", "pipe"]
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`could not execute ${binary}: ${message}; ${getDiagnostics()}`);
+    }
+    proc.stdout?.on("data", (chunk) => stdoutWriter.write(chunk));
+    proc.stderr?.on("data", (chunk) => stderrWriter.write(chunk));
+    const exit = await waitForProcess(proc, binary, timeoutMinutes * 60 * 1e3, getDiagnostics);
+    stdoutWriter.close();
+    stderrWriter.close();
+    const stdout = fs3.readFileSync(stdoutPath, "utf8");
+    if (exit.code !== 0 || exit.signal) {
+      throw new Error(
+        `${binary} exited unsuccessfully${exit.code !== null ? ` with status ${exit.code}` : ` with signal ${exit.signal}`}; ${getDiagnostics()}`
+      );
+    }
+    const parsed = runtime.parseEvents(stdout, stdoutPath, stderrPath);
+    return { ...parsed, model: options.model };
+  } finally {
+    closeCapture(stdoutWriter);
+    closeCapture(stderrWriter);
+    if (temporaryDebugDirectory) {
+      fs3.rmSync(temporaryDebugDirectory, { recursive: true, force: true });
+    }
+  }
+}
+
+// packages/run-reviews/src/opencode-run.ts
+var import_child_process = require("child_process");
+var fs4 = __toESM(require("fs"));
+var EVENT_TYPES = /* @__PURE__ */ new Set(["text", "step_finish", "step_use", "tool_use", "reasoning"]);
 function normalizeEventType(type) {
   if (typeof type !== "string") {
     return null;
@@ -25080,211 +25196,253 @@ function readTokens(event, part) {
   const reasoning = readNumber(rawTokens?.reasoning);
   return reasoning === void 0 ? { input, output } : { input, output, reasoning };
 }
-function buildEnvironment(options) {
-  const env = { ...process.env };
-  for (const name of Object.keys(env)) {
-    if (name.startsWith("OPENCODE_")) {
-      delete env[name];
-    }
+var OpenCodeRuntime = class {
+  constructor() {
+    this.tool = "opencode";
   }
-  if (options.configPath) {
-    env.OPENCODE_CONFIG = options.configPath;
-  }
-  if (options.homeDir) {
-    fs3.mkdirSync(options.homeDir, { recursive: true, mode: 448 });
-    env.HOME = options.homeDir;
-  }
-  env.OPENCODE_PERMISSION = JSON.stringify({
-    read: "deny",
-    glob: "deny",
-    grep: "deny",
-    list: "deny",
-    webfetch: "deny",
-    edit: "deny",
-    write: "deny",
-    question: "deny",
-    doom_loop: "deny",
-    bash: {
-      // The action embeds a pathspec-filtered diff in the reviewer
-      // prompt (see REVIEW_DIFF_EXCLUDE_PATHSPECS in main.ts).
-      // `git diff` and `git show` are denied so the model cannot
-      // bypass that filter by re-fetching the raw diff via bash
-      // (which would otherwise expose the auto-generated dist
-      // bundles that the filter intentionally excludes).
-      "*": "ask",
-      "git log *": "allow",
-      "git rev-parse *": "allow"
-    }
-  });
-  return env;
-}
-function commandArgs(model, prompt) {
-  return [
-    `--model=${model}`,
-    "run",
-    "--format=json",
-    "--",
-    prompt
-  ];
-}
-function modelFromCommand(args) {
-  const modelArg = args.find((arg) => arg.startsWith("--model="));
-  return modelArg ? modelArg.slice("--model=".length) : "";
-}
-function parseEvents(stdout, stdoutPath, stderrPath) {
-  const parts = [];
-  let finalStepFinish;
-  for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
-    let parsed;
-    try {
-      parsed = JSON.parse(line);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`could not parse OpenCode JSON event: ${message}; ${diagnostics(stdoutPath, stderrPath)}`);
-    }
-    const eventType = normalizeEventType(parsed.type);
-    const partRecord = asRecord(parsed.part);
-    const partType = normalizeEventType(partRecord?.type);
-    const filteredType = eventType ?? partType;
-    if (!filteredType || !EVENT_TYPES.has(filteredType)) {
-      continue;
-    }
-    const normalized = normalizePart(parsed, filteredType);
-    parts.push(normalized);
-    if (filteredType === "step_finish") {
-      finalStepFinish = {
-        event: asRecord(parsed) ?? {},
-        part: normalized
-      };
-    }
-  }
-  const selection = selectTerminalText(parts);
-  const finalEvent = finalStepFinish?.event;
-  const finalPart = finalStepFinish?.part;
-  const cost = readNumber(finalEvent?.cost) ?? readNumber(finalPart?.cost) ?? 0;
-  const tokens = finalStepFinish ? readTokens(finalEvent, finalPart) : { input: 0, output: 0 };
-  return {
-    text: selection.text,
-    cost,
-    tokens,
-    model: "",
-    parts
-  };
-}
-function closeCapture(writer) {
-  writer?.close();
-}
-function waitForProcess(proc, timeoutMs, getDiagnostics) {
-  return new Promise((resolve3, reject) => {
-    let settled = false;
-    let timeoutHandle;
-    const finish = (code, signal) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      if (timeoutHandle) {
-        clearTimeout(timeoutHandle);
-      }
-      resolve3({ code, signal });
-    };
-    proc.on("error", (error) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      if (timeoutHandle) {
-        clearTimeout(timeoutHandle);
-      }
-      const message = error instanceof Error ? error.message : String(error);
-      reject(new Error(`could not execute opencode run: ${message}; ${getDiagnostics()}`));
+  assertVersion(expectedVersion) {
+    const result = (0, import_child_process.spawnSync)("opencode", ["--version"], {
+      encoding: "utf8",
+      maxBuffer: 1024 * 1024,
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 1e4
     });
-    proc.on("close", (code, signal) => {
-      finish(
-        typeof code === "number" ? code : null,
-        typeof signal === "string" ? signal : null
-      );
-    });
-    timeoutHandle = setTimeout(() => {
-      if (settled) {
-        return;
-      }
-      try {
-        proc.kill("SIGTERM");
-      } catch {
-      }
-      const message = `opencode run timed out after ${timeoutMs} ms; ${getDiagnostics()}`;
-      reject(new Error(message));
-      settled = true;
-      const killHandle = setTimeout(() => {
-        try {
-          proc.kill("SIGKILL");
-        } catch {
-        }
-      }, 3e3);
-      killHandle.unref?.();
-    }, timeoutMs);
-    timeoutHandle.unref?.();
-  });
-}
-async function runOpenCodeRun(options, runtime) {
-  if (!options || typeof options !== "object") {
-    throw new Error("runOpenCodeRun requires an options object");
-  }
-  if (!options.prompt) {
-    throw new Error("runOpenCodeRun requires options.prompt");
-  }
-  if (!options.model) {
-    throw new Error("runOpenCodeRun requires options.model");
-  }
-  const timeoutMinutes = options.timeoutMinutes ?? DEFAULT_TIMEOUT_MINUTES;
-  if (!Number.isFinite(timeoutMinutes) || timeoutMinutes <= 0) {
-    throw new Error("runOpenCodeRun requires a positive options.timeoutMinutes");
-  }
-  const args = commandArgs(options.model, options.prompt);
-  const model = modelFromCommand(args);
-  const temporaryDebugDirectory = options.debugCapture ? null : fs3.mkdtempSync(path3.join(os2.tmpdir(), TEMP_DEBUG_PREFIX));
-  const stdoutPath = options.debugCapture?.stdoutPath ?? path3.join(temporaryDebugDirectory, "stdout.jsonl");
-  const stderrPath = options.debugCapture?.stderrPath ?? path3.join(temporaryDebugDirectory, "stderr.log");
-  const stdoutWriter = new LineBufferedWriter(stdoutPath);
-  const stderrWriter = new LineBufferedWriter(stderrPath);
-  const getDiagnostics = () => diagnostics(stdoutPath, stderrPath);
-  try {
-    const env = buildEnvironment(options);
-    let proc;
-    try {
-      proc = (runtime?.spawn ?? childProcess.spawn)("opencode", args, {
-        env,
-        stdio: ["ignore", "pipe", "pipe"]
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`could not execute opencode run: ${message}; ${getDiagnostics()}`);
+    const stdout = typeof result.stdout === "string" ? result.stdout.trim() : "";
+    const stderr = typeof result.stderr === "string" ? result.stderr.trim() : "";
+    if (result.error) {
+      throw new Error(`could not execute 'opencode --version': ${result.error.message}`);
     }
-    proc.stdout?.on("data", (chunk) => stdoutWriter.write(chunk));
-    proc.stderr?.on("data", (chunk) => stderrWriter.write(chunk));
-    const exit = await waitForProcess(proc, timeoutMinutes * 60 * 1e3, getDiagnostics);
-    stdoutWriter.close();
-    stderrWriter.close();
-    const stdout = fs3.readFileSync(stdoutPath, "utf8");
-    if (exit.code !== 0 || exit.signal) {
+    if (result.status !== 0) {
       throw new Error(
-        `opencode run exited unsuccessfully${exit.code !== null ? ` with status ${exit.code}` : ` with signal ${exit.signal}`}; ${getDiagnostics()}`
+        `'opencode --version' exited with status ${result.status}${stderr ? `: ${stderr}` : ""}`
       );
     }
-    const parsed = parseEvents(stdout, stdoutPath, stderrPath);
-    parsed.model = model;
-    return parsed;
-  } finally {
-    closeCapture(stdoutWriter);
-    closeCapture(stderrWriter);
-    if (temporaryDebugDirectory) {
-      fs3.rmSync(temporaryDebugDirectory, { recursive: true, force: true });
+    const reportedVersion = stdout || stderr;
+    const versionMatch = reportedVersion.match(/v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)/);
+    const installedVersion = (versionMatch?.[1] ?? reportedVersion.replace(/^v/, "")).trim();
+    const normalizedExpectedVersion = expectedVersion.replace(/^v/, "");
+    if (!installedVersion || installedVersion !== normalizedExpectedVersion) {
+      throw new Error(
+        `expected OpenCode ${normalizedExpectedVersion}, but 'opencode --version' reported '${reportedVersion || "<empty>"}'`
+      );
     }
   }
+  resolveModel(rawModel) {
+    return rawModel;
+  }
+  buildEnvironment(options) {
+    const env = { ...process.env };
+    for (const name of Object.keys(env)) {
+      if (name.startsWith("OPENCODE_")) {
+        delete env[name];
+      }
+    }
+    if (options.configPath) {
+      env.OPENCODE_CONFIG = options.configPath;
+    }
+    if (options.homeDir) {
+      fs4.mkdirSync(options.homeDir, { recursive: true, mode: 448 });
+      env.HOME = options.homeDir;
+    }
+    env.OPENCODE_PERMISSION = JSON.stringify({
+      read: "deny",
+      glob: "deny",
+      grep: "deny",
+      list: "deny",
+      webfetch: "deny",
+      edit: "deny",
+      write: "deny",
+      question: "deny",
+      doom_loop: "deny",
+      bash: {
+        // The action embeds a pathspec-filtered diff in the reviewer
+        // prompt (see REVIEW_DIFF_EXCLUDE_PATHSPECS in main.ts).
+        // `git diff` and `git show` are denied so the model cannot
+        // bypass that filter by re-fetching the raw diff via bash
+        // (which would otherwise expose the auto-generated dist
+        // bundles that the filter intentionally excludes).
+        "*": "ask",
+        "git log *": "allow",
+        "git rev-parse *": "allow"
+      }
+    });
+    return env;
+  }
+  commandArgs(model, prompt) {
+    return [
+      `--model=${model}`,
+      "run",
+      "--format=json",
+      "--",
+      prompt
+    ];
+  }
+  parseEvents(stdout, stdoutPath, stderrPath) {
+    const parts = [];
+    let finalStepFinish;
+    for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
+      let parsed;
+      try {
+        parsed = JSON.parse(line);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(`could not parse OpenCode JSON event: ${message}; ${diagnostics(stdoutPath, stderrPath)}`);
+      }
+      const eventType = normalizeEventType(parsed.type);
+      const partRecord = asRecord(parsed.part);
+      const partType = normalizeEventType(partRecord?.type);
+      const filteredType = eventType ?? partType;
+      if (!filteredType || !EVENT_TYPES.has(filteredType)) {
+        continue;
+      }
+      const normalized = normalizePart(parsed, filteredType);
+      parts.push(normalized);
+      if (filteredType === "step_finish") {
+        finalStepFinish = {
+          event: asRecord(parsed) ?? {},
+          part: normalized
+        };
+      }
+    }
+    const selection = selectTerminalText(parts);
+    const finalEvent = finalStepFinish?.event;
+    const finalPart = finalStepFinish?.part;
+    const cost = readNumber(finalEvent?.cost) ?? readNumber(finalPart?.cost) ?? 0;
+    const tokens = finalStepFinish ? readTokens(finalEvent, finalPart) : { input: 0, output: 0 };
+    return {
+      text: selection.text,
+      cost,
+      tokens,
+      model: "",
+      parts
+    };
+  }
+};
+
+// packages/run-reviews/src/claude-run.ts
+var import_child_process2 = require("child_process");
+var CLAUDE_ALLOWED_TOOLS = [
+  "Read",
+  "Glob",
+  "Grep",
+  "Bash(git diff *)",
+  "Bash(git show *)",
+  "Bash(git log *)",
+  "Bash(git rev-parse *)",
+  "query"
+];
+function readNumber2(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
 }
+function readString(value) {
+  return typeof value === "string" ? value : void 0;
+}
+function readUsageTokens(usage) {
+  if (!usage) {
+    return { input: 0, output: 0 };
+  }
+  const input = readNumber2(usage.input_tokens) ?? 0;
+  const output = readNumber2(usage.output_tokens) ?? 0;
+  const reasoning = readNumber2(usage.reasoning_tokens) ?? readNumber2(usage.cache_read_input_tokens);
+  return reasoning === void 0 ? { input, output } : { input, output, reasoning };
+}
+var ClaudeCodeRuntime = class {
+  constructor() {
+    this.tool = "claude";
+  }
+  assertVersion(expectedVersion) {
+    const result = (0, import_child_process2.spawnSync)("claude", ["--version"], {
+      encoding: "utf8",
+      maxBuffer: 1024 * 1024,
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 1e4
+    });
+    const stdout = typeof result.stdout === "string" ? result.stdout.trim() : "";
+    const stderr = typeof result.stderr === "string" ? result.stderr.trim() : "";
+    if (result.error) {
+      throw new Error(`could not execute 'claude --version': ${result.error.message}`);
+    }
+    if (result.status !== 0) {
+      throw new Error(
+        `'claude --version' exited with status ${result.status}${stderr ? `: ${stderr}` : ""}`
+      );
+    }
+    if (!expectedVersion) {
+      return;
+    }
+    const reportedVersion = stdout || stderr;
+    const versionMatch = reportedVersion.match(/v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)/);
+    const installedVersion = (versionMatch?.[1] ?? reportedVersion.replace(/^v/, "")).trim();
+    const normalizedExpectedVersion = expectedVersion.replace(/^v/, "");
+    if (!installedVersion || installedVersion !== normalizedExpectedVersion) {
+      throw new Error(
+        `expected Claude Code ${normalizedExpectedVersion}, but 'claude --version' reported '${reportedVersion || "<empty>"}'`
+      );
+    }
+  }
+  resolveModel(rawModel) {
+    const slashIndex = rawModel.indexOf("/");
+    if (slashIndex <= 0) {
+      throw new Error(
+        `tool=claude requires model in 'provider/model' format; got '${rawModel}'`
+      );
+    }
+    return rawModel.slice(slashIndex + 1);
+  }
+  buildEnvironment(_options) {
+    return { ...process.env };
+  }
+  commandArgs(model, prompt) {
+    const args = ["-p"];
+    for (const toolName of CLAUDE_ALLOWED_TOOLS) {
+      args.push("--allowedTools", toolName);
+    }
+    args.push(
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--include-partial-messages",
+      "--dangerously-skip-permissions",
+      "--model",
+      model,
+      "--",
+      prompt
+    );
+    return args;
+  }
+  parseEvents(stdout, stdoutPath, stderrPath) {
+    const parts = [];
+    let finalResultEvent;
+    for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
+      let parsed;
+      try {
+        parsed = JSON.parse(line);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(`could not parse Claude Code JSON event: ${message}; ${diagnostics(stdoutPath, stderrPath)}`);
+      }
+      parts.push(parsed);
+      if (parsed.type === "result") {
+        finalResultEvent = parsed;
+      }
+    }
+    const text = readString(finalResultEvent?.result) ?? "";
+    const cost = readNumber2(finalResultEvent?.total_cost_usd) ?? 0;
+    const tokens = readUsageTokens(finalResultEvent?.usage);
+    return {
+      text,
+      cost,
+      tokens,
+      model: "",
+      parts
+    };
+  }
+};
 
 // packages/run-reviews/src/opencode.ts
+function resolveRuntime(tool) {
+  return tool === "claude" ? new ClaudeCodeRuntime() : new OpenCodeRuntime();
+}
 var CANONICAL_FORMAT_TEMPLATE = `# Review \u2014 <title>
 
 ## Scope
@@ -25317,7 +25475,13 @@ ${CANONICAL_FORMAT_TEMPLATE}`;
 
 ${originalPrompt}`;
 }
-async function runOnce(prompt, model, configPath, options, debugCapture, runtime) {
+function combineResults(first, second) {
+  return {
+    input: first.tokens.input + second.tokens.input,
+    output: first.tokens.output + second.tokens.output
+  };
+}
+async function runOnce(prompt, model, configPath, options, debugCapture, runtime, spawnOverride) {
   const callOptions = {
     configPath,
     homeDir: options.homeDir,
@@ -25327,16 +25491,19 @@ async function runOnce(prompt, model, configPath, options, debugCapture, runtime
     disableTools: options.disableTools,
     debugCapture
   };
-  return runOpenCodeRun(callOptions, runtime);
+  return runReview(callOptions, runtime, spawnOverride?.spawn);
 }
-function combineResults(first, second) {
-  return {
-    input: first.tokens.input + second.tokens.input,
-    output: first.tokens.output + second.tokens.output
-  };
-}
-async function invokeOpenCode(prompt, model, configPath, options, runtime) {
-  const firstResult = await runOnce(prompt, model, configPath, options, options.debugCapture, runtime);
+async function invokeReview(prompt, model, configPath, options, tool, runtime) {
+  const runtimeImpl = resolveRuntime(tool);
+  const firstResult = await runOnce(
+    prompt,
+    model,
+    configPath,
+    options,
+    options.debugCapture,
+    runtimeImpl,
+    runtime
+  );
   const firstText = firstResult.text;
   const firstExtracted = extractReviewDocument(firstText);
   if (firstExtracted !== null) {
@@ -25348,7 +25515,15 @@ async function invokeOpenCode(prompt, model, configPath, options, runtime) {
     };
   }
   const retryPrompt = buildRetryPrompt(prompt, firstText);
-  const secondResult = await runOnce(retryPrompt, model, configPath, options, void 0, runtime);
+  const secondResult = await runOnce(
+    retryPrompt,
+    model,
+    configPath,
+    options,
+    void 0,
+    runtimeImpl,
+    runtime
+  );
   const secondExtracted = extractReviewDocument(secondResult.text);
   return {
     // If the retry still has no heading, fall through to the raw text
@@ -25363,7 +25538,7 @@ async function invokeOpenCode(prompt, model, configPath, options, runtime) {
 }
 
 // packages/run-reviews/src/prompt-composer.ts
-var fs4 = __toESM(require("fs"));
+var fs5 = __toESM(require("fs"));
 var path4 = __toESM(require("path"));
 function parsePrompts(input) {
   const workspace = path4.resolve(process.env.GITHUB_WORKSPACE || process.cwd());
@@ -25381,7 +25556,7 @@ function parsePrompts(input) {
       return {
         type: "file",
         source: filePath,
-        content: fs4.readFileSync(filePath, "utf8")
+        content: fs5.readFileSync(filePath, "utf8")
       };
     }
     if (entry.startsWith("text:")) {
@@ -25448,7 +25623,7 @@ function computeReviewDiff(eventContext, workingDir) {
     "--",
     ...REVIEW_DIFF_EXCLUDE_PATHSPECS
   ];
-  const result = (0, import_child_process.spawnSync)("git", args, {
+  const result = (0, import_child_process3.spawnSync)("git", args, {
     encoding: "utf8",
     maxBuffer: REVIEW_DIFF_MAX_BYTES * 2,
     stdio: ["ignore", "pipe", "pipe"],
@@ -25484,7 +25659,7 @@ function resolveDiffRange(eventContext, workingDir) {
     }
     return null;
   }
-  const probe = (0, import_child_process.spawnSync)("git", ["-C", workingDir, "rev-parse", "--verify", "--quiet", "HEAD~1"], {
+  const probe = (0, import_child_process3.spawnSync)("git", ["-C", workingDir, "rev-parse", "--verify", "--quiet", "HEAD~1"], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
     timeout: 5e3
@@ -25494,38 +25669,18 @@ function resolveDiffRange(eventContext, workingDir) {
   }
   return "HEAD~1..HEAD";
 }
-function assertOpenCodeVersion(expectedVersion) {
-  const result = (0, import_child_process.spawnSync)("opencode", ["--version"], {
-    encoding: "utf8",
-    maxBuffer: 1024 * 1024,
-    stdio: ["ignore", "pipe", "pipe"],
-    timeout: 1e4
-  });
-  const stdout = typeof result.stdout === "string" ? result.stdout.trim() : "";
-  const stderr = typeof result.stderr === "string" ? result.stderr.trim() : "";
-  if (result.error) {
-    throw new Error(`could not execute 'opencode --version': ${result.error.message}`);
-  }
-  if (result.status !== 0) {
-    throw new Error(
-      `'opencode --version' exited with status ${result.status}${stderr ? `: ${stderr}` : ""}`
-    );
-  }
-  const reportedVersion = stdout || stderr;
-  const versionMatch = reportedVersion.match(/v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)/);
-  const installedVersion = (versionMatch?.[1] ?? reportedVersion.replace(/^v/, "")).trim();
-  const normalizedExpectedVersion = expectedVersion.replace(/^v/, "");
-  if (!installedVersion || installedVersion !== normalizedExpectedVersion) {
-    throw new Error(
-      `expected OpenCode ${normalizedExpectedVersion}, but 'opencode --version' reported '${reportedVersion || "<empty>"}'`
-    );
+function assertToolVersion(tool, opencodeVersion, claudeVersion) {
+  if (tool === "claude") {
+    new ClaudeCodeRuntime().assertVersion(claudeVersion);
+  } else {
+    new OpenCodeRuntime().assertVersion(opencodeVersion);
   }
 }
 function createDebugDirectory() {
   const temporaryRoot = process.env.RUNNER_TEMP || os3.tmpdir();
-  fs5.mkdirSync(temporaryRoot, { recursive: true });
-  const debugDirectory = fs5.mkdtempSync(path5.join(temporaryRoot, "ai-review-debug-"));
-  fs5.chmodSync(debugDirectory, 448);
+  fs6.mkdirSync(temporaryRoot, { recursive: true });
+  const debugDirectory = fs6.mkdtempSync(path5.join(temporaryRoot, "ai-review-debug-"));
+  fs6.chmodSync(debugDirectory, 448);
   return debugDirectory;
 }
 function createDebugCapturePaths(directory, invocation, kind, model) {
@@ -25543,25 +25698,25 @@ function redactDebugOutput(output) {
   );
 }
 function finalizeDebugDirectory(directory) {
-  for (const entry of fs5.readdirSync(directory, { withFileTypes: true })) {
+  for (const entry of fs6.readdirSync(directory, { withFileTypes: true })) {
     if (!entry.isFile() || entry.name.endsWith(".gz")) {
       continue;
     }
     const rawPath = path5.join(directory, entry.name);
-    const redacted = redactDebugOutput(fs5.readFileSync(rawPath, "utf8"));
-    fs5.writeFileSync(`${rawPath}.gz`, (0, import_zlib.gzipSync)(redacted), { mode: 384 });
-    fs5.rmSync(rawPath, { force: true });
+    const redacted = redactDebugOutput(fs6.readFileSync(rawPath, "utf8"));
+    fs6.writeFileSync(`${rawPath}.gz`, (0, import_zlib.gzipSync)(redacted), { mode: 384 });
+    fs6.rmSync(rawPath, { force: true });
   }
 }
 function writeReviewOutputFile(targetPath, content) {
-  fs5.mkdirSync(path5.dirname(targetPath), { recursive: true });
-  fs5.writeFileSync(targetPath, content, { encoding: "utf8", mode: 384 });
+  fs6.mkdirSync(path5.dirname(targetPath), { recursive: true });
+  fs6.writeFileSync(targetPath, content, { encoding: "utf8", mode: 384 });
 }
 function readReviewOutputFile(targetPath) {
-  if (!fs5.existsSync(targetPath)) {
+  if (!fs6.existsSync(targetPath)) {
     throw new Error(`review output file not found at ${targetPath}`);
   }
-  const content = fs5.readFileSync(targetPath, "utf8");
+  const content = fs6.readFileSync(targetPath, "utf8");
   if (!content.trim()) {
     throw new Error(`review output file at ${targetPath} is empty`);
   }
@@ -25612,10 +25767,10 @@ async function runReviews(options) {
     rejectedDocuments: []
   };
   try {
-    assertOpenCodeVersion(options.opencodeVersion);
+    assertToolVersion(options.tool, options.opencodeVersion, options.claudeVersion ?? "");
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return { ...empty, failureReason: `OpenCode version assertion failed: ${message}` };
+    return { ...empty, failureReason: `Review runtime version assertion failed: ${message}` };
   }
   const validResults = [];
   const accountedResults = [];
@@ -25669,27 +25824,36 @@ async function runReviews(options) {
     }
   }
   reviewDiff = computeReviewDiff(eventContextForSetup, process.env.GITHUB_WORKSPACE || process.cwd());
-  try {
-    const agent = buildAgentDefinition({
-      eventContext: eventContextForSetup,
-      priorReviewsBlock,
-      reviewDiff
-    });
-    const merged = buildMergedConfig({
-      userConfig: options.userConfig,
-      permission: options.permission,
-      agent,
-      model: effectiveModels[0]
-    });
-    configPath = merged.configPath;
-    homeDir = merged.homeDir;
-    serializedConfig = merged.serializedConfig;
+  if (options.tool === "claude") {
+    configPath = "";
+    homeDir = os3.tmpdir();
+    serializedConfig = "";
     if (options.debug) {
       debugDirectory = createDebugDirectory();
     }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return { ...empty, failureReason: `Review setup failed: ${message}` };
+  } else {
+    try {
+      const agent = buildAgentDefinition({
+        eventContext: eventContextForSetup,
+        priorReviewsBlock,
+        reviewDiff
+      });
+      const merged = buildMergedConfig({
+        userConfig: options.userConfig,
+        permission: options.permission,
+        agent,
+        model: effectiveModels[0]
+      });
+      configPath = merged.configPath;
+      homeDir = merged.homeDir;
+      serializedConfig = merged.serializedConfig;
+      if (options.debug) {
+        debugDirectory = createDebugDirectory();
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { ...empty, failureReason: `Review setup failed: ${message}` };
+    }
   }
   const orderedPrompts = [...prompts].sort((left, right) => compareLexically(left.source, right.source));
   const orderedModels = [...effectiveModels].sort(compareLexically);
@@ -25706,7 +25870,7 @@ async function runReviews(options) {
     for (const currentModel of orderedModels) {
       console.log(`Running review: ${currentModel} :: ${prompt.source}`);
       try {
-        const result = await invokeOpenCode(
+        const result = await invokeReview(
           composeTaskPromptWithPreviousReviews([prompt], priorReviewsBlock),
           currentModel,
           configPath,
@@ -25714,7 +25878,8 @@ async function runReviews(options) {
             homeDir,
             timeoutMinutes: options.timeoutMinutes,
             debugCapture: options.debug ? createDebugCapturePaths(debugDirectory, ++debugInvocation, "review", currentModel) : void 0
-          }
+          },
+          options.tool
         );
         accountedResults.push(result);
         successfulModels.add(currentModel);
@@ -25805,7 +25970,7 @@ async function runReviews(options) {
       finalizeDebugDirectory(debugDirectory);
       debugArtifactPath = debugDirectory;
     } catch (error) {
-      fs5.rmSync(debugDirectory, { recursive: true, force: true });
+      fs6.rmSync(debugDirectory, { recursive: true, force: true });
       const message = error instanceof Error ? error.message : String(error);
       failureMessage = failureMessage ?? `Failed to create redacted debug artifact: ${message}`;
     }
@@ -25857,9 +26022,20 @@ function readPermissionInput(input) {
   }
   return parsed;
 }
+function readToolInput(input) {
+  const raw = (input || "opencode").trim().toLowerCase();
+  if (raw === "opencode" || raw === "claude") {
+    return raw;
+  }
+  throw new Error(
+    `tool input must be 'opencode' or 'claude'; received '${input || "<empty>"}'`
+  );
+}
 function buildOptionsFromCore() {
   return {
+    tool: readToolInput(core2.getInput("tool")),
     opencodeVersion: core2.getInput("opencode-version") || DEFAULT_OPENCODE_VERSION,
+    claudeVersion: core2.getInput("claude-version") || void 0,
     debug: core2.getBooleanInput("debug"),
     model: core2.getInput("model") || DEFAULT_MODEL,
     modelsInput: core2.getInput("models"),

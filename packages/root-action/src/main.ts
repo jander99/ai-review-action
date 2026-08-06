@@ -1,7 +1,7 @@
 import * as core from '@actions/core';
 import { context } from '@actions/github';
 import { runReviews } from '@jander99/ai-review-run-reviews';
-import type { RunReviewsOptions, RunReviewsResult } from '@jander99/ai-review-run-reviews';
+import type { RunReviewsOptions, RunReviewsResult, ReviewTool } from '@jander99/ai-review-run-reviews';
 import { validateReview } from '@jander99/ai-review-validate-review';
 import type { ValidateReviewOptions, ValidateReviewResult } from '@jander99/ai-review-validate-review';
 import { postComment } from '@jander99/ai-review-post-comment';
@@ -108,8 +108,20 @@ function roundCost(value: number): string {
 }
 
 function buildRunReviewsOptions(): RunReviewsOptions {
+  // `tool` is read once at the wrapper boundary; an invalid value
+  // raises here (before runReviews is invoked) so the action log
+  // surfaces the typo cleanly instead of the runtime failing later.
+  const rawTool = (core.getInput('tool') || 'opencode').trim().toLowerCase();
+  if (rawTool !== 'opencode' && rawTool !== 'claude') {
+    throw new Error(
+      `tool input must be 'opencode' or 'claude'; received '${core.getInput('tool') || '<empty>'}'`,
+    );
+  }
+  const tool: ReviewTool = rawTool === 'claude' ? 'claude' : 'opencode';
   return {
+    tool,
     opencodeVersion: core.getInput('opencode-version') || DEFAULT_OPENCODE_VERSION,
+    claudeVersion: core.getInput('claude-version') || undefined,
     debug: getBooleanInput('debug'),
     model: core.getInput('model') || DEFAULT_MODEL,
     modelsInput: core.getInput('models'),
@@ -123,6 +135,11 @@ function buildRunReviewsOptions(): RunReviewsOptions {
 }
 
 function buildValidateReviewOptions(reviewPath: string, model: string, passedConfigJson: string): ValidateReviewOptions {
+  // TODO: the validator package is opencode-only. When `tool=claude`
+  // the root action should skip this call entirely instead of
+  // forwarding an empty `passedConfigJson` that the validator
+  // rejects with "config-json input is required". Not changing
+  // validator package behavior in this PR per the spec.
   return {
     opencodeVersion: core.getInput('opencode-version') || DEFAULT_OPENCODE_VERSION,
     reviewPath,

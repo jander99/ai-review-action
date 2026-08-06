@@ -1,0 +1,209 @@
+'use strict';
+
+/**
+ * Tests for the Claude Code CLI transport (`claude-run.ts`).
+ *
+ * Mirrors the shape of `opencode-run.test.cjs`:
+ *   - Tests 1-3 spawn a fake `claude` process via a custom `spawn`
+ *     override and assert the parsed result shape.
+ *   - Tests 4-5 exercise `ClaudeCodeRuntime.resolveModel` directly so
+ *     we don't need to spawn anything to verify model-format behavior.
+ *
+ * The fake process emits the NDJSON line shape documented for the
+ * Claude Code CLI (`--output-format stream-json`): the final line is a
+ * `{type: "result", ...}` event carrying `result`, `total_cost_usd`,
+ * and `usage`.
+ */
+
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { EventEmitter } = require('node:events');
+const { PassThrough } = require('node:stream');
+const bundle = require('../dist-test/index.cjs');
+const { runClaudeRun, ClaudeCodeRuntime } = bundle;
+
+const PROMPT = 'return the canonical review';
+const RAW_MODEL = 'anthropic/claude-sonnet-4.6';
+const RESOLVED_MODEL = 'claude-sonnet-4.6';
+
+function makeProcess({ events = [], stderr = '', exitCode = 0 } = {}) {
+  const proc = new EventEmitter();
+  proc.stdout = new PassThrough();
+  proc.stderr = new PassThrough();
+  proc.kill = () => true;
+
+  setImmediate(() => {
+    for (const event of events) {
+      proc.stdout.write(`${JSON.stringify(event)}\n`);
+    }
+    if (stderr) {
+      proc.stderr.write(stderr.endsWith('\n') ? stderr : `${stderr}\n`);
+    }
+    proc.stdout.end();
+    proc.stderr.end();
+    proc.emit('close', exitCode, null);
+  });
+
+  return proc;
+}
+
+function runWithEvents(events, overrides = {}) {
+  const spawnCalls = [];
+  const result = runClaudeRun(
+    {
+      prompt: PROMPT,
+      model: RAW_MODEL,
+      homeDir: '/tmp/claude-test-home',
+      timeoutMinutes: 1,
+      ...overrides,
+    },
+    {
+      spawn: (command, args, options) => {
+        spawnCalls.push({ command, args, options });
+        return makeProcess(overrides.process ?? { events });
+      },
+    },
+  );
+  return { result, spawnCalls };
+}
+
+test('runClaudeRun spawns claude with expected flags', async () => {
+  const { result, spawnCalls } = runWithEvents([
+    { type: 'result', subtype: 'success', result: 'hello', total_cost_usd: 0, usage: {} },
+  ]);
+  const resultValue = await result;
+
+  assert.equal(resultValue.text, 'hello');
+  assert.equal(spawnCalls.length, 1);
+  assert.equal(spawnCalls[0].command, 'claude');
+
+  // Verify the args sequence. Each `--allowedTools <name>` pair is a
+  // separate argv entry (Claude Code accepts multiple separate
+  // `--allowedTools` flags rather than a single comma-separated
+  // value).
+  const args = spawnCalls[0].args;
+  assert.ok(args.includes('-p'), 'must pass -p for non-interactive mode');
+  assert.ok(args.includes('--output-format'), 'must pass --output-format');
+  assert.equal(args[args.indexOf('--output-format') + 1], 'stream-json');
+  assert.ok(args.includes('--verbose'), 'must pass --verbose');
+  assert.ok(args.includes('--include-partial-messages'), 'must pass --include-partial-messages');
+  assert.ok(args.includes('--dangerously-skip-permissions'), 'must pass --dangerously-skip-permissions');
+
+  // The full allowedTools allow-list must be present, each as its own
+  // argv entry.
+  const expectedTools = [
+    'Read',
+    'Glob',
+    'Grep',
+    'Bash(git diff *)',
+    'Bash(git show *)',
+    'Bash(git log *)',
+    'Bash(git rev-parse *)',
+    'query',
+  ];
+  const seenTools = [];
+  for (let i = 0; i < args.length; i += 1) {
+    if (args[i] === '--allowedTools') {
+      seenTools.push(args[i + 1]);
+      i += 1;
+    }
+  }
+  assert.deepEqual(seenTools, expectedTools, 'every allowedTool must appear once');
+
+  // Resolved model (provider prefix stripped) is passed to --model.
+  const modelFlagIndex = args.indexOf('--model');
+  assert.notEqual(modelFlagIndex, -1, '--model flag must be present');
+  assert.equal(args[modelFlagIndex + 1], RESOLVED_MODEL);
+
+  // Prompt is the trailing positional after `--`.
+  assert.equal(args[args.length - 2], '--');
+  assert.equal(args[args.length - 1], PROMPT);
+});
+
+test('runClaudeRun extracts text from the result event', async () => {
+  const { result } = runWithEvents([
+    { type: 'stream_event', delta: { text: 'partial ' } },
+    { type: 'result', subtype: 'success', result: '# Review — title\n\n## Summary', total_cost_usd: 0, usage: {} },
+  ]);
+  const resultValue = await result;
+  assert.equal(resultValue.text, '# Review — title\n\n## Summary');
+});
+
+test('runClaudeRun extracts cost and tokens from the result event', async () => {
+  const { result } = runWithEvents([
+    {
+      type: 'result',
+      subtype: 'success',
+      result: '',
+      total_cost_usd: 0.42,
+      usage: { input_tokens: 123, output_tokens: 45, cache_read_input_tokens: 7 },
+    },
+  ]);
+  const resultValue = await result;
+  assert.equal(resultValue.cost, 0.42);
+  // cache_read_input_tokens is the fallback for the reasoning token
+  // count when the CLI does not surface a dedicated `reasoning_tokens`
+  // field.
+  assert.deepEqual(resultValue.tokens, { input: 123, output: 45, reasoning: 7 });
+});
+
+test('runClaudeRun uses reasoning_tokens when the CLI surfaces it', async () => {
+  const { result } = runWithEvents([
+    {
+      type: 'result',
+      subtype: 'success',
+      result: '',
+      total_cost_usd: 0.5,
+      usage: { input_tokens: 10, output_tokens: 5, reasoning_tokens: 99, cache_read_input_tokens: 7 },
+    },
+  ]);
+  const resultValue = await result;
+  assert.deepEqual(resultValue.tokens, { input: 10, output: 5, reasoning: 99 });
+});
+
+test('runClaudeRun preserves the original provider/model string in result', async () => {
+  const { result } = runWithEvents([
+    { type: 'result', subtype: 'success', result: '', total_cost_usd: 0, usage: {} },
+  ]);
+  const resultValue = await result;
+  // The runtime resolves to `claude-sonnet-4.6` for the --model flag,
+  // but the caller's original `anthropic/claude-sonnet-4.6` is what
+  // downstream accounting (costByModel / tokensByModel) keys on.
+  assert.equal(resultValue.model, RAW_MODEL);
+});
+
+test('runClaudeRun rejects models without provider/ prefix', async () => {
+  // resolveModel throws BEFORE spawn is called, so we can exercise
+  // the validation purely through the runtime class - no fake
+  // process needed.
+  const runtime = new ClaudeCodeRuntime();
+  assert.throws(
+    () => runtime.resolveModel('claude-sonnet-4.6'),
+    /requires model in 'provider\/model' format/,
+  );
+  assert.throws(
+    () => runtime.resolveModel(''),
+    /requires model in 'provider\/model' format/,
+  );
+});
+
+test('runClaudeRun handles an empty result text gracefully', async () => {
+  const { result } = runWithEvents([
+    { type: 'result', subtype: 'success', result: '', total_cost_usd: 0, usage: {} },
+  ]);
+  const resultValue = await result;
+  assert.equal(resultValue.text, '');
+  assert.equal(resultValue.cost, 0);
+});
+
+test('runClaudeRun reports stderr when the process exits non-zero', async () => {
+  const { result } = runWithEvents([], {
+    process: { events: [], stderr: 'auth failed: missing ANTHROPIC_API_KEY', exitCode: 1 },
+  });
+
+  await assert.rejects(result, (error) => {
+    assert.match(error.message, /status 1/);
+    assert.match(error.message, /auth failed/);
+    return true;
+  });
+});
