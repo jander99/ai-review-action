@@ -15,7 +15,7 @@ The sub-actions remain available for callers who want fine-grained composition:
 - `run-reviews` removes workspace-root `opencode.json` and `opencode.jsonc`, builds an isolated merged configuration under the runner temp directory, and uses an isolated OpenCode home.
 - The action injects event/ref context into an action-owned agent definition. It does not materialize a diff; the model uses Git to decide what to inspect.
 - Prompts use `file:` or `text:` sources. `models` and `prompts` are cross-producted in stable lexical order.
-- Optional fusion sanitizes and size-limits individual reviews and runs a tool-disabled synthesis pass.
+- Multiple reviews are deterministically merged into one canonical document; findings dedup by normalized key, and the merge enforces the 256 KB contract maximum (exceeding it throws).
 - Results expose review text, successful models, cost, and token totals, including per-model JSON outputs.
 - Pull requests publish comments; non-PR events publish check runs. Publishing can be disabled independently.
 - Debug mode captures stdout/stderr, applies best-effort credential redaction, compresses the files, and uploads a short-lived artifact.

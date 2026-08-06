@@ -71,7 +71,7 @@ jobs:
               console.error('action.yml must declare using: node24');
               process.exit(1);
             }
-            const inputs = ['opencode-version', 'debug', 'github-token', 'model', 'models', 'prompts', 'opencode-config', 'permission', 'timeout-minutes', 'fusion', 'fusion-model', 'fail-on-error', 'post-comment', 'post-check-run', 'max-comment-chars', 'check-name', 'check-conclusion', 'check-details-url'];
+            const inputs = ['opencode-version', 'debug', 'github-token', 'model', 'models', 'prompts', 'opencode-config', 'permission', 'timeout-minutes', 'fail-on-error', 'post-comment', 'post-check-run', 'max-comment-chars', 'check-name', 'check-conclusion', 'check-details-url'];
             for (const name of inputs) {
               if (!action.includes(name + ':')) {
                 console.error('action.yml must declare input: ' + name);

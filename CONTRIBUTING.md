@@ -53,7 +53,7 @@ Use a real Linux x64 release archive and non-production credentials to verify th
 3. Set the root action's `opencode-version` to a different version and confirm the version assertion fails.
 4. Run a `pull_request` review with `pull-requests: write` and confirm a comment and `comment-url` are produced.
 5. Run a `push` or `workflow_dispatch` review with `checks: write` and confirm an `ai-review` check run and `check-run-url` are produced.
-6. When changing orchestration, exercise multiple prompts/models, fusion success and failure, partial results, and both values of `fail-on-error`.
+6. When changing orchestration, exercise multiple prompts/models, partial results, and both values of `fail-on-error`.
 7. When changing debug capture, enable `debug`, download `ai-review-debug`, confirm files are gzipped, and inspect them for unredacted synthetic credential patterns. Treat the artifact as sensitive even when the check passes.
 
 Never expose production provider credentials to untrusted pull-request code, and do not use `pull_request_target` as a workaround for fork secret restrictions.
@@ -104,7 +104,7 @@ Contract tests should verify at least:
 - `opencode --version` parsing and mismatch failure;
 - `opencode run <prompt> --model <provider/model> --format json` argument compatibility;
 - JSONL parsing, including malformed lines and the expected cost/token shape;
-- tool-disabled fusion behavior and stable result accounting; and
+- deterministic merge behavior and stable result accounting; and
 - config/permission behavior on the pinned OpenCode version.
 
 Fixtures must contain no live credentials or repository-sensitive content. Capture them from a pinned binary, sanitize them once, and review fixture changes as ABI changes rather than updating snapshots merely to make a test pass. Live-provider smoke tests should remain opt-in and separate from deterministic CI tests.

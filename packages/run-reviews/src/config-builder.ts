@@ -27,12 +27,6 @@ export interface BuildMergedConfigResult {
   merged: MergedConfig;
 }
 
-export interface BuildFusionConfigOptions {
-  agent: AgentDefinition;
-  model: string;
-  runnerTemp?: string;
-}
-
 export interface BuildValidatorConfigOptions {
   /**
    * Resolved OpenCode model the validator should use. Typically the
@@ -66,18 +60,6 @@ export interface BuildValidatorConfigResult {
   serializedConfig: string;
   config: Record<string, unknown>;
 }
-
-const FUSION_PERMISSION: Permission = {
-  read: 'deny',
-  glob: 'deny',
-  grep: 'deny',
-  list: 'deny',
-  webfetch: 'deny',
-  edit: 'deny',
-  question: 'deny',
-  doom_loop: 'deny',
-  bash: 'deny',
-};
 
 const VALIDATOR_PERMISSION: Permission = {
   read: 'deny',
@@ -359,33 +341,6 @@ export function buildMergedConfig(options: BuildMergedConfigOptions): BuildMerge
   return { configPath, homeDir, serializedConfig, merged };
 }
 
-export function buildFusionConfig(options: BuildFusionConfigOptions): BuildMergedConfigResult {
-  const synthesisAgent = options.agent.synthesis;
-  if (!synthesisAgent) {
-    throw new Error('Synthesis agent definition is required');
-  }
-
-  const runnerTemp = path.resolve(options.runnerTemp || process.env.RUNNER_TEMP || process.cwd());
-  const configPath = path.join(runnerTemp, 'opencode-fusion.json');
-  const homeDir = path.join(runnerTemp, 'ai-review-opencode-home-fusion');
-  const config = {
-    permission: FUSION_PERMISSION,
-    agent: { synthesis: synthesisAgent },
-    default_agent: 'synthesis',
-    model: options.model,
-  };
-
-  fs.mkdirSync(runnerTemp, { recursive: true });
-  fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
-  core.info(`Wrote isolated OpenCode fusion config: ${configPath}`);
-  return {
-    configPath,
-    homeDir,
-    serializedConfig: JSON.stringify(config, null, 2),
-    merged: config as unknown as MergedConfig,
-  };
-}
-
 /**
  * Build a validator-only OpenCode config that can be safely passed
  * to downstream actions. The returned object:
@@ -399,9 +354,9 @@ export function buildFusionConfig(options: BuildFusionConfigOptions): BuildMerge
  *   - carries the `__validator__: true` marker so consumers can
  *     recognize it as validator-only.
  *
- * Crucially, the object does NOT contain `agent.review`,
- * `agent.synthesis`, or any prompt that embeds `reviewOutputPath`,
- * and does NOT contain any `OPENCODE_*` env values.
+ * Crucially, the object does NOT contain `agent.review` or any
+ * prompt that embeds `reviewOutputPath`, and does NOT contain any
+ * `OPENCODE_*` env values.
  */
 export function buildValidatorConfig(options: BuildValidatorConfigOptions): BuildValidatorConfigResult {
   if (!options.model) {

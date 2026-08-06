@@ -48,14 +48,6 @@ inputs:
     description: 'Timeout for each OpenCode invocation.'
     required: false
     default: '30'
-  fusion:
-    description: 'Synthesize successful reviews into one result.'
-    required: false
-    default: 'false'
-  fusion-model:
-    description: 'Model used for fusion; defaults to the first effective model.'
-    required: false
-    default: ''
   fail-on-error:
     description: 'Exit non-zero when any review fails.'
     required: false
@@ -101,9 +93,9 @@ outputs:
       Canonical review document. When a single review invocation produces
       a valid document, that document is returned. When multiple
       invocations succeed, the documents are deterministically merged
-      (or fused when fusion is enabled and successful) into one
-      canonical document. Empty when no invocation produced a valid
-      document.
+      into one canonical document. Empty when no invocation produced a
+      valid document, or when valid invocations merged past the
+      contract maximum (see `failure-reason`).
   comment-url:
     description: >-
       URL of the posted PR comment (pull_request events). Empty when
@@ -151,7 +143,7 @@ outputs:
   review-output-path:
     description: 'Runner-local path to the authoritative review markdown file written by the action from a validated model response.'
   config-json:
-    description: 'OpenCode config JSON for the validator invocation (no agent review/synthesis prompts, no path leakage, no user-supplied secrets).'
+    description: 'OpenCode config JSON for the validator invocation (no agent review prompts, no path leakage, no user-supplied secrets).'
 
 runs:
   using: node24
