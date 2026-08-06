@@ -1,6 +1,6 @@
 # AI Review Action
 
-AI Review Action runs repository reviews through the OpenCode CLI using provider API keys supplied by your workflow. It supports one or many models and prompts, optional fusion, cost and token reporting, PR comments, non-PR check runs, user-composed OpenCode configuration, and opt-in debug capture.
+AI Review Action runs repository reviews through the OpenCode CLI using provider API keys supplied by your workflow. It supports one or many models and prompts, deterministic merging of multiple reviews into one canonical document, cost and token reporting, PR comments, non-PR check runs, user-composed OpenCode configuration, and opt-in debug capture.
 
 ## Prerequisites
 
@@ -101,10 +101,8 @@ These are all inputs accepted by the root `jander99/ai-review-action` action.
 | `prompts` | **Yes** | None | Comma-separated prompt sources. Each entry must begin with `file:` or `text:`. |
 | `opencode-config` | No | None | Path to a user-provided `opencode.json` or `opencode.jsonc` to merge into the isolated action configuration. |
 | `permission` | No | [Explicit per-tool defaults](#default-tool-permissions) | JSON object replacing the OpenCode permission block. |
-| `timeout-minutes` | No | `30` | Timeout for each review or fusion invocation. Must be a positive integer. |
-| `fusion` | No | `false` | Run a tool-disabled synthesis pass over successful individual reviews. |
-| `fusion-model` | No | First effective model | Model used for the fusion pass. |
-| `fail-on-error` | No | `false` | Fail the step when any review or fusion operation fails. Setup and validation failures always fail. |
+| `timeout-minutes` | No | `30` | Timeout for each review invocation. Must be a positive integer. |
+| `fail-on-error` | No | `false` | Fail the step when any review operation fails. Setup and validation failures always fail. |
 | `post-comment` | No | `true` | Publish on `pull_request` events. Set to `false` to consume outputs without commenting. |
 | `post-check-run` | No | `true` | Publish on non-PR events. Set to `false` to consume outputs without creating a check run. |
 | `max-comment-chars` | No | `65000` | Maximum PR comment length before truncation. |
@@ -136,9 +134,9 @@ OpenCode does not currently provide reliable sub-command allow-lists. `bash: all
 
 | Output | Description |
 |---|---|
-| `review` | Canonical review document. When a single review invocation produces a valid document, that document is returned. When multiple invocations succeed, the documents are deterministically merged (or fused when fusion is enabled and successful) into one canonical document. Empty when no invocation produced a valid document. |
+| `review` | Canonical review document. When a single review invocation produces a valid document, that document is returned. When multiple invocations succeed, the documents are deterministically merged into one canonical document. Empty when no invocation produced a valid document, or when valid invocations merged past the contract maximum (see `failure-reason`). |
 | `review-output-path` | Runner-local path to the authoritative review markdown file written by the action from a validated model response. |
-| `config-json` | OpenCode config JSON for the validator invocation (no agent review/synthesis prompts, no path leakage, no user-supplied secrets). |
+| `config-json` | OpenCode config JSON for the validator invocation (no agent review prompts, no path leakage, no user-supplied secrets). |
 | `comment-url` | URL of the posted PR comment (pull_request events). Falls back to the error-comment URL when the normal post is skipped. |
 | `check-run-url` | URL of the created check run (non-PR events). Falls back to the error-check-run URL when the normal check run is skipped. |
 | `models-used` | Comma-separated list of models that completed successfully. |
@@ -162,7 +160,7 @@ The repository is an Nx monorepo. The root action is a single JavaScript bundle;
 | Sub-action | Path | Purpose |
 |---|---|---|
 | `setup-opencode` | `packages/setup-opencode` | Install a pinned OpenCode release after verifying its SHA-256 checksum. |
-| `run-reviews` | `packages/run-reviews` | Run the review, fusion, and validation pipeline; write the canonical document. |
+| `run-reviews` | `packages/run-reviews` | Run the review and validation pipeline; write the canonical document. |
 | `validate-review` | `packages/validate-review` | Run the structural validator on a review file. |
 | `post-comment` | `packages/post-comment` | Post a PR comment from a review document. |
 | `post-check-run` | `packages/post-check-run` | Create a check run from a review document. |
@@ -250,12 +248,12 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
-### Multi-model with fusion
+### Multi-model with deterministic merge
 
-Run every prompt against both models, then synthesize the successful results with Claude.
+Run every prompt against both models; the action deterministically merges the successful results into one canonical document (no separate synthesis pass).
 
 ```yaml
-name: AI Review (multi-model fusion)
+name: AI Review (multi-model)
 on:
   pull_request:
 
@@ -280,8 +278,6 @@ jobs:
         with:
           models: "anthropic/claude-sonnet-4.6, openai/gpt-4o"
           prompts: "file:examples/prompts/code-review.md, file:examples/prompts/security-review.md"
-          fusion: true
-          fusion-model: anthropic/claude-sonnet-4.6
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

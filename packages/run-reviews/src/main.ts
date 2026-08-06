@@ -4,6 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { gzipSync } from 'zlib';
 import {
+  MAX_CHARS,
   mergeReviewDocuments,
   validateReviewDocument,
 } from '@jander99/ai-review-review-contract';
@@ -14,8 +15,7 @@ import {
   getEventContext,
   titleOrRefForHeading,
 } from './agent-definition';
-import { buildFusionConfig, buildMergedConfig, buildValidatorConfig } from './config-builder';
-import { composeFusionPrompt } from './fusion';
+import { buildMergedConfig, buildValidatorConfig } from './config-builder';
 import { invokeOpenCode } from './opencode';
 import type { DebugCapturePaths } from './opencode';
 import { parsePrompts, composeTaskPromptWithPreviousReviews } from './prompt-composer';
@@ -78,7 +78,7 @@ function createDebugDirectory(): string {
 function createDebugCapturePaths(
   directory: string,
   invocation: number,
-  kind: 'review' | 'fusion',
+  kind: 'review',
   model: string,
 ): DebugCapturePaths {
   const safeModel = model.replace(/[^A-Za-z0-9._-]+/g, '-').slice(0, 80) || 'unknown-model';
@@ -163,8 +163,6 @@ export interface RunReviewsOptions {
   debug: boolean;
   model: string;
   modelsInput: string;
-  fusionEnabled: boolean;
-  fusionModel: string;
   failOnError: boolean;
   timeoutMinutes: number;
   prompts: string;
@@ -294,12 +292,9 @@ export async function runReviews(options: RunReviewsOptions): Promise<RunReviews
   const rejectedDocuments: RejectedDocument[] = [];
   let prompts: PromptEntry[];
   let effectiveModels: string[];
-  let fusionModel: string;
   let configPath: string;
   let homeDir: string;
   let serializedConfig = '';
-  let fusionConfigPath = '';
-  let fusionHomeDir = '';
   let debugDirectory = '';
   let debugInvocation = 0;
   let priorReviewsBlock: string | null = null;
@@ -322,7 +317,6 @@ export async function runReviews(options: RunReviewsOptions): Promise<RunReviews
       throw new Error('At least one model is required');
     }
 
-    fusionModel = options.fusionModel || effectiveModels[0];
     prompts = parsePrompts(options.prompts);
     eventContextForSetup = getEventContext();
   } catch (error) {
@@ -365,14 +359,6 @@ export async function runReviews(options: RunReviewsOptions): Promise<RunReviews
     configPath = merged.configPath;
     homeDir = merged.homeDir;
     serializedConfig = merged.serializedConfig;
-    if (options.fusionEnabled) {
-      const fusion = buildFusionConfig({
-        agent,
-        model: fusionModel,
-      });
-      fusionConfigPath = fusion.configPath;
-      fusionHomeDir = fusion.homeDir;
-    }
     if (options.debug) {
       debugDirectory = createDebugDirectory();
     }
@@ -455,78 +441,41 @@ export async function runReviews(options: RunReviewsOptions): Promise<RunReviews
         `all ${accountedResults.length} review invocation(s) produced invalid documents`;
     }
   } else {
-    if (options.fusionEnabled && validResults.length > 1) {
-      console.log(`Running fusion: ${fusionModel}`);
-      try {
-        const agent = buildAgentDefinition({
-          eventContext: eventContextForSetup,
-          priorReviewsBlock,
-        });
-        const fusionResult = await invokeOpenCode(
-          composeFusionPrompt(
-            validResults.map((entry) => ({ model: entry.model, prompt: entry.prompt, text: entry.document })),
-            agent.synthesis.prompt,
-          ),
-          fusionModel,
-          fusionConfigPath,
-          {
-            homeDir: fusionHomeDir,
-            timeoutMinutes: options.timeoutMinutes,
-            disableTools: true,
-            debugCapture: options.debug
-              ? createDebugCapturePaths(debugDirectory, ++debugInvocation, 'fusion', fusionModel)
-              : undefined,
-          },
-        );
-        accountedResults.push(fusionResult);
-        successfulModels.add(fusionModel);
-        const validation = validateReviewDocument(fusionResult.text);
-        if (!validation.valid) {
-          failures.push(`fusion :: ${fusionModel}: invalid fused review (${validation.reason})`);
-          console.warn(
-            `Fusion result from ${fusionModel} is structurally invalid: ${validation.reason}; falling back to deterministic merge.`,
-          );
-          if (rejectedDocuments.length < REJECTED_DOCUMENT_CAP) {
-            rejectedDocuments.push({
-              model: `fusion:${fusionModel}`,
-              reason: validation.reason,
-              preview: buildRejectedDocumentPreview(fusionResult.text),
-            });
-          }
-        } else {
-          canonicalDocument = fusionResult.text;
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        failures.push(`fusion :: ${fusionModel}: ${message}`);
-        console.warn(`Fusion failed for ${fusionModel}; falling back to deterministic merge: ${message}`);
-      }
-    }
-
     if (canonicalDocument === undefined) {
       if (validResults.length === 1) {
         canonicalDocument = validResults[0].document;
       } else {
-        canonicalDocument = mergeReviewDocuments(
-          validResults.map((entry) => entry.document),
-          titleOrRef,
-        );
+        try {
+          canonicalDocument = mergeReviewDocuments(
+            validResults.map((entry) => entry.document),
+            titleOrRef,
+          );
+        } catch (error) {
+          // mergeReviewDocuments enforces the MAX_CHARS cap; surface the
+          // message via failureReason and skip the write/read so the
+          // action's downstream consumers see the failure cleanly
+          // instead of an oversized invalid document.
+          failureMessage = error instanceof Error ? error.message : String(error);
+          canonicalDocument = undefined;
+        }
       }
     }
 
-    try {
-      writeReviewOutputFile(reviewOutputPath, canonicalDocument);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      failureMessage = failureMessage ?? `Review output file write failed: ${message}`;
-    }
-
-    if (failureMessage === null) {
+    if (canonicalDocument !== undefined) {
       try {
-        reviewText = readReviewOutputFile(reviewOutputPath);
+        writeReviewOutputFile(reviewOutputPath, canonicalDocument);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        failureMessage = failureMessage ?? `Review output file read failed: ${message}`;
+        failureMessage = failureMessage ?? `Review output file write failed: ${message}`;
+      }
+
+      if (failureMessage === null) {
+        try {
+          reviewText = readReviewOutputFile(reviewOutputPath);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          failureMessage = failureMessage ?? `Review output file read failed: ${message}`;
+        }
       }
     }
   }

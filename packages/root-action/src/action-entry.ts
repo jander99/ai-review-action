@@ -110,8 +110,6 @@ function buildRunReviewsOptions(): RunReviewsOptions {
     debug: getBooleanInput('debug'),
     model: core.getInput('model') || DEFAULT_MODEL,
     modelsInput: core.getInput('models'),
-    fusionEnabled: getBooleanInput('fusion'),
-    fusionModel: core.getInput('fusion-model'),
     failOnError: getBooleanInput('fail-on-error'),
     timeoutMinutes: getIntInput('timeout-minutes', DEFAULT_TIMEOUT_MINUTES),
     prompts: core.getInput('prompts'),

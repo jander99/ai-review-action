@@ -46,7 +46,6 @@ jobs:
           # action deterministically merges both results into one
           # canonical document before posting the PR comment.
           prompts: file:examples/prompts/code-review.md,file:examples/prompts/security-review.md
-          fusion: false
           # Capture redacted, gzipped OpenCode stdout/stderr so the
           # follow-up step can upload it as a workflow artifact when
           # the model misbehaves (e.g. keeps emitting preamble-only
