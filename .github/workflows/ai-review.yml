@@ -93,12 +93,10 @@ jobs:
 
       - name: Install Claude Code CLI
         # The action's claude runtime shells out to `claude --print ...`,
-        # so the binary must be on PATH. The official installer lands in
-        # `~/.local/bin`; we prepend it to PATH for the review step below.
-        run: curl -fsSL https://claude.ai/install.sh | sh
-        env:
-          # Don't auto-launch Claude Code after install (we're in CI).
-          SKIP_LAUNCH: 1
+        # so the binary must be on PATH. npm install is non-interactive
+        # and works reliably in CI (the curl installer can prompt or
+        # require a TTY).
+        run: npm install -g @anthropic-ai/claude-code
 
       - name: AI Review (claude, silent)
         id: review-claude
@@ -118,7 +116,12 @@ jobs:
           post-comment: false
           github-token: ${{ github.token }}
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Prefer a real Anthropic key if the consumer set one; otherwise
+          # fall back to MINIMAX_API_KEY (Minimax offers an Anthropic-
+          # compatible endpoint, so Claude Code can run against it when
+          # ANTHROPIC_BASE_URL points there). Both may be empty in
+          # test/dev environments; the action surfaces a clear error.
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY || secrets.MINIMAX_API_KEY }}
           # Make the installed `claude` binary visible to the action.
           PATH: ${{ env.HOME }}/.local/bin:${{ env.PATH }}
 
