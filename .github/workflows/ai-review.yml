@@ -70,3 +70,63 @@ jobs:
           path: ${{ steps.review.outputs.debug-artifact-path }}
           if-no-files-found: ignore
           retention-days: 7
+
+  # Parallel test job: same review contract, but invoked via the Claude
+  # Code CLI runtime (`tool: claude`). Runs alongside the opencode job
+  # so we can compare outputs and CI behavior side-by-side without the
+  # claude path posting comments to PRs yet.
+  #
+  # This job is intentionally silent (`post-comment: false`) so reviewers
+  # on PRs don't see two comments per run. The debug artifact is the
+  # primary signal until we're ready to enable comments for the claude
+  # path.
+  review-claude:
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install Claude Code CLI
+        # The action's claude runtime shells out to `claude --print ...`,
+        # so the binary must be on PATH. The official installer lands in
+        # `~/.local/bin`; we prepend it to PATH for the review step below.
+        run: curl -fsSL https://claude.ai/install.sh | sh
+        env:
+          # Don't auto-launch Claude Code after install (we're in CI).
+          SKIP_LAUNCH: 1
+
+      - name: AI Review (claude, silent)
+        id: review-claude
+        uses: ./packages/root-action
+        with:
+          tool: claude
+          # The model input MUST be in `provider/model` form when
+          # `tool: claude`; the action strips the provider prefix before
+          # passing to `--model`. `anthropic/claude-sonnet-4.6` →
+          # `claude-sonnet-4.6` is the canonical Anthropic model id and
+          # what Claude Code CLI accepts.
+          model: anthropic/claude-sonnet-4.6
+          prompts: file:examples/prompts/code-review.md,file:examples/prompts/security-review.md
+          debug: true
+          fail-on-error: false
+          # Silent: do not post a PR comment for the claude path yet.
+          post-comment: false
+          github-token: ${{ github.token }}
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Make the installed `claude` binary visible to the action.
+          PATH: ${{ env.HOME }}/.local/bin:${{ env.PATH }}
+
+      - name: Upload debug artifacts (claude)
+        if: always() && steps.review-claude.outputs.debug-artifact-path != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-review-debug-claude
+          path: ${{ steps.review-claude.outputs.debug-artifact-path }}
+          if-no-files-found: ignore
+          retention-days: 7
