@@ -98,6 +98,18 @@ jobs:
         # require a TTY).
         run: npm install -g @anthropic-ai/claude-code
 
+      - name: Setup OpenCode
+        # The action's validator path still uses OpenCode internally
+        # even when `tool: claude` (the validator is opencode-only).
+        # Without this the validator's startup version check hard-
+        # fails with spawnSync opencode ENOENT, masking whatever the
+        # claude reviewer actually produced. Drop this once the
+        # validator learns to skip when tool=claude.
+        uses: ./packages/setup-opencode
+        with:
+          version: 1.18.4
+          checksum: bab463c3fb3224d388bb7cfad63f38703df9cf0be2cfd2ce8cb49d886b53a174
+
       - name: AI Review (claude, silent)
         id: review-claude
         uses: ./packages/root-action
