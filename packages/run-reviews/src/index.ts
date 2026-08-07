@@ -45,6 +45,12 @@ export type {
   RunOpenCodeRunResult,
 } from './opencode-run';
 
+// Reviewer wrapper. Implemented by the root action's main loop;
+// exported here so tests can drive the two-call retry path directly
+// without going through `runReviews`.
+export { invokeOpenCode } from './opencode';
+export type { InvokeOpenCodeOptions, InvokeOpenCodeRuntime } from './opencode';
+
 // Agent definition builder. Re-exported so tests can exercise the
 // `__DIFF__` placeholder substitution without going through the full
 // review pipeline.
