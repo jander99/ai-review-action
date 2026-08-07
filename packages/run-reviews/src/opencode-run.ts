@@ -172,9 +172,13 @@ function buildEnvironment(options: RunOpenCodeRunOptions): NodeJS.ProcessEnv {
     question: 'deny',
     doom_loop: 'deny',
     bash: {
+      // The action embeds a pathspec-filtered diff in the reviewer
+      // prompt (see REVIEW_DIFF_EXCLUDE_PATHSPECS in main.ts).
+      // `git diff` and `git show` are denied so the model cannot
+      // bypass that filter by re-fetching the raw diff via bash
+      // (which would otherwise expose the auto-generated dist
+      // bundles that the filter intentionally excludes).
       '*': 'ask',
-      'git diff *': 'allow',
-      'git show *': 'allow',
       'git log *': 'allow',
       'git rev-parse *': 'allow',
     },

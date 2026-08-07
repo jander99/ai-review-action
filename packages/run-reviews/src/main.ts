@@ -19,7 +19,7 @@ import { buildMergedConfig, buildValidatorConfig } from './config-builder';
 import { invokeOpenCode } from './opencode';
 import type { DebugCapturePaths } from './opencode';
 import { parsePrompts, composeTaskPromptWithPreviousReviews } from './prompt-composer';
-import type { Permission, PromptEntry, ReviewResult } from './types';
+import type { EventContext, Permission, PromptEntry, ReviewResult } from './types';
 
 // Best-effort only: debug artifacts may still contain sensitive data. AWS secret
 // access keys have no tight identifying prefix and cannot be safely pattern-matched.
@@ -36,6 +36,143 @@ const REDACTION_PATTERNS: ReadonlyArray<{ pattern: RegExp; replacement: string }
   { pattern: /AKIA[A-Z0-9]{16}/g, replacement: '[REDACTED]' },
   { pattern: /Bearer\s+[^\s"'`\\]+/gi, replacement: 'Bearer [REDACTED]' },
 ];
+
+/**
+ * Pathspec excludes applied to the diff that is embedded in the
+ * reviewer prompt. Filtering is deterministic by construction so a PR
+ * that only changes auto-generated dist bundles cannot get the
+ * reviewer stuck reading machine-bundled code (see issue: CI runs
+ * failed when the model spent its entire context on dist/main.cjs
+ * regeneration and emitted only think blocks).
+ *
+ * The two patterns cover both layouts that ship in this repo:
+ *   - the root-action bundle at dist/main.cjs, AND
+ *   - per-package bundles under packages STAR dist STAR STAR (the glob
+ *     matches dist/ and the gitignored dist-test/ rebuild artifacts
+ *     uniformly, which keeps the filter simple). The textual
+ *     placeholder is used here because a literal star-star sequence
+ *     would close this JSDoc block prematurely.
+ *
+ * Exported so tests can confirm the same pathspecs the runtime uses.
+ */
+export const REVIEW_DIFF_EXCLUDE_PATHSPECS: ReadonlyArray<string> = [
+  ':(exclude)dist/**',
+  ':(exclude)packages/*/dist*/**',
+];
+
+/**
+ * Hard cap on the byte size of the diff embedded in the reviewer
+ * prompt. The reviewer prompt itself is bounded by the model's
+ * context window, and the diff is the largest single section, so a
+ * fixed 200 KB cap keeps token use predictable across PRs without
+ * sacrificing the ability to review large source changes. Diff lines
+ * above the cap are dropped; a `[diff truncated to 200 KB]` marker is
+ * appended so the model knows the section is incomplete.
+ */
+export const REVIEW_DIFF_MAX_BYTES = 200_000;
+
+/**
+ * Placeholder returned by `computeReviewDiff` when no diff is
+ * available (the event did not supply a ref range, the working
+ * directory is not a git repo, `git diff` returned non-zero, or the
+ * filtered diff was empty because every changed path matched an
+ * exclude pathspec). The model emits a valid `## Scope` line based on
+ * this placeholder instead of looping on an empty prompt.
+ */
+export const REVIEW_DIFF_EMPTY_PLACEHOLDER =
+  '(no diff available — the changes may be entirely under dist/** which is auto-generated and excluded from review)';
+
+/**
+ * Compute the filtered diff for the current event and embed it in the
+ * reviewer prompt. Pure from the caller's perspective: every failure
+ * mode (missing refs, missing git binary, non-zero exit, empty
+ * filtered diff) returns `REVIEW_DIFF_EMPTY_PLACEHOLDER` so the prompt
+ * remains well-formed and the model still has a path to emit a valid
+ * `## Scope`.
+ *
+ * Filtering is applied at `git diff` time via pathspec excludes, so
+ * the model never sees dist/ content even if it tried to run `git
+ * diff` (which is also denied by `OPENCODE_PERMISSION`).
+ *
+ * Exported for tests; the production call site is in `runReviews`.
+ */
+export function computeReviewDiff(eventContext: EventContext, workingDir: string): string {
+  const range = resolveDiffRange(eventContext);
+  if (!range) {
+    return REVIEW_DIFF_EMPTY_PLACEHOLDER;
+  }
+
+  const args = [
+    '-C', workingDir,
+    'diff',
+    range,
+    '--',
+    ...REVIEW_DIFF_EXCLUDE_PATHSPECS,
+  ];
+
+  const result = spawnSync('git', args, {
+    encoding: 'utf8',
+    maxBuffer: REVIEW_DIFF_MAX_BYTES * 2,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 15_000,
+  });
+
+  if (result.error) {
+    return REVIEW_DIFF_EMPTY_PLACEHOLDER;
+  }
+  if (result.status !== 0) {
+    return REVIEW_DIFF_EMPTY_PLACEHOLDER;
+  }
+
+  const stdout = typeof result.stdout === 'string' ? result.stdout : '';
+  if (!stdout.trim()) {
+    return REVIEW_DIFF_EMPTY_PLACEHOLDER;
+  }
+
+  if (stdout.length <= REVIEW_DIFF_MAX_BYTES) {
+    return stdout;
+  }
+  // Hard truncate at the byte cap. The marker makes it obvious the
+  // section is incomplete so the model does not cite findings from
+  // content past the boundary.
+  return `${stdout.slice(0, REVIEW_DIFF_MAX_BYTES)}\n\n[diff truncated to ${REVIEW_DIFF_MAX_BYTES / 1000} KB]`;
+}
+
+/**
+ * Resolve the `<a>..<b>` ref range for the current event. Returns
+ * `null` when the event shape does not expose a diff range (e.g. a
+ * `workflow_dispatch` run without `HEAD~1` available, or a
+ * `pull_request` event missing `baseSha`/`headSha`).
+ */
+function resolveDiffRange(eventContext: EventContext): string | null {
+  if (eventContext.eventName === 'pull_request') {
+    if (eventContext.baseSha && eventContext.headSha) {
+      return `${eventContext.baseSha}..${eventContext.headSha}`;
+    }
+    return null;
+  }
+  if (eventContext.eventName === 'push') {
+    if (eventContext.before && eventContext.after) {
+      return `${eventContext.before}..${eventContext.after}`;
+    }
+    return null;
+  }
+  // workflow_dispatch / other events: fall back to HEAD~1..HEAD when
+  // both refs resolve in the working tree. Shallow clones do not
+  // always have HEAD~1, so probe before constructing the range.
+  const probe = spawnSync('git', ['-C', eventContext.repository ? `/dev/null` : '.', 'rev-parse', '--verify', '--quiet', 'HEAD~1'], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 5_000,
+  });
+  // The probe is best-effort; if it fails (shallow clone, not a repo,
+  // etc.) we cannot construct a meaningful range, so the caller gets
+  // the placeholder.
+  if (probe.status !== 0) {
+    return null;
+  }
+  return 'HEAD~1..HEAD';
+}
 
 function assertOpenCodeVersion(expectedVersion: string): void {
   const result = spawnSync('opencode', ['--version'], {
@@ -299,6 +436,7 @@ export async function runReviews(options: RunReviewsOptions): Promise<RunReviews
   let debugInvocation = 0;
   let priorReviewsBlock: string | null = null;
   let eventContextForSetup: ReturnType<typeof getEventContext>;
+  let reviewDiff = REVIEW_DIFF_EMPTY_PLACEHOLDER;
   let failureMessage: string | null = null;
 
   try {
@@ -345,10 +483,16 @@ export async function runReviews(options: RunReviewsOptions): Promise<RunReviews
     }
   }
 
+  // Compute the filtered diff for the reviewer prompt. Failure modes
+  // (missing refs, not a git repo, empty filtered diff) fall back to
+  // the placeholder so the prompt is always well-formed.
+  reviewDiff = computeReviewDiff(eventContextForSetup, process.env.GITHUB_WORKSPACE || process.cwd());
+
   try {
     const agent = buildAgentDefinition({
       eventContext: eventContextForSetup,
       priorReviewsBlock,
+      reviewDiff,
     });
     const merged = buildMergedConfig({
       userConfig: options.userConfig,

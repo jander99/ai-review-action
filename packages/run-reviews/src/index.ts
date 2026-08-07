@@ -21,6 +21,10 @@ export type {
 export {
   buildRejectedDocumentPreview,
   runReviews,
+  computeReviewDiff,
+  REVIEW_DIFF_EXCLUDE_PATHSPECS,
+  REVIEW_DIFF_MAX_BYTES,
+  REVIEW_DIFF_EMPTY_PLACEHOLDER,
   REJECTED_DOCUMENT_CAP,
   REJECTED_DOCUMENT_PREVIEW_MAX_CHARS,
 } from './main';
@@ -40,3 +44,15 @@ export type {
   RunOpenCodeRunOptions,
   RunOpenCodeRunResult,
 } from './opencode-run';
+
+// Agent definition builder. Re-exported so tests can exercise the
+// `__DIFF__` placeholder substitution without going through the full
+// review pipeline.
+export {
+  buildAgentDefinition,
+  buildValidatorAgentDefinition,
+  getEventContext,
+  titleOrRefForHeading,
+} from './agent-definition';
+export type { BuildAgentDefinitionOptions } from './agent-definition';
+export type { EventContext } from './types';
