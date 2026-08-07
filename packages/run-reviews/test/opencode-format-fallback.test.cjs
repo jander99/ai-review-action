@@ -272,3 +272,152 @@ test('invokeOpenCode passes the FIRST call prompt as-is to the spawn', async () 
   assert.equal(firstPrompt, PROMPT, 'first call must receive the original prompt verbatim');
   assert.ok(!firstPrompt.includes('# Review — <title>'), 'first call must not be wrapped in the retry format directive');
 });
+
+// ---------------------------------------------------------------------------
+// Format-invalid retry trigger: heading is present, but the body fails
+// the validator's two most common rejection modes (## Scope bullets,
+// finding Location pattern). These cover the production failure mode
+// the latest CI run hit: the model produced a document but the
+// validator rejected it for `Scope no bullets` or `Location: <path>`
+// (no line numbers).
+// ---------------------------------------------------------------------------
+
+test('invokeOpenCode retries when the first call has a heading but ## Scope has no bullets', async () => {
+  // The first call emits a structurally well-formed-looking document
+  // EXCEPT that ## Scope is followed directly by ## Summary with no
+  // bullet lines in between. The validator rejects with
+  // "## Scope section is present but contains no bullets".
+  const scopeWithoutBullets = [
+    '# Review — title',
+    '',
+    '## Scope',
+    'Reviewed the change.',
+    '',
+    '## Summary',
+    '- New findings: 0',
+    '- Unresolved from prior review: 0',
+    '- Resolved by latest commits: 0',
+  ].join('\n');
+
+  const { result, spawnCalls } = runWithScript([
+    { events: reviewEvents(scopeWithoutBullets, { input: 200, output: 50, cost: 0.10 }) },
+    { events: reviewEvents(CANONICAL_DOCUMENT, { input: 220, output: 80, cost: 0.06 }) },
+  ]);
+
+  const resultValue = await result;
+  assert.equal(spawnCalls.length, 2, 'retry must fire on the no-bullets Scope failure');
+  assert.equal(resultValue.text, CANONICAL_DOCUMENT);
+
+  const retryPrompt = spawnCalls[1].args[spawnCalls[1].args.length - 1];
+  // The retry directive must call out the specific validator reason
+  // so the model knows exactly which rule to fix.
+  assert.match(retryPrompt, /the validator rejected it for format reasons: `[^`]*no bullets/i);
+  assert.ok(retryPrompt.includes(scopeWithoutBullets), 'retry prompt must include the first-call text as context');
+  // Tokens / cost still sum across both calls.
+  assert.equal(resultValue.tokens.input, 200 + 220);
+  assert.equal(resultValue.cost, 0.10 + 0.06);
+});
+
+test('invokeOpenCode retries when the first call has a finding with a Location that lacks line numbers', async () => {
+  // The first call emits a heading + Scope + a finding whose
+  // Location field is a bare path with no `:line` suffix. The
+  // validator rejects with a "must match <path>:<line>" reason.
+  const findingWithoutLineNumber = [
+    '# Review — title',
+    '',
+    '## Scope',
+    '- Reviewed the change.',
+    '',
+    '## Summary',
+    '- New findings: 1',
+    '- Unresolved from prior review: 0',
+    '- Resolved by latest commits: 0',
+    '',
+    '## Findings',
+    '',
+    '### 🔴 Critical — bogus /dev/null probe',
+    '- Status: new',
+    '- Location: packages/run-reviews/src/runtime.ts',
+    '- Description: probe targets /dev/null instead of the working dir.',
+  ].join('\n');
+
+  const { result, spawnCalls } = runWithScript([
+    { events: reviewEvents(findingWithoutLineNumber, { input: 250, output: 60, cost: 0.12 }) },
+    { events: reviewEvents(CANONICAL_DOCUMENT, { input: 270, output: 90, cost: 0.07 }) },
+  ]);
+
+  const resultValue = await result;
+  assert.equal(spawnCalls.length, 2, 'retry must fire on the bad-Location format failure');
+  assert.equal(resultValue.text, CANONICAL_DOCUMENT);
+
+  const retryPrompt = spawnCalls[1].args[spawnCalls[1].args.length - 1];
+  // The validator's rejection surfaces in the directive so the model
+  // can fix the Location format on the retry.
+  assert.match(retryPrompt, /the validator rejected it for format reasons: `[^`]*must match <path>:<line>/);
+  assert.ok(retryPrompt.includes(findingWithoutLineNumber), 'retry prompt must include the first-call text as context');
+  assert.equal(resultValue.cost, 0.12 + 0.07);
+});
+
+test('invokeOpenCode does NOT retry when the first call is fully valid (heading + Scope bullets + valid Locations)', async () => {
+  // A fully valid document with no format issues must take a single
+  // spawn. Bound the regression where the retry trigger fires on
+  // false positives from the client-side format check.
+  const { result, spawnCalls } = runWithScript([
+    { events: reviewEvents(CANONICAL_DOCUMENT, { input: 300, output: 100, cost: 0.15 }) },
+  ]);
+
+  const resultValue = await result;
+  assert.equal(spawnCalls.length, 1, 'no retry when the first call passes all format checks');
+  assert.equal(resultValue.text, CANONICAL_DOCUMENT);
+  assert.equal(resultValue.cost, 0.15);
+});
+
+test('formatReviewDocumentIssues returns the specific reason for a bare-path Location', () => {
+  // Direct unit-level check of the helper exposed for testing. The
+  // validator emits a rejection reason that begins with "Location
+  // item ... must match"; we surface that substring here.
+  const { formatReviewDocumentIssues } = bundle;
+  const document = [
+    '# Review — title',
+    '',
+    '## Scope',
+    '- Reviewed.',
+    '',
+    '## Summary',
+    '- New findings: 1',
+    '- Unresolved from prior review: 0',
+    '- Resolved by latest commits: 0',
+    '',
+    '## Findings',
+    '',
+    '### 🔴 Critical — bogus',
+    '- Status: new',
+    '- Location: packages/run-reviews/src/runtime.ts',
+    '- Description: bad',
+  ].join('\n');
+  const issue = formatReviewDocumentIssues(document);
+  assert.ok(issue !== null);
+  assert.match(issue, /must match <path>:<line>/);
+});
+
+test('formatReviewDocumentIssues returns the Scope-no-bullets reason', () => {
+  const { formatReviewDocumentIssues } = bundle;
+  const document = [
+    '# Review — title',
+    '',
+    '## Scope',
+    'Reviewed.',
+    '',
+    '## Summary',
+    '- New findings: 0',
+    '- Unresolved from prior review: 0',
+    '- Resolved by latest commits: 0',
+  ].join('\n');
+  const issue = formatReviewDocumentIssues(document);
+  assert.equal(issue, '## Scope section is present but contains no bullets');
+});
+
+test('formatReviewDocumentIssues returns null for a fully valid document', () => {
+  const { formatReviewDocumentIssues } = bundle;
+  assert.equal(formatReviewDocumentIssues(CANONICAL_DOCUMENT), null);
+});

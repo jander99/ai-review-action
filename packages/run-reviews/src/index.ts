@@ -75,9 +75,9 @@ export type { RunClaudeRunOptions, RunClaudeRunResult } from './claude-run';
 // Dispatcher + back-compat entry points. `invokeOpenCode` is kept as
 // a thin wrapper around `invokeReview(..., 'opencode')` so any
 // internal callers continue to work without modification. The wrapper
-// also applies the two-call retry for the no-heading case (see
-// `./opencode.ts` for the format-fallback details).
-export { invokeReview, invokeOpenCode } from './opencode';
+// also applies the two-call retry for the no-heading and format-invalid
+// cases (see `./opencode.ts` for the retry details).
+export { invokeReview, invokeOpenCode, formatReviewDocumentIssues } from './opencode';
 export type {
   InvokeOpenCodeOptions,
   InvokeOpenCodeRuntime,
