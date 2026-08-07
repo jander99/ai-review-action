@@ -130,8 +130,12 @@ jobs:
           # its byte-level streaming watchdog; both flags disable that.
           CLAUDE_ENABLE_BYTE_WATCHDOG: 0
           CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 1
-          # Make the installed `claude` binary visible to the action.
-          PATH: ${{ env.HOME }}/.local/bin:${{ env.PATH }}
+          # PATH is intentionally not overridden: `npm install -g` puts
+          # `claude` in `/usr/local/bin/`, which is already on the
+          # runner's default PATH. Overriding PATH here previously
+          # evaluated `${{ env.HOME }}` to empty in this context,
+          # producing `/bin:` (no `/usr/local/bin`), which masked the
+          # npm-installed binary.
 
       - name: Upload debug artifacts (claude)
         if: always() && steps.review-claude.outputs.debug-artifact-path != ''
