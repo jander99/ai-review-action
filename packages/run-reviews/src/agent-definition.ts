@@ -92,6 +92,16 @@ function titleOrRefForHeading(eventContext: EventContext): string {
 export interface BuildAgentDefinitionOptions {
   eventContext: EventContext;
   priorReviewsBlock?: string | null;
+  /**
+   * Pre-computed filtered diff (pathspec-excluded, byte-capped) for the
+   * current event. Embedded verbatim into the system prompt's `<DIFF>`
+   * block so the reviewer never has to fetch the diff via bash.
+   * Required: the action always computes and passes it via
+   * `computeReviewDiff`. Empty string is acceptable (renders as an
+   * explicit "no diff available" placeholder) so a fetch failure does
+   * not crash the run; the reviewer still emits a valid `## Scope`.
+   */
+  reviewDiff: string;
 }
 
 export function buildAgentDefinition(options: BuildAgentDefinitionOptions): AgentDefinition {
@@ -100,6 +110,7 @@ export function buildAgentDefinition(options: BuildAgentDefinitionOptions): Agen
   const contextForAgent: EventContext = { ...eventContext, reviewOutputPath };
   const runtimeContext = JSON.stringify(contextForAgent, null, 2);
   const priorReviewsBlock = options.priorReviewsBlock ?? 'none';
+  const reviewDiff = options.reviewDiff;
 
   return {
     review: {
@@ -107,7 +118,8 @@ export function buildAgentDefinition(options: BuildAgentDefinitionOptions): Agen
       mode: 'primary',
       prompt: REVIEW_AGENT_PROMPT_TEMPLATE
         .replace('__RUNTIME_CONTEXT__', runtimeContext)
-        .replace('__PRIOR_REVIEWS__', priorReviewsBlock),
+        .replace('__PRIOR_REVIEWS__', priorReviewsBlock)
+        .replace('__DIFF__', reviewDiff),
     },
   };
 }
