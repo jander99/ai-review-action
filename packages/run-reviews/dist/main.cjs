@@ -25436,7 +25436,7 @@ var REVIEW_DIFF_EXCLUDE_PATHSPECS = [
 var REVIEW_DIFF_MAX_BYTES = 2e5;
 var REVIEW_DIFF_EMPTY_PLACEHOLDER = "(no diff available \u2014 the changes may be entirely under dist/** which is auto-generated and excluded from review)";
 function computeReviewDiff(eventContext, workingDir) {
-  const range = resolveDiffRange(eventContext);
+  const range = resolveDiffRange(eventContext, workingDir);
   if (!range) {
     return REVIEW_DIFF_EMPTY_PLACEHOLDER;
   }
@@ -25471,7 +25471,7 @@ function computeReviewDiff(eventContext, workingDir) {
 
 [diff truncated to ${REVIEW_DIFF_MAX_BYTES / 1e3} KB]`;
 }
-function resolveDiffRange(eventContext) {
+function resolveDiffRange(eventContext, workingDir) {
   if (eventContext.eventName === "pull_request") {
     if (eventContext.baseSha && eventContext.headSha) {
       return `${eventContext.baseSha}..${eventContext.headSha}`;
@@ -25484,7 +25484,7 @@ function resolveDiffRange(eventContext) {
     }
     return null;
   }
-  const probe = (0, import_child_process.spawnSync)("git", ["-C", eventContext.repository ? `/dev/null` : ".", "rev-parse", "--verify", "--quiet", "HEAD~1"], {
+  const probe = (0, import_child_process.spawnSync)("git", ["-C", workingDir, "rev-parse", "--verify", "--quiet", "HEAD~1"], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
     timeout: 5e3

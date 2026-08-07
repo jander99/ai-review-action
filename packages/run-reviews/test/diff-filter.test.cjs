@@ -212,6 +212,29 @@ test('computeReviewDiff returns the placeholder when refs are missing', () => {
   }
 });
 
+test('computeReviewDiff probes HEAD~1 for workflow_dispatch when working dir has history', () => {
+  const { repo } = buildFixtureRepo();
+  try {
+    // workflow_dispatch has no PR/Push-specific refs, so the dispatcher
+    // falls through to the HEAD~1 probe in the actual working dir.
+    // Regression: an earlier revision branched on `eventContext.repository`
+    // (always a slug like "owner/repo") and always picked `/dev/null`, so
+    // this path returned the placeholder for every workflow_dispatch run.
+    // The AI reviewer caught it on PR #36; this test pins the fix.
+    const result = computeReviewDiff({ eventName: 'workflow_dispatch' }, repo);
+    assert.notEqual(
+      result,
+      REVIEW_DIFF_EMPTY_PLACEHOLDER,
+      'workflow_dispatch with HEAD~1 in the working dir must produce a real diff, not the placeholder',
+    );
+    assert.ok(/src\/foo\.ts/.test(result), 'filtered diff must contain the source change');
+    assert.ok(!/dist\/main\.cjs/.test(result), 'dist bundles must remain filtered out');
+    assert.ok(!/packages\/x\/dist/.test(result), 'per-package dist bundles must remain filtered out');
+  } finally {
+    rmFixture(repo);
+  }
+});
+
 test('computeReviewDiff returns the placeholder when the working dir is not a git repo', () => {
   const nonRepo = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-review-diff-nonrepo-'));
   try {

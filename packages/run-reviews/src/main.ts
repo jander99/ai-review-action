@@ -97,7 +97,7 @@ export const REVIEW_DIFF_EMPTY_PLACEHOLDER =
  * Exported for tests; the production call site is in `runReviews`.
  */
 export function computeReviewDiff(eventContext: EventContext, workingDir: string): string {
-  const range = resolveDiffRange(eventContext);
+  const range = resolveDiffRange(eventContext, workingDir);
   if (!range) {
     return REVIEW_DIFF_EMPTY_PLACEHOLDER;
   }
@@ -144,7 +144,7 @@ export function computeReviewDiff(eventContext: EventContext, workingDir: string
  * `workflow_dispatch` run without `HEAD~1` available, or a
  * `pull_request` event missing `baseSha`/`headSha`).
  */
-function resolveDiffRange(eventContext: EventContext): string | null {
+function resolveDiffRange(eventContext: EventContext, workingDir: string): string | null {
   if (eventContext.eventName === 'pull_request') {
     if (eventContext.baseSha && eventContext.headSha) {
       return `${eventContext.baseSha}..${eventContext.headSha}`;
@@ -159,8 +159,13 @@ function resolveDiffRange(eventContext: EventContext): string | null {
   }
   // workflow_dispatch / other events: fall back to HEAD~1..HEAD when
   // both refs resolve in the working tree. Shallow clones do not
-  // always have HEAD~1, so probe before constructing the range.
-  const probe = spawnSync('git', ['-C', eventContext.repository ? `/dev/null` : '.', 'rev-parse', '--verify', '--quiet', 'HEAD~1'], {
+  // always have HEAD~1, so probe before constructing the range. The
+  // probe MUST run in the actual working directory — earlier revisions
+  // branched on `eventContext.repository` (always a slug, so the branch
+  // was effectively unreachable) and always picked `/dev/null`, which
+  // made `workflow_dispatch` fall through to the placeholder for every
+  // PR. The model caught this; the fix is to pass `workingDir` directly.
+  const probe = spawnSync('git', ['-C', workingDir, 'rev-parse', '--verify', '--quiet', 'HEAD~1'], {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
     timeout: 5_000,
