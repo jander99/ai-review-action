@@ -3,11 +3,10 @@
 /**
  * Tests for the Claude Code CLI transport (`claude-run.ts`).
  *
- * Mirrors the shape of `opencode-run.test.cjs`:
- *   - Tests 1-3 spawn a fake `claude` process via a custom `spawn`
- *     override and assert the parsed result shape.
- *   - Tests 4-5 exercise `ClaudeCodeRuntime.resolveModel` directly so
- *     we don't need to spawn anything to verify model-format behavior.
+ * Most tests spawn a fake `claude` process via a custom `spawn`
+ * override and assert the parsed result shape. Two tests exercise
+ * `ClaudeCodeRuntime.resolveModel` directly so we don't need to spawn
+ * anything to verify model-format behavior.
  *
  * The fake process emits the NDJSON line shape documented for the
  * Claude Code CLI (`--output-format stream-json`): the final line is a
@@ -127,6 +126,20 @@ test('runClaudeRun extracts text from the result event', async () => {
   ]);
   const resultValue = await result;
   assert.equal(resultValue.text, '# Review — title\n\n## Summary');
+});
+
+test('runClaudeRun prefers the result event text over stream_event deltas', async () => {
+  // The CLI emits incremental `stream_event` deltas as it streams
+  // output, then a single terminal `result` event whose `result` field
+  // holds the canonical text. The runtime must ignore the deltas so
+  // partial chunks don't leak into the final review document.
+  const { result } = runWithEvents([
+    { type: 'stream_event', delta: { text: 'partial chunk one ' } },
+    { type: 'stream_event', delta: { text: 'partial chunk two ' } },
+    { type: 'result', subtype: 'success', result: 'canonical text', total_cost_usd: 0, usage: {} },
+  ]);
+  const resultValue = await result;
+  assert.equal(resultValue.text, 'canonical text');
 });
 
 test('runClaudeRun extracts cost and tokens from the result event', async () => {
