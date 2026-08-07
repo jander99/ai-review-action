@@ -25460,20 +25460,121 @@ var CANONICAL_FORMAT_TEMPLATE = `# Review \u2014 <title>
 - Description: <single-line text, max 200 chars>
 
 (repeat the finding block for each finding; omit the section entirely when there are no findings)`;
-function buildRetryPrompt(originalPrompt, firstCallText) {
-  const formatDirective = firstCallText.trim() ? `Your previous response produced analysis but no canonical review document. Convert that analysis to the canonical format below. Emit ONLY the canonical review document; begin with "# Review \u2014 " on the very first character.
+function buildRetryPrompt(originalPrompt, firstCallText, firstIssues) {
+  const hasText = firstCallText.trim().length > 0;
+  let formatDirective;
+  if (!hasText) {
+    formatDirective = `Your previous response produced no output. Emit ONLY the canonical review document based on the diff and prompts below; begin with "# Review \u2014 " on the very first character.
+
+${CANONICAL_FORMAT_TEMPLATE}`;
+  } else if (firstIssues === "missing heading") {
+    formatDirective = `Your previous response produced analysis but no canonical review document. Convert that analysis to the canonical format below. Emit ONLY the canonical review document; begin with "# Review \u2014 " on the very first character.
 
 ${CANONICAL_FORMAT_TEMPLATE}
 
 Your previous analysis (for context):
-${firstCallText}` : `Your previous response produced no output. Emit ONLY the canonical review document based on the diff and prompts below; begin with "# Review \u2014 " on the very first character.
+${firstCallText}`;
+  } else {
+    formatDirective = `Your previous response produced a document but the validator rejected it for format reasons: \`${firstIssues}\`. Fix the format issues and emit ONLY the canonical review document; begin with "# Review \u2014 " on the very first character.
 
-${CANONICAL_FORMAT_TEMPLATE}`;
+${CANONICAL_FORMAT_TEMPLATE}
+
+Your previous analysis (for context):
+${firstCallText}`;
+  }
   return `${formatDirective}
 
 ---
 
 ${originalPrompt}`;
+}
+var SCOPE_HEADING_PATTERN2 = /^## Scope\s*$/;
+var FINDING_HEADING_PATTERN2 = /^### /;
+var LOCATION_FIELD_PATTERN = /^-\s*Location:\s*(\S.*)$/;
+var TOP_BULLET_PATTERN = /^-\s+\S/;
+var LOCATION_ITEM_PATTERN2 = /^([^:]+):(\d+)(?:-(\d+))?$/;
+function locationItems(value) {
+  return value.split(",").map((item) => item.trim());
+}
+function describeLocationError(value) {
+  if (value.includes(";")) {
+    return "Location items must be separated by commas only; semicolons are not allowed";
+  }
+  for (const raw of locationItems(value)) {
+    if (raw === "") {
+      return "Location must not contain empty items or a trailing/leading comma";
+    }
+    if (!LOCATION_ITEM_PATTERN2.test(raw)) {
+      return `Location item "${raw}" must match <path>:<line> or <path>:<line>-<line> (use commas to separate multiple items; do not use "and", "or", "&", ";", markdown links, or bullets)`;
+    }
+  }
+  return "Location is invalid";
+}
+function isValidLocations(value) {
+  if (value.trim() === "" || value.includes(";")) {
+    return false;
+  }
+  for (const raw of locationItems(value)) {
+    if (raw === "" || !LOCATION_ITEM_PATTERN2.test(raw)) {
+      return false;
+    }
+  }
+  return true;
+}
+function formatReviewDocumentIssues(text) {
+  const lines = text.split("\n");
+  let scopeSeen = false;
+  let scopeHasBullet = false;
+  let sawFirstFindingLocation = false;
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (SCOPE_HEADING_PATTERN2.test(line)) {
+      scopeSeen = true;
+      for (let j = i + 1; j < lines.length; j += 1) {
+        const inner = lines[j];
+        if (inner.startsWith("## ")) break;
+        if (inner.trim() === "") continue;
+        if (TOP_BULLET_PATTERN.test(inner)) {
+          scopeHasBullet = true;
+        }
+        break;
+      }
+      continue;
+    }
+    if (FINDING_HEADING_PATTERN2.test(line)) {
+      const headingLineNumber = i + 1;
+      for (let j = i + 1; j < lines.length; j += 1) {
+        const inner = lines[j];
+        if (FINDING_HEADING_PATTERN2.test(inner) || inner.startsWith("## ")) break;
+        const locationMatch = inner.match(LOCATION_FIELD_PATTERN);
+        if (locationMatch) {
+          const value = locationMatch[1].trim();
+          if (!isValidLocations(value)) {
+            return `finding at line ${headingLineNumber} has invalid Location: ${describeLocationError(value)}`;
+          }
+          sawFirstFindingLocation = true;
+          break;
+        }
+      }
+      if (!sawFirstFindingLocation) {
+        for (let j = i + 1; j < lines.length; j += 1) {
+          const inner = lines[j];
+          if (FINDING_HEADING_PATTERN2.test(inner) || inner.startsWith("## ")) break;
+          if (LOCATION_FIELD_PATTERN.test(inner)) {
+            sawFirstFindingLocation = true;
+            break;
+          }
+        }
+      }
+    }
+  }
+  if (!scopeSeen) {
+    return "missing ## Scope section";
+  }
+  if (!scopeHasBullet) {
+    return "## Scope section is present but contains no bullets";
+  }
+  return null;
 }
 function combineResults(first, second) {
   return {
@@ -25506,7 +25607,8 @@ async function invokeReview(prompt, model, configPath, options, tool, runtime) {
   );
   const firstText = firstResult.text;
   const firstExtracted = extractReviewDocument(firstText);
-  if (firstExtracted !== null) {
+  const firstIssues = firstExtracted === null ? "missing heading" : formatReviewDocumentIssues(firstExtracted);
+  if (firstIssues === null) {
     return {
       text: firstExtracted,
       tokens: { input: firstResult.tokens.input, output: firstResult.tokens.output },
@@ -25514,7 +25616,7 @@ async function invokeReview(prompt, model, configPath, options, tool, runtime) {
       model: firstResult.model
     };
   }
-  const retryPrompt = buildRetryPrompt(prompt, firstText);
+  const retryPrompt = buildRetryPrompt(prompt, firstText, firstIssues);
   const secondResult = await runOnce(
     retryPrompt,
     model,
