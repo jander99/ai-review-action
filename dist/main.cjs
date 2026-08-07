@@ -28194,23 +28194,80 @@ async function runOpenCodeRun(options, runtime) {
 }
 
 // packages/run-reviews/src/opencode.ts
-async function invokeOpenCode(prompt, model, configPath, options) {
-  const result = await runOpenCodeRun({
+var CANONICAL_FORMAT_TEMPLATE = `# Review \u2014 <title>
+
+## Scope
+- <one or more bullet lines, each non-empty>
+
+## Summary
+- New findings: <integer>
+- Unresolved from prior review: <integer>
+- Resolved by latest commits: <integer>
+
+## Findings (only when there are findings; max 5 blocks)
+### \u{1F534} Critical \u2014 <short title>
+- Status: <new | unresolved | resolved | new variant>
+- Location: <path>:<line>
+- Description: <single-line text, max 200 chars>
+
+(repeat the finding block for each finding; omit the section entirely when there are no findings)`;
+function buildRetryPrompt(originalPrompt, firstCallText) {
+  const formatDirective = firstCallText.trim() ? `Your previous response produced analysis but no canonical review document. Convert that analysis to the canonical format below. Emit ONLY the canonical review document; begin with "# Review \u2014 " on the very first character.
+
+${CANONICAL_FORMAT_TEMPLATE}
+
+Your previous analysis (for context):
+${firstCallText}` : `Your previous response produced no output. Emit ONLY the canonical review document based on the diff and prompts below; begin with "# Review \u2014 " on the very first character.
+
+${CANONICAL_FORMAT_TEMPLATE}`;
+  return `${formatDirective}
+
+---
+
+${originalPrompt}`;
+}
+async function runOnce(prompt, model, configPath, options, debugCapture, runtime) {
+  const callOptions = {
     configPath,
     homeDir: options.homeDir,
     model,
     prompt,
     timeoutMinutes: options.timeoutMinutes ?? 30,
     disableTools: options.disableTools,
-    debugCapture: options.debugCapture
-  });
-  const rawText = result.text;
-  const extracted = extractReviewDocument(rawText);
+    debugCapture
+  };
+  return runOpenCodeRun(callOptions, runtime);
+}
+function combineResults(first, second) {
   return {
-    text: extracted ?? rawText,
-    tokens: { input: result.tokens.input, output: result.tokens.output },
-    cost: result.cost,
-    model: result.model
+    input: first.tokens.input + second.tokens.input,
+    output: first.tokens.output + second.tokens.output
+  };
+}
+async function invokeOpenCode(prompt, model, configPath, options, runtime) {
+  const firstResult = await runOnce(prompt, model, configPath, options, options.debugCapture, runtime);
+  const firstText = firstResult.text;
+  const firstExtracted = extractReviewDocument(firstText);
+  if (firstExtracted !== null) {
+    return {
+      text: firstExtracted,
+      tokens: { input: firstResult.tokens.input, output: firstResult.tokens.output },
+      cost: firstResult.cost,
+      model: firstResult.model
+    };
+  }
+  const retryPrompt = buildRetryPrompt(prompt, firstText);
+  const secondResult = await runOnce(retryPrompt, model, configPath, options, void 0, runtime);
+  const secondExtracted = extractReviewDocument(secondResult.text);
+  return {
+    // If the retry still has no heading, fall through to the raw text
+    // so downstream validation (`validateReviewDocument` in the
+    // review contract) can surface a clean failure via `failure-reason`
+    // rather than this wrapper swallowing it.
+    text: secondExtracted ?? secondResult.text,
+    tokens: combineResults(firstResult, secondResult),
+    cost: firstResult.cost + secondResult.cost,
+    model: secondResult.model
   };
 }
 
