@@ -10,10 +10,23 @@ const { runOpenCodeRun } = bundle;
 const PROMPT = 'return the canonical review';
 const MODEL = 'opencode-go/minimax-m3';
 
-function makeProcess({ events = [], stderr = '', exitCode = 0 } = {}) {
+function makeProcess({ events = [], stderr = '', exitCode = 0, stdinChunks } = {}) {
   const proc = new EventEmitter();
   proc.stdout = new PassThrough();
   proc.stderr = new PassThrough();
+  // The orchestrator delivers the prompt via `proc.stdin.write(...)`
+  // when `options.input` is set. Capture the writes into the
+  // supplied array so tests can assert on the actual prompt that
+  // was sent.
+  proc.stdin = {
+    write: (chunk) => {
+      if (stdinChunks) {
+        stdinChunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
+      }
+      return true;
+    },
+    end: () => {},
+  };
   proc.kill = () => true;
 
   setImmediate(() => {
@@ -44,8 +57,11 @@ function runWithEvents(events, overrides = {}) {
     },
     {
       spawn: (command, args, options) => {
-        spawnCalls.push({ command, args, options });
-        return makeProcess(overrides.process ?? { events });
+        const stdinChunks = [];
+        const record = { command, args, options, stdinChunks };
+        spawnCalls.push(record);
+        const eventsForCall = overrides.process ?? { events };
+        return makeProcess({ ...eventsForCall, stdinChunks });
       },
     },
   );
@@ -155,4 +171,54 @@ test('runOpenCodeRun extracts cost and tokens from the final step-finish event',
   const resultValue = await result;
   assert.deepEqual(resultValue.tokens, { input: 30, output: 12, reasoning: 5 });
   assert.equal(resultValue.cost, 0.75);
+});
+
+test('runOpenCodeRun routes the prompt through stdin when options.input is set (E2BIG fix)', async () => {
+  // Mirrors the failure mode in PR #35's run 31230589499: when the
+  // prompt + embedded diff exceeds the OS `ARG_MAX` (~128 KB on
+  // Linux), passing the prompt via argv causes `execve` to fail
+  // with E2BIG. The fix delivers the prompt via stdin (`-` as
+  // the positional arg) instead.
+  const bigPrompt = 'A'.repeat(1024);
+  const { result, spawnCalls } = runWithEvents([
+    { type: 'result', part: { type: 'step-finish', reason: 'stop', tokens: { input: 5, output: 5 }, cost: 0.01 } },
+  ], { prompt: bigPrompt, input: bigPrompt });
+
+  await result;
+
+  assert.equal(spawnCalls.length, 1);
+  const args = spawnCalls[0].args;
+  // The prompt MUST NOT be in argv when `input` is set: the
+  // runtime substitutes `-` (opencode's stdin sentinel) for the
+  // trailing positional. The CLI reads the actual prompt text
+  // from stdin.
+  assert.deepEqual(args, [`--model=${MODEL}`, 'run', '--format=json', '-']);
+  // The prompt content lands on stdin via `proc.stdin.write(...)`.
+  const stdinContent = spawnCalls[0].stdinChunks.join('');
+  assert.equal(stdinContent, bigPrompt, 'prompt must be delivered via stdin');
+  // The runtime's spawn uses `stdio: ['pipe', 'pipe', 'pipe']`
+  // so stdin is writable; the existing `'ignore'` mode would
+  // have closed stdin and the CLI would have seen EOF with no
+  // prompt.
+  assert.equal(spawnCalls[0].options.stdio[0], 'pipe', 'stdin must be a writable pipe');
+});
+
+test('runOpenCodeRun falls back to argv when options.input is absent (back-compat)', async () => {
+  // The back-compat `runOpenCodeRun` entry point (used by the
+  // validator's opencode path) does NOT set `options.input`,
+  // so the prompt must remain in argv after `--`. This test
+  // bounds the regression where the change accidentally breaks
+  // the back-compat path.
+  const { result, spawnCalls } = runWithEvents([
+    { type: 'result', part: { type: 'step-finish', reason: 'stop', tokens: { input: 5, output: 5 }, cost: 0.01 } },
+  ]);
+
+  await result;
+
+  assert.equal(spawnCalls.length, 1);
+  assert.deepEqual(spawnCalls[0].args, [`--model=${MODEL}`, 'run', '--format=json', '--', PROMPT]);
+  // No stdin content captured (input was not set).
+  assert.equal(spawnCalls[0].stdinChunks.join(''), '');
+  // stdio[0] is 'ignore' when input is absent.
+  assert.equal(spawnCalls[0].options.stdio[0], 'ignore');
 });
