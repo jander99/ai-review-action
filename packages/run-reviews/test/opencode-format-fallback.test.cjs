@@ -634,13 +634,19 @@ test('formatReviewDocumentIssues returns an empty array for a fully valid docume
   assert.deepEqual(formatReviewDocumentIssues(CANONICAL_DOCUMENT), []);
 });
 
-test('formatReviewDocumentIssues returns the unexpected-content reason when Summary has trailing parentheticals', () => {
+test('formatReviewDocumentIssues returns an empty array for trailing parentheticals in Summary (regression guard)', () => {
   // Mirrors the production failure mode in run 31230589499 / job
-  // 93033507321: the model puts inline reasoning in the Summary
-  // bullets and the validator rejects with "unexpected content in
-  // ## Summary: <line>". The client-side check surfaces the same
-  // reason so the retry can fire and the model can drop the
-  // parenthetical.
+  // 93033507321: the model used to put inline reasoning in the
+  // Summary bullets. The hardened
+  // `REVIEW_AGENT_PROMPT_TEMPLATE`'s "WHAT NOT TO DO" section
+  // names "extra bullets to Summary" and the field-ordering rule
+  // (`Field 1: Status`, `Field 2: Location`, `Field 3:
+  // Description`) so the model pattern-matches the WRONG examples
+  // with the WRONG verdict. The client-side check is therefore
+  // redundant — this regression guard asserts it does NOT emit
+  // "unexpected content in ## Summary" for either parentheticals
+  // or extra bullets, so a future reintroduction of the check
+  // is a deliberate choice.
   const { formatReviewDocumentIssues } = bundle;
   const document = [
     '# Review — title',
@@ -661,17 +667,23 @@ test('formatReviewDocumentIssues returns the unexpected-content reason when Summ
     '- Description: a real bug.',
   ].join('\n');
   const issues = formatReviewDocumentIssues(document);
-  // Two bullets fail the strict-shape check (one per offending line).
-  // The other Summary issues (Scope, Location) are clean.
-  assert.equal(issues.length, 2);
-  assert.match(issues[0], /unexpected content in ## Summary: - Unresolved from prior review: 0 \(cannot verify diff not in context\)/);
-  assert.match(issues[1], /unexpected content in ## Summary: - Resolved by latest commits: 1 \(the OpenCode-only validator rejection fixed b\)/);
+  // The parentheticals are NOT flagged by the client-side check
+  // anymore — the prompt owns the contract now. The validator's
+  // own parser still rejects them on the final pass.
+  for (const issue of issues) {
+    assert.ok(
+      !/unexpected content in ## Summary/.test(issue),
+      `helper must NOT emit "unexpected content in ## Summary" for trailing parentheticals (got: ${issue}); the prompt now owns this contract`,
+    );
+  }
 });
 
-test('formatReviewDocumentIssues flags extra bullets in the Summary section', () => {
-  // A Summary section with 4 bullets (3 correct + 1 extra) — the
-  // 4th bullet ("- Note: 0") doesn't match any of the three strict
-  // patterns, so the client-side check flags it.
+test('formatReviewDocumentIssues returns an empty array for extra bullets in the Summary section (regression guard)', () => {
+  // The hardened template's "WHAT NOT TO DO" list explicitly names
+  // "Adding extra bullets to Summary (Note:, Total:)" as a slip the
+  // model must avoid. The client-side check is therefore redundant.
+  // This regression guard asserts the helper no longer flags extra
+  // bullets, so a future reintroduction is a deliberate choice.
   const { formatReviewDocumentIssues } = bundle;
   const document = [
     '# Review — title',
@@ -688,62 +700,12 @@ test('formatReviewDocumentIssues flags extra bullets in the Summary section', ()
     '## Findings',
   ].join('\n');
   const issues = formatReviewDocumentIssues(document);
-  assert.equal(issues.length, 1);
-  assert.match(issues[0], /unexpected content in ## Summary: - Note: 0/);
-});
-
-test('invokeOpenCode retries with BOTH a count-mismatch AND unexpected Summary content in the directive', async () => {
-  // The first call's Summary is broken in TWO ways simultaneously:
-  //   - 3 valid bullets, but the counts don't match the findings
-  //     (Summary says New=0/Resolved=1 while blocks yield New=1/Resolved=0)
-  //   - A 4th bullet with trailing text the model emitted as
-  //     inline reasoning
-  // The retry directive must surface BOTH issues in a numbered
-  // list so the model fixes them in one pass.
-  //
-  // Note: the production failure mode (trailing parenthetical on a
-  // VALID field) trips BOTH checks at once in spirit, but the
-  // parser stops at the first malformed bullet and so the
-  // count-mismatch check can't fire when a field can't be parsed.
-  // We exercise BOTH checks via a 4th extra bullet, not a
-  // parenthetical, so both report reasons are reachable.
-  const summaryAndCountOff = [
-    '# Review — title',
-    '',
-    '## Scope',
-    '- Reviewed.',
-    '',
-    '## Summary',
-    '- New findings: 0',
-    '- Unresolved from prior review: 0',
-    '- Resolved by latest commits: 1',
-    '- Note: 0',
-    '',
-    '## Findings',
-    '',
-    '### 🔴 Critical — one real bug',
-    '- Status: new',
-    '- Location: packages/foo.ts:42',
-    '- Description: a real bug.',
-  ].join('\n');
-
-  const { result, spawnCalls } = runWithScript([
-    { events: reviewEvents(summaryAndCountOff, { input: 250, output: 60, cost: 0.12 }) },
-    { events: reviewEvents(CANONICAL_DOCUMENT, { input: 270, output: 90, cost: 0.07 }) },
-  ]);
-
-  const resultValue = await result;
-  assert.equal(spawnCalls.length, 2, 'retry must fire when the first call has both count-mismatch AND unexpected Summary content');
-  assert.equal(resultValue.text, CANONICAL_DOCUMENT);
-
-  const retryPrompt = promptFor(spawnCalls[1]);
-  // The retry directive must call out BOTH issues in validator order:
-  // count-mismatch (Summary parsing) first, then the strict-shape
-  // check that walks every Summary bullet.
-  assert.match(retryPrompt, /the validator rejected it for the following format reasons:/);
-  assert.match(retryPrompt, /\n\s+1\. count mismatch: summary says New=0, Unresolved=0, Resolved=1; blocks yield New=1, Unresolved=0, Resolved=0/);
-  assert.match(retryPrompt, /\n\s+2\. unexpected content in ## Summary: - Note: 0/);
-  assert.ok(retryPrompt.includes(summaryAndCountOff), 'retry prompt must include the first-call text as context');
+  for (const issue of issues) {
+    assert.ok(
+      !/unexpected content in ## Summary/.test(issue),
+      `helper must NOT emit "unexpected content in ## Summary" for extra bullets (got: ${issue}); the prompt now owns this contract`,
+    );
+  }
 });
 
 // ---------------------------------------------------------------------------
