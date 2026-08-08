@@ -28371,22 +28371,35 @@ var CANONICAL_FORMAT_TEMPLATE = `# Review \u2014 <title>
 - Description: <single-line text, max 200 chars>
 
 (repeat the finding block for each finding; omit the section entirely when there are no findings)`;
-function buildRetryPrompt(originalPrompt, firstCallText, firstIssues) {
-  const hasText = firstCallText.trim().length > 0;
+function buildRetryPrompt(originalPrompt, currentText, currentIssues, priorIssuesByAttempt) {
+  const hasText = currentText.trim().length > 0;
   let formatDirective;
-  if (!hasText) {
+  if (priorIssuesByAttempt.length >= 2) {
+    const history = priorIssuesByAttempt.map((issues, idx) => {
+      const inner = issues.map((i) => `    * ${i}`).join("\n");
+      return `  - Attempt ${idx + 1}:
+${inner}`;
+    }).join("\n");
+    formatDirective = `You have now tried twice and the validator still rejected your output. Start over with a clean canonical document; do NOT try to patch the previous response. Here is the complete list of issues across both prior attempts:
+
+${history}
+
+Emit ONLY the canonical review document below; begin with "# Review \u2014 " on the very first character. Address every issue above in this retry.
+
+${CANONICAL_FORMAT_TEMPLATE}`;
+  } else if (!hasText) {
     formatDirective = `Your previous response produced no output. Emit ONLY the canonical review document based on the diff and prompts below; begin with "# Review \u2014 " on the very first character.
 
 ${CANONICAL_FORMAT_TEMPLATE}`;
-  } else if (firstIssues.length === 1 && firstIssues[0] === "missing heading") {
+  } else if (currentIssues.length === 1 && currentIssues[0] === "missing heading") {
     formatDirective = `Your previous response produced analysis but no canonical review document. Convert that analysis to the canonical format below. Emit ONLY the canonical review document; begin with "# Review \u2014 " on the very first character.
 
 ${CANONICAL_FORMAT_TEMPLATE}
 
 Your previous analysis (for context):
-${firstCallText}`;
+${currentText}`;
   } else {
-    const issueList = firstIssues.map((reason, idx) => `  ${idx + 1}. ${reason}`).join("\n");
+    const issueList = currentIssues.map((reason, idx) => `  ${idx + 1}. ${reason}`).join("\n");
     formatDirective = `Your previous response produced a document but the validator rejected it for the following format reasons:
 ${issueList}
 
@@ -28395,7 +28408,7 @@ Convert your analysis to the canonical format below and emit ONLY the canonical 
 ${CANONICAL_FORMAT_TEMPLATE}
 
 Your previous analysis (for context):
-${firstCallText}`;
+${currentText}`;
   }
   return `${formatDirective}
 
@@ -28581,12 +28594,6 @@ function formatReviewDocumentIssues(text) {
   }
   return issues;
 }
-function combineResults(first, second) {
-  return {
-    input: first.tokens.input + second.tokens.input,
-    output: first.tokens.output + second.tokens.output
-  };
-}
 async function runOnce(prompt, model, configPath, options, debugCapture, runtime, spawnOverride) {
   const callOptions = {
     configPath,
@@ -28599,48 +28606,59 @@ async function runOnce(prompt, model, configPath, options, debugCapture, runtime
   };
   return runReview(callOptions, runtime, spawnOverride?.spawn);
 }
+var MAX_ATTEMPTS = 3;
 async function invokeReview(prompt, model, configPath, options, tool, runtime) {
   const runtimeImpl = resolveRuntime(tool);
-  const firstResult = await runOnce(
-    prompt,
-    model,
-    configPath,
-    options,
-    options.debugCapture,
-    runtimeImpl,
-    runtime
-  );
-  const firstText = firstResult.text;
-  const firstExtracted = extractReviewDocument(firstText);
-  const firstIssues = firstExtracted === null ? ["missing heading"] : formatReviewDocumentIssues(firstExtracted);
-  if (firstIssues.length === 0) {
-    return {
-      text: firstExtracted,
-      tokens: { input: firstResult.tokens.input, output: firstResult.tokens.output },
-      cost: firstResult.cost,
-      model: firstResult.model
-    };
+  let currentText = "";
+  let currentIssues = [];
+  const priorIssuesByAttempt = [];
+  let cumulativeInput = 0;
+  let cumulativeOutput = 0;
+  let cumulativeCost = 0;
+  let lastResult = null;
+  let lastExtracted = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    const attemptPrompt = attempt === 1 ? prompt : buildRetryPrompt(prompt, currentText, currentIssues, priorIssuesByAttempt);
+    const debugCapture = attempt === 1 ? options.debugCapture : void 0;
+    const result = await runOnce(
+      attemptPrompt,
+      model,
+      configPath,
+      options,
+      debugCapture,
+      runtimeImpl,
+      runtime
+    );
+    lastResult = result;
+    cumulativeInput += result.tokens.input;
+    cumulativeOutput += result.tokens.output;
+    cumulativeCost += result.cost;
+    const extracted = extractReviewDocument(result.text);
+    lastExtracted = extracted;
+    if (extracted === null) {
+      priorIssuesByAttempt.push(["missing heading"]);
+      currentText = result.text;
+      currentIssues = ["missing heading"];
+      continue;
+    }
+    const issues = formatReviewDocumentIssues(extracted);
+    if (issues.length === 0) {
+      return {
+        text: extracted,
+        tokens: { input: cumulativeInput, output: cumulativeOutput },
+        cost: cumulativeCost,
+        model: result.model
+      };
+    }
+    priorIssuesByAttempt.push(issues);
+    currentText = extracted;
+    currentIssues = issues;
   }
-  const retryPrompt = buildRetryPrompt(prompt, firstText, firstIssues);
-  const secondResult = await runOnce(
-    retryPrompt,
-    model,
-    configPath,
-    options,
-    void 0,
-    runtimeImpl,
-    runtime
-  );
-  const secondExtracted = extractReviewDocument(secondResult.text);
   return {
-    // If the retry still has no heading, fall through to the raw text
-    // so downstream validation (`validateReviewDocument` in the
-    // review contract) can surface a clean failure via `failure-reason`
-    // rather than this wrapper swallowing it.
-    text: secondExtracted ?? secondResult.text,
-    tokens: combineResults(firstResult, secondResult),
-    cost: firstResult.cost + secondResult.cost,
-    model: secondResult.model
+    text: lastExtracted ?? lastResult?.text ?? "",
+    tokens: { input: cumulativeInput, output: cumulativeOutput },
+    cost: cumulativeCost,
+    model: lastResult?.model ?? ""
   };
 }
 
