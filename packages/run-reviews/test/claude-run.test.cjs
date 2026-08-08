@@ -86,7 +86,10 @@ test('runClaudeRun spawns claude with expected flags', async () => {
   assert.equal(args[args.indexOf('--output-format') + 1], 'stream-json');
   assert.ok(args.includes('--verbose'), 'must pass --verbose');
   assert.ok(args.includes('--include-partial-messages'), 'must pass --include-partial-messages');
-  assert.ok(args.includes('--dangerously-skip-permissions'), 'must pass --dangerously-skip-permissions');
+  assert.ok(
+    !args.includes('--dangerously-skip-permissions'),
+    'must NOT pass --dangerously-skip-permissions — bypassing the permission system would defeat the --allowedTools lockdown and allow shell expansion in `git diff <$(...)>` arguments to match the allowlist',
+  );
 
   // The full allowedTools allow-list must be present, each as its own
   // argv entry.

@@ -9,9 +9,10 @@
  * the reviewer's — no retry loop, no format-fallback — so the
  * assertions focus on:
  *   - spawn args match the reviewer's shape (-p, --output-format
- *     stream-json, --verbose, --include-partial-messages,
- *     --dangerously-skip-permissions, the stripped --model, and the
- *     read-only --allowedTools list)
+ *     stream-json, --verbose, --include-partial-messages, the stripped
+ *     --model, and the read-only --allowedTools list). We deliberately
+ *     do NOT pass --dangerously-skip-permissions here either — same
+ *     reason as the reviewer.
  *   - the resolved model id (provider/ prefix stripped) is passed
  *     to --model
  *   - the env block carries the Anthropic-compatible-endpoint
@@ -127,7 +128,10 @@ test('runClaudeValidator spawns claude with the expected flags (mirroring the re
   assert.equal(args[args.indexOf('--output-format') + 1], 'stream-json');
   assert.ok(args.includes('--verbose'), 'must pass --verbose');
   assert.ok(args.includes('--include-partial-messages'), 'must pass --include-partial-messages');
-  assert.ok(args.includes('--dangerously-skip-permissions'), 'must pass --dangerously-skip-permissions');
+  assert.ok(
+    !args.includes('--dangerously-skip-permissions'),
+    'must NOT pass --dangerously-skip-permissions — same security reason as the reviewer (allowlist enforcement)',
+  );
 
   // Same allow-list as the reviewer's claude runtime.
   const expectedTools = [

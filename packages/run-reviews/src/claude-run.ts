@@ -8,11 +8,16 @@
  *
  * Permission lockdown is hardcoded to match the read-only git subset
  * already enforced for opencode's `OPENCODE_PERMISSION` deny-list:
- *   - `--dangerously-skip-permissions` opts out of the interactive
- *     permission prompts.
  *   - `--allowedTools` whitelists `Read`, `Glob`, `Grep`, the same
  *     `git diff/show/log/rev-parse` subset, and `query` (Claude Code's
- *     internal tool name for structured prompts / sub-queries).
+ *     internal tool name for structured prompts / sub-queries). Tools
+ *     not on this list are denied by Claude Code's permission system.
+ *
+ * We do NOT pass `--dangerously-skip-permissions`. With that flag the
+ * permission system is bypassed entirely, and shell expansion in
+ * `git diff <$(...)>` arguments would match the `Bash(git diff *)`
+ * allowlist rule before the allowlist check fires — i.e. an RCE-shaped
+ * path. Without the flag, the allowlist is enforced.
  */
 import { spawnSync } from 'child_process';
 import {
@@ -154,7 +159,6 @@ export class ClaudeCodeRuntime implements ReviewRuntime {
       '--output-format', 'stream-json',
       '--verbose',
       '--include-partial-messages',
-      '--dangerously-skip-permissions',
       '--model', model,
       '--', prompt,
     );

@@ -11,10 +11,16 @@
  * on the reviewer side).
  *
  * Permission lockdown (mirrored from `ClaudeCodeRuntime`):
- *   - `--dangerously-skip-permissions` opts out of the interactive
- *     permission prompts.
  *   - `--allowedTools` whitelists `Read`, `Glob`, `Grep`, the same
- *     `git diff/show/log/rev-parse` subset, and `query`.
+ *     `git diff/show/log/rev-parse` subset, and `query`. Tools not on
+ *     this list are denied by Claude Code's permission system.
+ *
+ * We do NOT pass `--dangerously-skip-permissions` here either. With
+ * that flag the permission system is bypassed entirely, and shell
+ * expansion in `git diff <$(...)>` arguments would match the
+ * `Bash(git diff *)` allowlist rule before the allowlist check
+ * fires. Without the flag, the allowlist is enforced. Same reason as
+ * the reviewer side.
  *
  * Env handling is intentionally NOT pass-through-by-default here.
  * Unlike the reviewer (where the action layer sets env vars globally
@@ -220,7 +226,6 @@ export class ClaudeCodeValidatorRuntime {
       '--output-format', 'stream-json',
       '--verbose',
       '--include-partial-messages',
-      '--dangerously-skip-permissions',
       '--model', model,
       '--', prompt,
     );

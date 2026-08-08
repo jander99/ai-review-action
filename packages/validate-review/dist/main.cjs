@@ -20836,7 +20836,6 @@ var ClaudeCodeValidatorRuntime = class {
       "stream-json",
       "--verbose",
       "--include-partial-messages",
-      "--dangerously-skip-permissions",
       "--model",
       model,
       "--",

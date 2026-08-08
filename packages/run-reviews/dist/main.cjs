@@ -25402,7 +25402,6 @@ var ClaudeCodeRuntime = class {
       "stream-json",
       "--verbose",
       "--include-partial-messages",
-      "--dangerously-skip-permissions",
       "--model",
       model,
       "--",
