@@ -28379,7 +28379,7 @@ function buildRetryPrompt(originalPrompt, firstCallText, firstIssues) {
     formatDirective = `Your previous response produced no output. Emit ONLY the canonical review document based on the diff and prompts below; begin with "# Review \u2014 " on the very first character.
 
 ${CANONICAL_FORMAT_TEMPLATE}`;
-  } else if (firstIssues === "missing heading") {
+  } else if (firstIssues.length === 1 && firstIssues[0] === "missing heading") {
     formatDirective = `Your previous response produced analysis but no canonical review document. Convert that analysis to the canonical format below. Emit ONLY the canonical review document; begin with "# Review \u2014 " on the very first character.
 
 ${CANONICAL_FORMAT_TEMPLATE}
@@ -28387,7 +28387,11 @@ ${CANONICAL_FORMAT_TEMPLATE}
 Your previous analysis (for context):
 ${firstCallText}`;
   } else {
-    formatDirective = `Your previous response produced a document but the validator rejected it for format reasons: \`${firstIssues}\`. Fix the format issues and emit ONLY the canonical review document; begin with "# Review \u2014 " on the very first character.
+    const issueList = firstIssues.map((reason, idx) => `  ${idx + 1}. ${reason}`).join("\n");
+    formatDirective = `Your previous response produced a document but the validator rejected it for the following format reasons:
+${issueList}
+
+Convert your analysis to the canonical format below and emit ONLY the canonical review document; begin with "# Review \u2014 " on the very first character. Address every issue above in your retry.
 
 ${CANONICAL_FORMAT_TEMPLATE}
 
@@ -28403,8 +28407,14 @@ ${originalPrompt}`;
 var SCOPE_HEADING_PATTERN2 = /^## Scope\s*$/;
 var FINDING_HEADING_PATTERN2 = /^### /;
 var LOCATION_FIELD_PATTERN = /^-\s*Location:\s*(\S.*)$/;
+var STATUS_FIELD_PATTERN = /^-\s*Status:\s*(.+)$/i;
+var SUMMARY_HEADING_PATTERN2 = /^## Summary\s*$/;
 var TOP_BULLET_PATTERN = /^-\s+\S/;
 var LOCATION_ITEM_PATTERN2 = /^([^:]+):(\d+)(?:-(\d+))?$/;
+var NEW_FINDINGS_PATTERN = /^\s*-\s*New findings:\s*(\d+)\s*$/;
+var UNRESOLVED_PATTERN = /^\s*-\s*Unresolved from prior review:\s*(\d+)\s*$/;
+var RESOLVED_PATTERN = /^\s*-\s*Resolved by latest commits:\s*(\d+)\s*$/;
+var NEW_STATUSES = /* @__PURE__ */ new Set(["new", "new variant"]);
 function locationItems(value) {
   return value.split(",").map((item) => item.trim());
 }
@@ -28433,60 +28443,127 @@ function isValidLocations(value) {
   }
   return true;
 }
-function formatReviewDocumentIssues(text) {
-  const lines = text.split("\n");
-  let scopeSeen = false;
-  let scopeHasBullet = false;
-  let sawFirstFindingLocation = false;
+function extractFindings(lines) {
+  const findings = [];
+  let current = null;
+  const pushCurrent = () => {
+    if (current) {
+      findings.push(current);
+      current = null;
+    }
+  };
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
-    if (SCOPE_HEADING_PATTERN2.test(line)) {
-      scopeSeen = true;
-      for (let j = i + 1; j < lines.length; j += 1) {
-        const inner = lines[j];
-        if (inner.startsWith("## ")) break;
-        if (inner.trim() === "") continue;
-        if (TOP_BULLET_PATTERN.test(inner)) {
-          scopeHasBullet = true;
-        }
-        break;
-      }
+    if (FINDING_HEADING_PATTERN2.test(line)) {
+      pushCurrent();
+      current = {
+        lineNumber: i + 1,
+        status: "",
+        locationValue: "",
+        locationValid: true,
+        locationError: null
+      };
       continue;
     }
-    if (FINDING_HEADING_PATTERN2.test(line)) {
-      const headingLineNumber = i + 1;
-      for (let j = i + 1; j < lines.length; j += 1) {
-        const inner = lines[j];
-        if (FINDING_HEADING_PATTERN2.test(inner) || inner.startsWith("## ")) break;
-        const locationMatch = inner.match(LOCATION_FIELD_PATTERN);
-        if (locationMatch) {
-          const value = locationMatch[1].trim();
-          if (!isValidLocations(value)) {
-            return `finding at line ${headingLineNumber} has invalid Location: ${describeLocationError(value)}`;
-          }
-          sawFirstFindingLocation = true;
-          break;
-        }
-      }
-      if (!sawFirstFindingLocation) {
-        for (let j = i + 1; j < lines.length; j += 1) {
-          const inner = lines[j];
-          if (FINDING_HEADING_PATTERN2.test(inner) || inner.startsWith("## ")) break;
-          if (LOCATION_FIELD_PATTERN.test(inner)) {
-            sawFirstFindingLocation = true;
-            break;
-          }
-        }
+    if (line.startsWith("## ")) {
+      pushCurrent();
+      continue;
+    }
+    if (!current) continue;
+    const statusMatch = line.match(STATUS_FIELD_PATTERN);
+    if (statusMatch) {
+      current.status = statusMatch[1].trim().toLowerCase();
+      continue;
+    }
+    const locMatch = line.match(LOCATION_FIELD_PATTERN);
+    if (locMatch) {
+      current.locationValue = locMatch[1].trim();
+      if (!isValidLocations(current.locationValue)) {
+        current.locationValid = false;
+        current.locationError = describeLocationError(current.locationValue);
       }
     }
   }
-  if (!scopeSeen) {
-    return "missing ## Scope section";
+  pushCurrent();
+  return findings;
+}
+function extractSummaryCounts(lines) {
+  const summaryIdx = lines.findIndex((l) => SUMMARY_HEADING_PATTERN2.test(l));
+  if (summaryIdx === -1) return null;
+  let newCount = null;
+  let unresolvedCount = null;
+  let resolvedCount = null;
+  for (let i = summaryIdx + 1; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (FINDING_HEADING_PATTERN2.test(line) || /^\s*##\s+/.test(line)) {
+      break;
+    }
+    const newMatch = line.match(NEW_FINDINGS_PATTERN);
+    if (newMatch) {
+      newCount = Number.parseInt(newMatch[1], 10);
+      continue;
+    }
+    const unresolvedMatch = line.match(UNRESOLVED_PATTERN);
+    if (unresolvedMatch) {
+      unresolvedCount = Number.parseInt(unresolvedMatch[1], 10);
+      continue;
+    }
+    const resolvedMatch = line.match(RESOLVED_PATTERN);
+    if (resolvedMatch) {
+      resolvedCount = Number.parseInt(resolvedMatch[1], 10);
+    }
   }
-  if (!scopeHasBullet) {
-    return "## Scope section is present but contains no bullets";
+  if (newCount === null || unresolvedCount === null || resolvedCount === null) {
+    return null;
   }
-  return null;
+  return { new: newCount, unresolved: unresolvedCount, resolved: resolvedCount };
+}
+function formatReviewDocumentIssues(text) {
+  const lines = text.split("\n");
+  const issues = [];
+  const scopeIdx = lines.findIndex((l) => SCOPE_HEADING_PATTERN2.test(l));
+  if (scopeIdx === -1) {
+    issues.push("missing ## Scope section");
+  } else {
+    let scopeHasBullet = false;
+    for (let j = scopeIdx + 1; j < lines.length; j += 1) {
+      const inner = lines[j];
+      if (inner.startsWith("## ")) break;
+      if (inner.trim() === "") continue;
+      if (TOP_BULLET_PATTERN.test(inner)) {
+        scopeHasBullet = true;
+      }
+      break;
+    }
+    if (!scopeHasBullet) {
+      issues.push("## Scope section is present but contains no bullets");
+    }
+  }
+  const findings = extractFindings(lines);
+  for (const finding of findings) {
+    if (!finding.locationValid && finding.locationError !== null) {
+      issues.push(`finding at line ${finding.lineNumber} has invalid Location: ${finding.locationError}`);
+    }
+  }
+  const summary = extractSummaryCounts(lines);
+  if (summary !== null) {
+    const actual = { new: 0, unresolved: 0, resolved: 0 };
+    for (const finding of findings) {
+      if (NEW_STATUSES.has(finding.status)) {
+        actual.new += 1;
+      } else if (finding.status === "unresolved") {
+        actual.unresolved += 1;
+      } else if (finding.status === "resolved") {
+        actual.resolved += 1;
+      }
+    }
+    if (actual.new !== summary.new || actual.unresolved !== summary.unresolved || actual.resolved !== summary.resolved) {
+      issues.push(
+        `count mismatch: summary says New=${summary.new}, Unresolved=${summary.unresolved}, Resolved=${summary.resolved}; blocks yield New=${actual.new}, Unresolved=${actual.unresolved}, Resolved=${actual.resolved}`
+      );
+    }
+  }
+  return issues;
 }
 function combineResults(first, second) {
   return {
@@ -28519,8 +28596,8 @@ async function invokeReview(prompt, model, configPath, options, tool, runtime) {
   );
   const firstText = firstResult.text;
   const firstExtracted = extractReviewDocument(firstText);
-  const firstIssues = firstExtracted === null ? "missing heading" : formatReviewDocumentIssues(firstExtracted);
-  if (firstIssues === null) {
+  const firstIssues = firstExtracted === null ? ["missing heading"] : formatReviewDocumentIssues(firstExtracted);
+  if (firstIssues.length === 0) {
     return {
       text: firstExtracted,
       tokens: { input: firstResult.tokens.input, output: firstResult.tokens.output },
