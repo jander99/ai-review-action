@@ -76,47 +76,74 @@ const CANONICAL_FORMAT_TEMPLATE = `# Review — <title>
 (repeat the finding block for each finding; omit the section entirely when there are no findings)`;
 
 /**
- * Build the retry prompt that focuses the second call on format
- * conversion. The first call's output is passed in as context when
- * present; when the first call returned no text the retry gets the
- * full directive plus the original prompt (with the embedded diff)
- * so it can still produce a review.
+ * Build the retry prompt for attempts 2..N. Three modes:
+ *   - **reset** (when `priorIssuesByAttempt.length >= 2`): the model
+ *     has now tried twice and still produced a rejected document.
+ *     Instead of asking it to convert the previous analysis (which
+ *     produced the same problems), we list every issue from every
+ *     prior attempt and ask the model to start over with a clean
+ *     canonical document.
+ *   - **missing-output**: the previous attempt produced no text;
+ *     the directive is the canonical-format template plus the
+ *     original prompt.
+ *   - **missing-heading**: the previous attempt produced text but
+ *     no `# Review —` heading; the directive asks the model to
+ *     convert its analysis to the canonical format.
+ *   - **format-issue**: the previous attempt produced a document
+ *     with one or more format issues; the directive lists them as
+ *     a numbered list and asks the model to fix them all.
  *
- * `firstIssues` is the list of reasons the retry was triggered:
- *   - empty array means "first call passed all checks, no retry"
- *     (callers gate on `firstIssues.length > 0` before invoking)
- *   - non-empty when `extractReviewDocument` returned null (synthetic
- *     `['missing heading']`) OR when `formatReviewDocumentIssues`
- *     surfaced one or more validator-style rejection reasons
- *
- * When `firstIssues` has multiple entries (the common case after a
- * multi-issue document like the claude #31226995889 run), the
- * directive surfaces them as a numbered list so the model fixes
- * every issue in one retry instead of leaking one at a time.
+ * `priorIssuesByAttempt` is the history of issue lists, one entry
+ * per prior attempt that failed. For attempt 2 it has one entry;
+ * for attempt 3 it has two. The function uses the LATEST entry for
+ * the format-issue mode, and the FULL history for the reset mode.
  */
 function buildRetryPrompt(
   originalPrompt: string,
-  firstCallText: string,
-  firstIssues: string[],
+  currentText: string,
+  currentIssues: string[],
+  priorIssuesByAttempt: string[][],
 ): string {
-  const hasText = firstCallText.trim().length > 0;
+  const hasText = currentText.trim().length > 0;
   let formatDirective: string;
-  if (!hasText) {
+
+  if (priorIssuesByAttempt.length >= 2) {
+    // Reset mode: the model has now tried twice. Listing every
+    // issue from every prior attempt and asking for a clean
+    // canonical document works better than asking the model to
+    // patch the previous (broken) analysis. The "Convert your
+    // analysis to the canonical format" framing assumes the
+    // previous text is a useful substrate, which is not the case
+    // when both prior attempts were rejected.
+    const history = priorIssuesByAttempt
+      .map((issues, idx) => {
+        const inner = issues.map((i) => `    * ${i}`).join('\n');
+        return `  - Attempt ${idx + 1}:\n${inner}`;
+      })
+      .join('\n');
+    formatDirective = `You have now tried twice and the validator still rejected your output. Start over with a clean canonical document; do NOT try to patch the previous response. Here is the complete list of issues across both prior attempts:
+
+${history}
+
+Emit ONLY the canonical review document below; begin with "# Review — " on the very first character. Address every issue above in this retry.
+
+${CANONICAL_FORMAT_TEMPLATE}`;
+  } else if (!hasText) {
     formatDirective = `Your previous response produced no output. Emit ONLY the canonical review document based on the diff and prompts below; begin with "# Review — " on the very first character.
 
 ${CANONICAL_FORMAT_TEMPLATE}`;
-  } else if (firstIssues.length === 1 && firstIssues[0] === 'missing heading') {
+  } else if (currentIssues.length === 1 && currentIssues[0] === 'missing heading') {
     formatDirective = `Your previous response produced analysis but no canonical review document. Convert that analysis to the canonical format below. Emit ONLY the canonical review document; begin with "# Review — " on the very first character.
 
 ${CANONICAL_FORMAT_TEMPLATE}
 
 Your previous analysis (for context):
-${firstCallText}`;
+${currentText}`;
   } else {
     // Format-issue case: list every validator reason the helper
     // surfaced (typically 1-3 entries) so the model fixes them all
     // in this retry instead of round-tripping the cycle again.
-    const issueList = firstIssues
+    const issueList = currentIssues
       .map((reason, idx) => `  ${idx + 1}. ${reason}`)
       .join('\n');
     formatDirective = `Your previous response produced a document but the validator rejected it for the following format reasons:
@@ -127,7 +154,7 @@ Convert your analysis to the canonical format below and emit ONLY the canonical 
 ${CANONICAL_FORMAT_TEMPLATE}
 
 Your previous analysis (for context):
-${firstCallText}`;
+${currentText}`;
   }
 
   return `${formatDirective}\n\n---\n\n${originalPrompt}`;
@@ -480,6 +507,19 @@ async function runOnce(
 }
 
 /**
+ * Maximum number of reviewer invocations per call to
+ * `invokeReview`. The loop runs `MAX_ATTEMPTS` times at most; the
+ * first attempt uses the original prompt, and any subsequent
+ * attempts use `buildRetryPrompt` with the issues the helper
+ * surfaced. Recent CI runs on PR #35 showed the model could
+ * converge on a canonical document in 2-3 passes given a
+ * sufficiently explicit reset-mode directive; capping at 3
+ * bounds the per-invocation token + cost budget while leaving
+ * enough headroom for the model to recover from earlier mistakes.
+ */
+const MAX_ATTEMPTS = 3;
+
+/**
  * Invoke the selected reviewer CLI through the shared `runReview`
  * transport. Picks the OpenCode CLI (`opencode run --format=json`) for
  * `tool: 'opencode'` and the Claude Code CLI (`claude -p
@@ -489,20 +529,26 @@ async function runOnce(
  * preserves the review pipeline's sanitization and canonical document
  * extraction regardless of which CLI produced the events.
  *
- * Two-call retry strategy: when the first call's output does not
- * produce a canonical review document (either no `# Review —`
- * heading, OR a heading plus a body that fails one or more of the
- * validator's common format checks — see `formatReviewDocumentIssues`),
- * a second call is dispatched with a focused format-conversion
- * prompt that uses the first call's text as context. The retry
- * surfaces EVERY issue found (Scope + per-finding Location + count
- * mismatch), formatted as a numbered list, so the model fixes them
- * all in one retry instead of leaking one at a time. Tokens and
- * cost are summed across both calls so downstream accounting
- * reflects the full spend. If the retry also fails to produce a
- * valid document, the action's downstream validation surfaces the
- * failure cleanly via `failure-reason`; this wrapper never throws on
- * a missing heading.
+ * Bounded retry loop: when an attempt's output does not produce a
+ * canonical review document (either no `# Review —` heading, OR a
+ * heading plus a body that fails one or more of the validator's
+ * common format checks — see `formatReviewDocumentIssues`), the
+ * next attempt is dispatched with a focused format-conversion
+ * prompt that uses the prior attempt's text as context. The
+ * `priorIssuesByAttempt` history is threaded through so attempt
+ * N+1 can reference every issue from attempts 1..N. When two
+ * prior attempts have both failed, the directive switches to
+ * "reset" mode (start over with a clean canonical document) on
+ * the grounds that asking the model to patch a broken substrate
+ * two attempts in a row is what got us here in the first place.
+ *
+ * Tokens and cost are summed across every attempt so downstream
+ * accounting reflects the full spend. After `MAX_ATTEMPTS`
+ * unsuccessful attempts the wrapper returns the last attempt's
+ * text (or the raw text when no attempt produced a heading) and
+ * the action's downstream validation surfaces the failure cleanly
+ * via `failure-reason`; this wrapper never throws on a missing
+ * heading.
  *
  * The optional 6th argument is a non-breaking extension for tests
  * that script the underlying CLI spawn. Existing callers that pass
@@ -518,68 +564,80 @@ export async function invokeReview(
 ): Promise<ReviewResult> {
   const runtimeImpl = resolveRuntime(tool);
 
-  const firstResult = await runOnce(
-    prompt, model, configPath, options,
-    options.debugCapture,
-    runtimeImpl,
-    runtime,
-  );
-  const firstText = firstResult.text;
-  const firstExtracted = extractReviewDocument(firstText);
+  let currentText = '';
+  let currentIssues: string[] = [];
+  const priorIssuesByAttempt: string[][] = [];
+  let cumulativeInput = 0;
+  let cumulativeOutput = 0;
+  let cumulativeCost = 0;
+  let lastResult: ReviewRuntimeResult | null = null;
+  let lastExtracted: string | null = null;
 
-  // Decide whether to retry. Either condition triggers the fallback:
-  //   - no `# Review —` heading at all (model burned budget on
-  //     thinking or emitted nothing visible)
-  //   - heading present but the body fails one or more of the
-  //     validator's most common format checks (Scope missing/no
-  //     bullets, a finding's Location field not matching the
-  //     canonical grammar, or Summary counts mismatching the
-  //     finding Status counts)
-  //
-  // `firstIssues` lists EVERY issue found in validator order; the
-  // retry directive surfaces them as a numbered list so the model
-  // fixes them all in one retry instead of leaking one at a time.
-  const firstIssues: string[] = firstExtracted === null
-    ? ['missing heading']
-    : formatReviewDocumentIssues(firstExtracted);
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    // Attempt 1 uses the original prompt verbatim; attempts 2..N
+    // use the focused retry directive. The retry's debug capture
+    // is always undefined so the first call's captured analysis
+    // is the only artifact on disk (retries either succeed and
+    // produce a canonical document, or fail and surface a
+    // failure-reason — their raw streams are not interesting).
+    const attemptPrompt = attempt === 1
+      ? prompt
+      : buildRetryPrompt(prompt, currentText, currentIssues, priorIssuesByAttempt);
+    const debugCapture = attempt === 1 ? options.debugCapture : undefined;
 
-  if (firstIssues.length === 0) {
-    // First call produced a valid document AND passed the format
-    // checks; no retry needed. The non-null assertion on
-    // `firstExtracted` is safe because `firstIssues.length === 0`
-    // implies `firstExtracted !== null` (the ternary above).
-    return {
-      text: firstExtracted as string,
-      tokens: { input: firstResult.tokens.input, output: firstResult.tokens.output },
-      cost: firstResult.cost,
-      model: firstResult.model,
-    };
+    const result = await runOnce(
+      attemptPrompt, model, configPath, options,
+      debugCapture,
+      runtimeImpl,
+      runtime,
+    );
+    lastResult = result;
+    cumulativeInput += result.tokens.input;
+    cumulativeOutput += result.tokens.output;
+    cumulativeCost += result.cost;
+
+    const extracted = extractReviewDocument(result.text);
+    lastExtracted = extracted;
+
+    if (extracted === null) {
+      // The model emitted nothing visible (think-block analysis
+      // only, or no output at all). Treat the next attempt as
+      // "missing heading" so the retry directive can convert the
+      // analysis to a canonical document.
+      priorIssuesByAttempt.push(['missing heading']);
+      currentText = result.text;
+      currentIssues = ['missing heading'];
+      continue;
+    }
+
+    const issues = formatReviewDocumentIssues(extracted);
+    if (issues.length === 0) {
+      // Success — the document is canonical. Return immediately.
+      return {
+        text: extracted,
+        tokens: { input: cumulativeInput, output: cumulativeOutput },
+        cost: cumulativeCost,
+        model: result.model,
+      };
+    }
+
+    // Document is structurally valid but the validator would
+    // reject it. Record the issues for the next attempt and
+    // continue the loop.
+    priorIssuesByAttempt.push(issues);
+    currentText = extracted;
+    currentIssues = issues;
   }
 
-  // First call did not produce a canonical document. Retry with a
-  // focused format-conversion prompt that uses the first call's
-  // text as context. Pass `undefined` for the retry's debug capture
-  // so the first call's analysis is the only artifact captured; the
-  // retry is either a fix or a known failure that downstream
-  // validation will surface.
-  const retryPrompt = buildRetryPrompt(prompt, firstText, firstIssues);
-  const secondResult = await runOnce(
-    retryPrompt, model, configPath, options,
-    undefined,
-    runtimeImpl,
-    runtime,
-  );
-  const secondExtracted = extractReviewDocument(secondResult.text);
-
+  // MAX_ATTEMPTS reached without convergence. Return the last
+  // attempt's extracted text (or raw text when no attempt ever
+  // produced a heading); downstream validation surfaces the
+  // failure-reason.
   return {
-    // If the retry still has no heading, fall through to the raw text
-    // so downstream validation (`validateReviewDocument` in the
-    // review contract) can surface a clean failure via `failure-reason`
-    // rather than this wrapper swallowing it.
-    text: secondExtracted ?? secondResult.text,
-    tokens: combineResults(firstResult, secondResult),
-    cost: firstResult.cost + secondResult.cost,
-    model: secondResult.model,
+    text: lastExtracted ?? lastResult?.text ?? '',
+    tokens: { input: cumulativeInput, output: cumulativeOutput },
+    cost: cumulativeCost,
+    model: lastResult?.model ?? '',
   };
 }
 

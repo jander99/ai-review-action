@@ -207,26 +207,33 @@ test('invokeOpenCode retries with the full original prompt when the first call e
   assert.ok(retryPrompt.includes(PROMPT), 'retry prompt must include the original prompt as fallback context');
 });
 
-test('invokeOpenCode returns the second call text when both calls fail to produce a heading', async () => {
-  const secondCallText = '<think>retry also failed to emit a heading</think>';
+test('invokeOpenCode returns the LAST attempt text when all 3 attempts fail to produce a heading', async () => {
+  // All three attempts produce visible analysis but no `# Review —`
+  // heading. The bounded loop runs all 3 attempts and falls through
+  // to the last attempt's raw text so downstream validation in
+  // `runReviews` (which routes through `validateReviewDocument`) can
+  // surface a clean `failure-reason`.
+  const firstCallText = '<think>first analysis only</think>';
+  const secondCallText = '<think>second call also failed to emit a heading</think>';
+  const thirdCallText = '<think>third call also failed to emit a heading</think>';
   const { result, spawnCalls } = runWithScript([
-    { events: thinkingOnlyEvents('<think>first analysis</think>', { input: 100, output: 1, cost: 0.1, reason: 'length' }) },
+    { events: thinkingOnlyEvents(firstCallText, { input: 100, output: 1, cost: 0.1, reason: 'length' }) },
     { events: thinkingOnlyEvents(secondCallText, { input: 150, output: 1, cost: 0.1, reason: 'length' }) },
+    { events: thinkingOnlyEvents(thirdCallText, { input: 200, output: 1, cost: 0.1, reason: 'length' }) },
   ]);
 
   const resultValue = await result;
 
-  assert.equal(spawnCalls.length, 2, 'retry still fires when first call fails');
+  assert.equal(spawnCalls.length, 3, 'loop runs all 3 attempts when no attempt produces a heading');
   // The wrapper does NOT throw on a missing heading: it returns the
-  // raw text from the second call so downstream validation in
-  // `runReviews` (which routes through `validateReviewDocument`) can
+  // raw text from the LAST attempt so downstream validation can
   // surface a clean `failure-reason`.
-  assert.equal(resultValue.text, secondCallText);
-  // Tokens and cost are still summed - the budget was spent, even if
-  // no canonical document came back.
-  assert.equal(resultValue.tokens.input, 250);
-  assert.equal(resultValue.tokens.output, 2);
-  assert.equal(resultValue.cost, 0.2);
+  assert.equal(resultValue.text, thirdCallText);
+  // Tokens and cost are still summed across all 3 attempts - the
+  // budget was spent, even if no canonical document came back.
+  assert.equal(resultValue.tokens.input, 450);
+  assert.equal(resultValue.tokens.output, 3);
+  assert.ok(Math.abs(resultValue.cost - 0.3) < 1e-9, `cost should sum to 0.3, got ${resultValue.cost}`);
 });
 
 test('invokeOpenCode sums tokens and cost across the two calls', async () => {
@@ -694,4 +701,197 @@ test('invokeOpenCode retries with BOTH a count-mismatch AND unexpected Summary c
   assert.match(retryPrompt, /\n\s+1\. count mismatch: summary says New=0, Unresolved=0, Resolved=1; blocks yield New=1, Unresolved=0, Resolved=0/);
   assert.match(retryPrompt, /\n\s+2\. unexpected content in ## Summary: - Note: 0/);
   assert.ok(retryPrompt.includes(summaryAndCountOff), 'retry prompt must include the first-call text as context');
+});
+
+// ---------------------------------------------------------------------------
+// Bounded retry loop (MAX_ATTEMPTS=3): tests for the 3-attempt cap,
+// the reset-mode directive on the second retry, and the success
+// mid-loop path.
+// ---------------------------------------------------------------------------
+
+// A document with bare-path Location AND no Scope bullets.
+const BARE_PATH_NO_SCOPE = [
+  '# Review — title',
+  '',
+  '## Scope',
+  'Reviewed.',
+  '',
+  '## Summary',
+  '- New findings: 1',
+  '- Unresolved from prior review: 0',
+  '- Resolved by latest commits: 0',
+  '',
+  '## Findings',
+  '',
+  '### 🔴 Critical — bogus',
+  '- Status: new',
+  '- Location: packages/run-reviews/src/runtime.ts',
+  '- Description: bad',
+].join('\n');
+
+// A document with no Scope bullets AND no Location issues.
+const NO_SCOPE_CLEAN_LOCATION = [
+  '# Review — title',
+  '',
+  '## Scope',
+  'Reviewed.',
+  '',
+  '## Summary',
+  '- New findings: 1',
+  '- Unresolved from prior review: 0',
+  '- Resolved by latest commits: 0',
+  '',
+  '## Findings',
+  '',
+  '### 🔴 Critical — bogus',
+  '- Status: new',
+  '- Location: packages/foo.ts:42',
+  '- Description: bad',
+].join('\n');
+
+test('invokeOpenCode returns on the 3rd attempt when the model fixes one issue per pass (reset-mode directive)', async () => {
+  // Attempt 1: bare-path Location (no Scope bullets because the
+  // paragraph "Reviewed." doesn't satisfy TOP_BULLET_PATTERN — wait,
+  // it does because "Reviewed." is not a top-level bullet. So
+  // attempt 1 has BOTH Scope-no-bullets AND a bad Location. Let
+  // me use a document where only Location is bad on attempt 1.)
+  //
+  // Actually the BARE_PATH_NO_SCOPE document above is constructed
+  // so that attempt 1 yields TWO issues (Scope no bullets + bad
+  // Location). The model fixes the Location on attempt 2, but
+  // introduces a different problem (still no bullets). Attempt 3
+  // produces a clean document.
+  const { result, spawnCalls } = runWithScript([
+    { events: reviewEvents(BARE_PATH_NO_SCOPE, { input: 200, output: 50, cost: 0.10 }) },
+    { events: reviewEvents(NO_SCOPE_CLEAN_LOCATION, { input: 220, output: 80, cost: 0.06 }) },
+    { events: reviewEvents(CANONICAL_DOCUMENT, { input: 240, output: 100, cost: 0.04 }) },
+  ]);
+
+  const resultValue = await result;
+  assert.equal(spawnCalls.length, 3, 'success on the 3rd attempt runs all 3 spawns');
+  assert.equal(resultValue.text, CANONICAL_DOCUMENT);
+
+  // The 2nd attempt's prompt uses the single-retry directive
+  // (since priorIssuesByAttempt.length === 1).
+  const attempt2Prompt = spawnCalls[1].args[spawnCalls[1].args.length - 1];
+  assert.match(attempt2Prompt, /the validator rejected it for the following format reasons:/);
+  assert.match(attempt2Prompt, /Scope section is present but contains no bullets/);
+  assert.match(attempt2Prompt, /must match <path>:<line>/);
+
+  // The 3rd attempt's prompt uses the RESET directive (since
+  // priorIssuesByAttempt.length === 2). The reset directive
+  // explicitly tells the model to start over with a clean
+  // canonical document and lists BOTH prior attempts' issues.
+  const attempt3Prompt = spawnCalls[2].args[spawnCalls[2].args.length - 1];
+  assert.match(attempt3Prompt, /You have now tried twice/);
+  assert.match(attempt3Prompt, /Start over with a clean canonical document/);
+  assert.match(attempt3Prompt, /Attempt 1:/);
+  assert.match(attempt3Prompt, /Attempt 2:/);
+  // The 3rd attempt's prompt must NOT include the second-call
+  // analysis as context (the reset mode drops the "Your previous
+  // analysis" block).
+  assert.ok(!attempt3Prompt.includes('Your previous analysis (for context):'), 'reset directive must NOT include the previous analysis block');
+
+  // Tokens and cost are summed across all 3 attempts.
+  assert.equal(resultValue.tokens.input, 200 + 220 + 240);
+  assert.equal(resultValue.tokens.output, 50 + 80 + 100);
+  assert.ok(Math.abs(resultValue.cost - (0.10 + 0.06 + 0.04)) < 1e-9, `cost should sum, got ${resultValue.cost}`);
+});
+
+test('invokeOpenCode caps at MAX_ATTEMPTS=3 when every attempt has format issues', async () => {
+  // All 3 attempts produce a document with format issues. The
+  // wrapper should run exactly 3 spawns and return the last
+  // attempt's extracted text with summed tokens + cost.
+  const brokenDocument = [
+    '# Review — title',
+    '',
+    '## Scope',
+    'Reviewed.',  // no bullets — Scope issue
+    '',
+    '## Summary',
+    '- New findings: 1',
+    '- Unresolved from prior review: 0',
+    '- Resolved by latest commits: 0',
+    '',
+    '## Findings',
+    '',
+    '### 🔴 Critical — bogus',
+    '- Status: new',
+    '- Location: packages/run-reviews/src/runtime.ts',  // no line number — Location issue
+    '- Description: bad',
+  ].join('\n');
+
+  const { result, spawnCalls } = runWithScript([
+    { events: reviewEvents(brokenDocument, { input: 200, output: 50, cost: 0.10 }) },
+    { events: reviewEvents(brokenDocument, { input: 220, output: 50, cost: 0.08 }) },
+    { events: reviewEvents(brokenDocument, { input: 240, output: 50, cost: 0.06 }) },
+  ]);
+
+  const resultValue = await result;
+  assert.equal(spawnCalls.length, 3, 'cap at 3 attempts when every attempt fails');
+  // The wrapper returns the last attempt's text (which is the
+  // brokenDocument; downstream validator surfaces the failure).
+  assert.equal(resultValue.text, brokenDocument);
+  // Tokens and cost are summed across all 3 attempts.
+  assert.equal(resultValue.tokens.input, 660);
+  assert.equal(resultValue.tokens.output, 150);
+  assert.ok(Math.abs(resultValue.cost - 0.24) < 1e-9, `cost should sum to 0.24, got ${resultValue.cost}`);
+});
+
+test('invokeOpenCode returns on the 2nd attempt when the first call has no heading (existing behavior)', async () => {
+  // After the loop refactor, missing-heading still triggers a
+  // retry and the model can recover on attempt 2 — 2 spawns total,
+  // not 3.
+  const { result, spawnCalls } = runWithScript([
+    { events: thinkingOnlyEvents('<think>the reviewer prompt requires a strict heading first...</think>', { input: 30000, output: 1, cost: 0.35, reason: 'length' }) },
+    { events: reviewEvents(CANONICAL_DOCUMENT, { input: 30500, output: 80, cost: 0.10 }) },
+  ]);
+
+  const resultValue = await result;
+  assert.equal(spawnCalls.length, 2, 'success on the 2nd attempt for the missing-heading case');
+  assert.equal(resultValue.text, CANONICAL_DOCUMENT);
+  assert.equal(resultValue.tokens.input, 30000 + 30500);
+  assert.equal(resultValue.tokens.output, 1 + 80);
+});
+
+test('invokeOpenCode attempt-2 prompt references BOTH issues from attempt 1', async () => {
+  // First call has a bare-path Location AND a Summary count
+  // mismatch. The second call's prompt must list BOTH issues
+  // (preserved behavior from PR #36's single-shot retry; verified
+  // here to confirm the loop refactor doesn't regress the
+  // directive content).
+  const multiIssue = [
+    '# Review — title',
+    '',
+    '## Scope',
+    '- Reviewed.',
+    '',
+    '## Summary',
+    '- New findings: 1',
+    '- Unresolved from prior review: 0',
+    '- Resolved by latest commits: 2',  // mismatch with the 1 new finding
+    '',
+    '## Findings',
+    '',
+    '### 🔴 Critical — bogus',
+    '- Status: new',
+    '- Location: packages/run-reviews/src/runtime.ts',  // bad Location
+    '- Description: bad',
+  ].join('\n');
+
+  const { result, spawnCalls } = runWithScript([
+    { events: reviewEvents(multiIssue, { input: 200, output: 50, cost: 0.10 }) },
+    { events: reviewEvents(CANONICAL_DOCUMENT, { input: 220, output: 80, cost: 0.06 }) },
+  ]);
+
+  const resultValue = await result;
+  assert.equal(spawnCalls.length, 2, 'success on the 2nd attempt for the multi-issue case');
+  assert.equal(resultValue.text, CANONICAL_DOCUMENT);
+
+  // The 2nd attempt's prompt must list BOTH issues (Location +
+  // count mismatch) from the first attempt.
+  const attempt2Prompt = spawnCalls[1].args[spawnCalls[1].args.length - 1];
+  assert.match(attempt2Prompt, /the validator rejected it for the following format reasons:/);
+  assert.match(attempt2Prompt, /\n\s+1\. finding at line \d+ has invalid Location: .*must match <path>:<line>/);
+  assert.match(attempt2Prompt, /\n\s+2\. count mismatch: summary says New=1, Unresolved=0, Resolved=2; blocks yield New=1, Unresolved=0, Resolved=0/);
 });
