@@ -30,10 +30,35 @@ const { invokeOpenCode } = bundle;
 const PROMPT = 'return the canonical review';
 const MODEL = 'opencode-go/minimax-m3';
 
-function makeProcess({ events = [], stderr = '', exitCode = 0 } = {}) {
+/**
+ * Build a fake child process. The runtime now delivers the prompt
+ * via `proc.stdin.write(...)` (to avoid the OS `ARG_MAX` /
+ * `E2BIG` failure when the prompt + embedded diff exceeds the
+ * argv limit on Linux), so the fake exposes a minimal writable
+ * stream and captures writes into the supplied `stdinChunks`
+ * array. The test fixture's spawn override forwards that array
+ * onto the per-spawn record so tests can assert on the prompt
+ * that was actually sent.
+ */
+function makeProcess({ events = [], stderr = '', exitCode = 0, stdinChunks } = {}) {
   const proc = new EventEmitter();
   proc.stdout = new PassThrough();
   proc.stderr = new PassThrough();
+  // Synchronous writable for the prompt. The runtime only calls
+  // `write(string|Buffer)` and `end()`; a real Node Writable
+  // would buffer and emit 'data' asynchronously, but a plain
+  // object that pushes into a test-owned array is enough to
+  // capture what the runtime sent without the per-test plumbing
+  // of a Transform stream.
+  proc.stdin = {
+    write: (chunk) => {
+      if (stdinChunks) {
+        stdinChunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
+      }
+      return true;
+    },
+    end: () => {},
+  };
   proc.kill = () => true;
 
   setImmediate(() => {
@@ -72,13 +97,31 @@ function runWithScript(eventScript, overrides = {}) {
     {
       spawn: (command, args, options) => {
         const idx = spawnCalls.length;
-        spawnCalls.push({ command, args, options });
+        const stdinChunks = [];
+        // Pre-allocate the record so the spawn override can fill
+        // it in as the test process emits events. Tests assert on
+        // `stdinContent` after awaiting the orchestrator's
+        // promise (so all writes have settled).
+        const record = { command, args, options, stdinChunks };
+        spawnCalls.push(record);
         const events = eventScript[idx] ?? { events: [], stderr: 'unexpected extra spawn', exitCode: 1 };
-        return makeProcess(events);
+        return makeProcess({ ...events, stdinChunks });
       },
     },
   );
   return { result, spawnCalls };
+}
+
+/**
+ * Extract the prompt the action sent to a spawn call. After the
+ * stdin-routing change, the prompt is delivered via
+ * `proc.stdin.write(...)` and the runtime's `commandArgs`
+ * substitutes `-` as the trailing positional. Tests that
+ * previously pulled the prompt from the last argv element need
+ * this helper to stay readable.
+ */
+function promptFor(spawnCall) {
+  return spawnCall.stdinChunks?.join('');
 }
 
 const CANONICAL_DOCUMENT = [
@@ -162,7 +205,7 @@ test('invokeOpenCode retries with a format-conversion prompt when the first call
 
   // The retry prompt must include the first call's analysis as context
   // so the second call can convert it into a canonical document.
-  const retryPrompt = spawnCalls[1].args[spawnCalls[1].args.length - 1];
+  const retryPrompt = promptFor(spawnCalls[1]);
   assert.match(retryPrompt, /Your previous response produced analysis but no canonical review document/);
   assert.ok(retryPrompt.includes(thinking), 'retry prompt must include the first-call text as context');
 
@@ -199,7 +242,7 @@ test('invokeOpenCode retries with the full original prompt when the first call e
   // With no first-call text to reuse, the retry prompt must say so
   // explicitly and include the canonical-format template so the
   // model still has a strict shape to follow.
-  const retryPrompt = spawnCalls[1].args[spawnCalls[1].args.length - 1];
+  const retryPrompt = promptFor(spawnCalls[1]);
   assert.match(retryPrompt, /Your previous response produced no output/);
   assert.match(retryPrompt, /# Review — <title>/, 'retry prompt must include the canonical format template');
   // Original prompt must still be appended so the model has the diff
@@ -275,7 +318,7 @@ test('invokeOpenCode passes the FIRST call prompt as-is to the spawn', async () 
   await result;
 
   assert.equal(spawnCalls.length, 1);
-  const firstPrompt = spawnCalls[0].args[spawnCalls[0].args.length - 1];
+  const firstPrompt = promptFor(spawnCalls[0]);
   assert.equal(firstPrompt, PROMPT, 'first call must receive the original prompt verbatim');
   assert.ok(!firstPrompt.includes('# Review — <title>'), 'first call must not be wrapped in the retry format directive');
 });
@@ -315,7 +358,7 @@ test('invokeOpenCode retries when the first call has a heading but ## Scope has 
   assert.equal(spawnCalls.length, 2, 'retry must fire on the no-bullets Scope failure');
   assert.equal(resultValue.text, CANONICAL_DOCUMENT);
 
-  const retryPrompt = spawnCalls[1].args[spawnCalls[1].args.length - 1];
+  const retryPrompt = promptFor(spawnCalls[1]);
   // The retry directive must call out the specific validator reason
   // (now formatted as a numbered list) so the model knows exactly
   // which rule to fix.
@@ -359,7 +402,7 @@ test('invokeOpenCode retries when the first call has a finding with a Location t
   assert.equal(spawnCalls.length, 2, 'retry must fire on the bad-Location format failure');
   assert.equal(resultValue.text, CANONICAL_DOCUMENT);
 
-  const retryPrompt = spawnCalls[1].args[spawnCalls[1].args.length - 1];
+  const retryPrompt = promptFor(spawnCalls[1]);
   // The validator's rejection surfaces in the directive as a single-
   // entry numbered list so the model can fix the Location format on
   // the retry.
@@ -431,7 +474,7 @@ test('invokeOpenCode retries with a numbered list when the first call has BOTH a
   assert.equal(spawnCalls.length, 2, 'retry must fire when the first call has multi-issue format failures');
   assert.equal(resultValue.text, CANONICAL_DOCUMENT);
 
-  const retryPrompt = spawnCalls[1].args[spawnCalls[1].args.length - 1];
+  const retryPrompt = promptFor(spawnCalls[1]);
   // The retry directive must surface BOTH issues as a numbered list
   // so the model fixes them in one pass.
   assert.match(retryPrompt, /the validator rejected it for the following format reasons:/);
@@ -472,7 +515,7 @@ test('invokeOpenCode retries on Summary-count mismatch alone (no Location or Sco
   assert.equal(spawnCalls.length, 2, 'retry must fire on the count-mismatch failure');
   assert.equal(resultValue.text, CANONICAL_DOCUMENT);
 
-  const retryPrompt = spawnCalls[1].args[spawnCalls[1].args.length - 1];
+  const retryPrompt = promptFor(spawnCalls[1]);
   assert.match(retryPrompt, /the validator rejected it for the following format reasons:/);
   assert.match(retryPrompt, /\n\s+1\. count mismatch: summary says New=2, Unresolved=0, Resolved=0; blocks yield New=1, Unresolved=0, Resolved=0/);
   assert.ok(retryPrompt.includes(countMismatch), 'retry prompt must include the first-call text as context');
@@ -693,7 +736,7 @@ test('invokeOpenCode retries with BOTH a count-mismatch AND unexpected Summary c
   assert.equal(spawnCalls.length, 2, 'retry must fire when the first call has both count-mismatch AND unexpected Summary content');
   assert.equal(resultValue.text, CANONICAL_DOCUMENT);
 
-  const retryPrompt = spawnCalls[1].args[spawnCalls[1].args.length - 1];
+  const retryPrompt = promptFor(spawnCalls[1]);
   // The retry directive must call out BOTH issues in validator order:
   // count-mismatch (Summary parsing) first, then the strict-shape
   // check that walks every Summary bullet.
@@ -773,7 +816,7 @@ test('invokeOpenCode returns on the 3rd attempt when the model fixes one issue p
 
   // The 2nd attempt's prompt uses the single-retry directive
   // (since priorIssuesByAttempt.length === 1).
-  const attempt2Prompt = spawnCalls[1].args[spawnCalls[1].args.length - 1];
+  const attempt2Prompt = promptFor(spawnCalls[1]);
   assert.match(attempt2Prompt, /the validator rejected it for the following format reasons:/);
   assert.match(attempt2Prompt, /Scope section is present but contains no bullets/);
   assert.match(attempt2Prompt, /must match <path>:<line>/);
@@ -782,7 +825,7 @@ test('invokeOpenCode returns on the 3rd attempt when the model fixes one issue p
   // priorIssuesByAttempt.length === 2). The reset directive
   // explicitly tells the model to start over with a clean
   // canonical document and lists BOTH prior attempts' issues.
-  const attempt3Prompt = spawnCalls[2].args[spawnCalls[2].args.length - 1];
+  const attempt3Prompt = promptFor(spawnCalls[2]);
   assert.match(attempt3Prompt, /You have now tried twice/);
   assert.match(attempt3Prompt, /Start over with a clean canonical document/);
   assert.match(attempt3Prompt, /Attempt 1:/);
@@ -890,7 +933,7 @@ test('invokeOpenCode attempt-2 prompt references BOTH issues from attempt 1', as
 
   // The 2nd attempt's prompt must list BOTH issues (Location +
   // count mismatch) from the first attempt.
-  const attempt2Prompt = spawnCalls[1].args[spawnCalls[1].args.length - 1];
+  const attempt2Prompt = promptFor(spawnCalls[1]);
   assert.match(attempt2Prompt, /the validator rejected it for the following format reasons:/);
   assert.match(attempt2Prompt, /\n\s+1\. finding at line \d+ has invalid Location: .*must match <path>:<line>/);
   assert.match(attempt2Prompt, /\n\s+2\. count mismatch: summary says New=1, Unresolved=0, Resolved=2; blocks yield New=1, Unresolved=0, Resolved=0/);

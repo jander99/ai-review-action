@@ -86,6 +86,7 @@ function readUsageTokens(usage: ClaudeUsage | undefined): { input: number; outpu
 interface SpawnedProcess {
   stdout: NodeJS.ReadableStream | null;
   stderr: NodeJS.ReadableStream | null;
+  stdin: { write(chunk: string | Buffer): boolean; end(): void } | null;
   on(event: string, listener: (...args: unknown[]) => void): unknown;
   kill(signal?: NodeJS.Signals | string): boolean;
 }
@@ -217,7 +218,7 @@ export class ClaudeCodeValidatorRuntime {
     return { ...process.env, ...(passthroughEnv ?? {}) };
   }
 
-  commandArgs(model: string, prompt: string): string[] {
+  commandArgs(model: string, prompt: string, useStdin: boolean): string[] {
     const args: string[] = ['-p'];
     for (const toolName of CLAUDE_VALIDATOR_ALLOWED_TOOLS) {
       args.push('--allowedTools', toolName);
@@ -227,8 +228,18 @@ export class ClaudeCodeValidatorRuntime {
       '--verbose',
       '--include-partial-messages',
       '--model', model,
-      '--', prompt,
     );
+    // When `useStdin` is true, the orchestrator writes the prompt
+    // to `proc.stdin`; the runtime substitutes `-` as the
+    // positional arg. This avoids the OS `ARG_MAX` (`E2BIG` on
+    // Linux) failure on a long review. The validator's prompt is
+    // the structural-validation result + the review file
+    // contents; both can be substantial.
+    if (useStdin) {
+      args.push('-');
+    } else {
+      args.push('--', prompt);
+    }
     return args;
   }
 
@@ -370,7 +381,13 @@ export async function runClaudeValidator(
   }
 
   const model = runtime.resolveModel(options.model);
-  const args = runtime.commandArgs(model, options.prompt);
+  // Always deliver the prompt via stdin (mirroring the reviewer's
+  // `invokeReview`). The validator's prompt is the structural-
+  // validation result + the review file contents; both can be
+  // substantial. Routing through stdin keeps the argv under
+  // `ARG_MAX` regardless of how big the review document gets.
+  const useStdin = true;
+  const args = runtime.commandArgs(model, options.prompt, useStdin);
   const env = runtime.buildEnvironment(options.passthroughEnv);
 
   const runnerTemp = process.env.RUNNER_TEMP ?? os.tmpdir();
@@ -388,11 +405,25 @@ export async function runClaudeValidator(
     try {
       proc = (spawnOverride ?? spawn)('claude', args, {
         env,
-        stdio: ['ignore', 'pipe', 'pipe'],
+        stdio: ['pipe', 'pipe', 'pipe'],
       }) as SpawnedProcess;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(`could not execute claude: ${message}; ${getDiagnostics()}`);
+    }
+
+    // Write the prompt to stdin and close the write end so the
+    // child sees EOF and starts reading. Errors here are
+    // non-fatal: if the child already exited, the write would
+    // surface as `EPIPE` and the spawn is over.
+    if (proc.stdin) {
+      try {
+        proc.stdin.write(options.prompt);
+        proc.stdin.end();
+      } catch {
+        // Best-effort. The error path below still surfaces any
+        // non-zero exit, so we don't need to re-throw here.
+      }
     }
 
     proc.stdout?.on('data', (chunk: unknown) => stdoutWriter.write(chunk));

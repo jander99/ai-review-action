@@ -180,7 +180,20 @@ export class OpenCodeRuntime implements ReviewRuntime {
     return env;
   }
 
-  commandArgs(model: string, prompt: string): string[] {
+  commandArgs(model: string, prompt: string, useStdin: boolean): string[] {
+    // When `useStdin` is true, the orchestrator writes the prompt
+    // to `proc.stdin`; the runtime substitutes `-` as the
+    // positional arg. This avoids the OS `ARG_MAX` (`E2BIG` on
+    // Linux) failure that hits when a reviewer prompt + embedded
+    // diff exceeds the argv limit.
+    if (useStdin) {
+      return [
+        `--model=${model}`,
+        'run',
+        '--format=json',
+        '-',
+      ];
+    }
     return [
       `--model=${model}`,
       'run',

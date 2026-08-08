@@ -40,6 +40,23 @@ export interface ReviewRuntimeOptions {
   homeDir?: string;
   timeoutMinutes?: number;
   debugCapture?: DebugCapturePaths;
+  /**
+   * When set, the prompt is delivered to the child's stdin pipe
+   * rather than as the trailing positional arg. The runtime
+   * substitutes `-` (or its own stdin sentinel) for the prompt in
+   * `commandArgs`, and the orchestrator writes `input` to
+   * `proc.stdin` before closing it. This avoids the OS `ARG_MAX`
+   * (`E2BIG` on Linux, ~128 KB) failure mode that hits when a
+   * reviewer prompt + embedded diff exceeds the argv limit.
+   *
+   * When unset, the prompt is passed as the trailing positional
+   * arg after `--` (the existing behavior). The orchestrator
+   * always sets `input` so reviewers and validators stay
+   * consistent; this field is left optional so the back-compat
+   * `runOpenCodeRun` entry point (used by the validator's
+   * opencode path) keeps its existing signature.
+   */
+  input?: string | Buffer;
 }
 
 export interface ReviewRuntimeResult {
@@ -69,8 +86,14 @@ export interface ReviewRuntime {
   resolveModel(rawModel: string): string;
   /** Build the env for the spawned process. */
   buildEnvironment(options: ReviewRuntimeOptions): NodeJS.ProcessEnv;
-  /** Build the CLI args. */
-  commandArgs(model: string, prompt: string): string[];
+  /**
+   * Build the CLI args. When `useStdin` is true, the runtime
+   * substitutes a stdin sentinel (`-` for both opencode and
+   * claude) for the prompt and the orchestrator writes the
+   * actual prompt text to `proc.stdin`. When `useStdin` is false,
+   * the prompt is the trailing positional arg after `--`.
+   */
+  commandArgs(model: string, prompt: string, useStdin: boolean): string[];
   /** Parse captured stdout into a structured result. */
   parseEvents(stdout: string, stdoutPath: string, stderrPath: string): ReviewRuntimeResult;
 }
@@ -148,6 +171,7 @@ function closeCapture(writer: LineBufferedWriter | null): void {
 interface SpawnedProcess {
   stdout: NodeJS.ReadableStream | null;
   stderr: NodeJS.ReadableStream | null;
+  stdin: { write(chunk: string | Buffer): boolean; end(): void } | null;
   on(event: string, listener: (...args: unknown[]) => void): unknown;
   kill(signal?: NodeJS.Signals | string): boolean;
 }
@@ -250,7 +274,15 @@ export async function runReview(
   // prefix. Validation errors throw from here so the dispatcher can
   // surface them as `failureReason`.
   const resolvedModel = runtime.resolveModel(options.model);
-  const args = runtime.commandArgs(resolvedModel, options.prompt);
+  // `useStdin` is decided once here and threaded through the
+  // runtime's `commandArgs` (which substitutes `-` for the
+  // prompt) and the orchestrator's spawn (which writes the
+  // prompt to `proc.stdin`). Setting `input` is the canonical
+  // opt-in: any caller that wants to bypass the OS `ARG_MAX`
+  // (Linux: ~128 KB) provides `input` and the runtime + spawn
+  // route accordingly.
+  const useStdin = options.input !== undefined;
+  const args = runtime.commandArgs(resolvedModel, options.prompt, useStdin);
   const binary = runtime.tool;
 
   const temporaryDebugDirectory = options.debugCapture
@@ -264,15 +296,37 @@ export async function runReview(
 
   try {
     const env = runtime.buildEnvironment(options);
+    // Open stdin as a pipe when `input` is set so we can write the
+    // prompt to the child. Otherwise close stdin (`'ignore'`) so
+    // the child sees EOF immediately; passing `''` would create a
+    // closed pipe on some platforms which `claude` interprets as
+    // "no stdin", but explicit `'ignore'` is the documented
+    // `stdio` mode for "close the child's stdin fd".
+    const stdinMode: 'pipe' | 'ignore' = useStdin ? 'pipe' : 'ignore';
     let proc: SpawnedProcess;
     try {
       proc = (spawnOverride ?? childProcess.spawn)(binary, args, {
         env,
-        stdio: ['ignore', 'pipe', 'pipe'],
+        stdio: [stdinMode, 'pipe', 'pipe'],
       }) as SpawnedProcess;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(`could not execute ${binary}: ${message}; ${getDiagnostics()}`);
+    }
+
+    if (useStdin && options.input !== undefined && proc.stdin) {
+      // Write the prompt and close the write end so the child sees
+      // EOF and can start reading from stdin. Errors here are
+      // non-fatal — if the child already exited, the write would
+      // surface as `EPIPE`; the spawn is already over.
+      try {
+        proc.stdin.write(options.input);
+        proc.stdin.end();
+      } catch {
+        // Best-effort: the child may have exited before we got to
+        // write. The error path below still surfaces any
+        // non-zero exit, so we don't need to re-throw here.
+      }
     }
 
     proc.stdout?.on('data', (chunk: unknown) => stdoutWriter.write(chunk));

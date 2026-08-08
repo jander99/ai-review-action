@@ -25,10 +25,19 @@ const PROMPT = 'return the canonical review';
 const RAW_MODEL = 'anthropic/claude-sonnet-4.6';
 const RESOLVED_MODEL = 'claude-sonnet-4.6';
 
-function makeProcess({ events = [], stderr = '', exitCode = 0 } = {}) {
+function makeProcess({ events = [], stderr = '', exitCode = 0, stdinChunks } = {}) {
   const proc = new EventEmitter();
   proc.stdout = new PassThrough();
   proc.stderr = new PassThrough();
+  proc.stdin = {
+    write: (chunk) => {
+      if (stdinChunks) {
+        stdinChunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
+      }
+      return true;
+    },
+    end: () => {},
+  };
   proc.kill = () => true;
 
   setImmediate(() => {
@@ -58,8 +67,11 @@ function runWithEvents(events, overrides = {}) {
     },
     {
       spawn: (command, args, options) => {
-        spawnCalls.push({ command, args, options });
-        return makeProcess(overrides.process ?? { events });
+        const stdinChunks = [];
+        const record = { command, args, options, stdinChunks };
+        spawnCalls.push(record);
+        const eventsForCall = overrides.process ?? { events };
+        return makeProcess({ ...eventsForCall, stdinChunks });
       },
     },
   );
@@ -222,4 +234,49 @@ test('runClaudeRun reports stderr when the process exits non-zero', async () => 
     assert.match(error.message, /auth failed/);
     return true;
   });
+});
+
+test('runClaudeRun routes the prompt through stdin when options.input is set (E2BIG fix)', async () => {
+  // The reviewer side (`invokeReview` -> `runOnce`) always sets
+  // `options.input` so the prompt is delivered via stdin. The
+  // back-compat `runClaudeRun` entry point does NOT, so the
+  // back-compat path uses argv. This test exercises the
+  // `ClaudeCodeRuntime` directly with `input` set to verify the
+  // runtime's command-args shape (it should substitute `-` for
+  // the trailing positional, not the prompt text).
+  const bigPrompt = 'B'.repeat(2048);
+  const events = [
+    { type: 'result', subtype: 'success', result: 'OK', total_cost_usd: 0.01, usage: { input_tokens: 1, output_tokens: 1 } },
+  ];
+  const spawnCalls = [];
+  const result = runClaudeRun(
+    {
+      prompt: bigPrompt,
+      model: RAW_MODEL,
+      homeDir: '/tmp/claude-test-home',
+      timeoutMinutes: 1,
+      input: bigPrompt,
+    },
+    {
+      spawn: (command, args, options) => {
+        const stdinChunks = [];
+        const record = { command, args, options, stdinChunks };
+        spawnCalls.push(record);
+        return makeProcess({ events, stdinChunks });
+      },
+    },
+  );
+  const resultValue = await result;
+  assert.equal(resultValue.text, 'OK');
+
+  assert.equal(spawnCalls.length, 1);
+  // The prompt must NOT be in argv. The runtime substitutes `-`
+  // (Claude Code's stdin sentinel) and the orchestrator writes
+  // the actual prompt to `proc.stdin`.
+  assert.equal(spawnCalls[0].args[spawnCalls[0].args.length - 1], '-');
+  // The prompt content lands on stdin.
+  const stdinContent = spawnCalls[0].stdinChunks.join('');
+  assert.equal(stdinContent, bigPrompt, 'prompt must be delivered via stdin');
+  // stdio[0] is 'pipe' when input is set; 'ignore' otherwise.
+  assert.equal(spawnCalls[0].options.stdio[0], 'pipe', 'stdin must be a writable pipe');
 });

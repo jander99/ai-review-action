@@ -150,7 +150,7 @@ export class ClaudeCodeRuntime implements ReviewRuntime {
     return { ...process.env };
   }
 
-  commandArgs(model: string, prompt: string): string[] {
+  commandArgs(model: string, prompt: string, useStdin: boolean): string[] {
     const args: string[] = ['-p'];
     for (const toolName of CLAUDE_ALLOWED_TOOLS) {
       args.push('--allowedTools', toolName);
@@ -160,8 +160,18 @@ export class ClaudeCodeRuntime implements ReviewRuntime {
       '--verbose',
       '--include-partial-messages',
       '--model', model,
-      '--', prompt,
     );
+    // When `useStdin` is true, the orchestrator writes the prompt
+    // to `proc.stdin`; the runtime substitutes `-` as the
+    // positional arg. This avoids the OS `ARG_MAX` (`E2BIG` on
+    // Linux) failure that hits when a reviewer prompt + embedded
+    // diff exceeds the argv limit. Claude Code's `-` sentinel
+    // reads the prompt from stdin.
+    if (useStdin) {
+      args.push('-');
+    } else {
+      args.push('--', prompt);
+    }
     return args;
   }
 

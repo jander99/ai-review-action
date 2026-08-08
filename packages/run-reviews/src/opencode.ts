@@ -499,6 +499,16 @@ async function runOnce(
     homeDir: options.homeDir,
     model,
     prompt,
+    // Always deliver the prompt via stdin. The reviewer prompt
+    // includes the embedded diff (up to REVIEW_DIFF_MAX_BYTES =
+    // 200 KB on top of the system prompt + task prompt), which
+    // exceeds the OS `ARG_MAX` (`E2BIG` on Linux, ~128 KB) on
+    // any reasonably-sized PR. Routing through stdin keeps the
+    // argv under the limit regardless of which runtime is in
+    // use. The runtime substitutes `-` for the prompt in
+    // `commandArgs`; the orchestrator writes the prompt to
+    // `proc.stdin`.
+    input: prompt,
     timeoutMinutes: options.timeoutMinutes ?? 30,
     disableTools: options.disableTools,
     debugCapture,

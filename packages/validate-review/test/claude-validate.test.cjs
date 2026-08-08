@@ -61,10 +61,23 @@ function makeFakeStream() {
   return stream;
 }
 
-function makeProcess({ events = [], stderr = '', exitCode = 0 } = {}) {
+function makeProcess({ events = [], stderr = '', exitCode = 0, stdinChunks } = {}) {
   const proc = new EventEmitter();
   proc.stdout = makeFakeStream();
   proc.stderr = makeFakeStream();
+  // The validator's orchestrator delivers the prompt via
+  // `proc.stdin.write(...)` (after the E2BIG fix) when the
+  // runtime is set to use stdin. Capture the writes so tests
+  // can assert on the actual prompt that was sent.
+  proc.stdin = {
+    write: (chunk) => {
+      if (stdinChunks) {
+        stdinChunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
+      }
+      return true;
+    },
+    end: () => {},
+  };
   proc.kill = () => true;
 
   setImmediate(() => {
@@ -102,11 +115,13 @@ function runWithEvents(events, overrides = {}) {
       ...overrides,
     },
     (command, args, options) => {
-      spawnCalls.push({ command, args, options });
+      const stdinChunks = [];
+      const record = { command, args, options, stdinChunks };
+      spawnCalls.push(record);
       // Wrap in `{ events }` so makeProcess's destructuring picks
       // up the array as the `events` option rather than the array
       // itself (whose `.events` is undefined → defaults to []).
-      return makeProcess({ events, ...overrides.process });
+      return makeProcess({ events, stdinChunks, ...overrides.process });
     },
   );
   return { result, spawnCalls };
@@ -158,9 +173,10 @@ test('runClaudeValidator spawns claude with the expected flags (mirroring the re
   assert.notEqual(modelFlagIndex, -1, '--model flag must be present');
   assert.equal(args[modelFlagIndex + 1], RESOLVED_MODEL);
 
-  // Prompt is the trailing positional after `--`.
-  assert.equal(args[args.length - 2], '--');
-  assert.equal(args[args.length - 1], PROMPT);
+  // The prompt is delivered via stdin (to avoid the OS `ARG_MAX`
+  // limit on long reviews), so the trailing positional is `-`
+  // (Claude Code's stdin sentinel) rather than the prompt text.
+  assert.equal(args[args.length - 1], '-');
 });
 
 test('runClaudeValidator env block carries the Anthropic-compatible endpoint switches', async () => {
@@ -278,4 +294,32 @@ test('ClaudeCodeValidatorRuntime.buildEnvironment merges passthroughEnv over pro
       process.env.MINIMAX_TEST_VAR = original;
     }
   }
+});
+
+test('runClaudeValidator routes the prompt through stdin (E2BIG fix)', async () => {
+  // The validator's prompt embeds the review file content, which
+  // can be substantial. Routing through stdin keeps the argv
+  // under `ARG_MAX` regardless of how long the review document
+  // gets. The trailing positional is `-` (Claude Code's stdin
+  // sentinel) and the prompt is delivered via `proc.stdin.write`.
+  const bigPrompt = 'C'.repeat(4096);
+  const { result, spawnCalls } = runWithEvents(
+    [{ type: 'result', subtype: 'success', result: 'VALID', total_cost_usd: 0, usage: {} }],
+    { prompt: bigPrompt },
+  );
+  await result;
+
+  assert.equal(spawnCalls.length, 1);
+  const args = spawnCalls[0].args;
+  // Trailing positional is `-`, NOT the prompt.
+  assert.equal(args[args.length - 1], '-', 'trailing positional must be the stdin sentinel');
+  // The prompt must NOT be in argv anywhere.
+  assert.ok(!args.includes(bigPrompt), 'prompt must not appear in argv');
+  // The prompt content lands on stdin.
+  const stdinContent = spawnCalls[0].stdinChunks.join('');
+  assert.equal(stdinContent, bigPrompt, 'prompt must be delivered via stdin');
+  // stdio[0] is 'pipe' (writable) when input is set; the
+  // orchestrator's `'ignore'` mode would have closed stdin and
+  // the CLI would have seen EOF with no prompt.
+  assert.equal(spawnCalls[0].options.stdio[0], 'pipe');
 });
