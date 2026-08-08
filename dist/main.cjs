@@ -99,11 +99,11 @@ var require_command = __commonJS({
     };
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.issue = exports2.issueCommand = void 0;
-    var os5 = __importStar(require("os"));
+    var os6 = __importStar(require("os"));
     var utils_1 = require_utils();
     function issueCommand(command, properties, message) {
       const cmd = new Command(command, properties, message);
-      process.stdout.write(cmd.toString() + os5.EOL);
+      process.stdout.write(cmd.toString() + os6.EOL);
     }
     exports2.issueCommand = issueCommand;
     function issue(name, message = "") {
@@ -186,18 +186,18 @@ var require_file_command = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.prepareKeyValueMessage = exports2.issueFileCommand = void 0;
     var crypto = __importStar(require("crypto"));
-    var fs8 = __importStar(require("fs"));
-    var os5 = __importStar(require("os"));
+    var fs9 = __importStar(require("fs"));
+    var os6 = __importStar(require("os"));
     var utils_1 = require_utils();
     function issueFileCommand(command, message) {
       const filePath = process.env[`GITHUB_${command}`];
       if (!filePath) {
         throw new Error(`Unable to find environment variable for file command ${command}`);
       }
-      if (!fs8.existsSync(filePath)) {
+      if (!fs9.existsSync(filePath)) {
         throw new Error(`Missing file at path: ${filePath}`);
       }
-      fs8.appendFileSync(filePath, `${(0, utils_1.toCommandValue)(message)}${os5.EOL}`, {
+      fs9.appendFileSync(filePath, `${(0, utils_1.toCommandValue)(message)}${os6.EOL}`, {
         encoding: "utf8"
       });
     }
@@ -211,7 +211,7 @@ var require_file_command = __commonJS({
       if (convertedValue.includes(delimiter)) {
         throw new Error(`Unexpected input: value should not contain the delimiter "${delimiter}"`);
       }
-      return `${key}<<${delimiter}${os5.EOL}${convertedValue}${os5.EOL}${delimiter}`;
+      return `${key}<<${delimiter}${os6.EOL}${convertedValue}${os6.EOL}${delimiter}`;
     }
     exports2.prepareKeyValueMessage = prepareKeyValueMessage;
   }
@@ -1002,14 +1002,14 @@ var require_util = __commonJS({
         }
         const port = url.port != null ? url.port : url.protocol === "https:" ? 443 : 80;
         let origin = url.origin != null ? url.origin : `${url.protocol}//${url.hostname}:${port}`;
-        let path7 = url.path != null ? url.path : `${url.pathname || ""}${url.search || ""}`;
+        let path8 = url.path != null ? url.path : `${url.pathname || ""}${url.search || ""}`;
         if (origin.endsWith("/")) {
           origin = origin.substring(0, origin.length - 1);
         }
-        if (path7 && !path7.startsWith("/")) {
-          path7 = `/${path7}`;
+        if (path8 && !path8.startsWith("/")) {
+          path8 = `/${path8}`;
         }
-        url = new URL(origin + path7);
+        url = new URL(origin + path8);
       }
       return url;
     }
@@ -2623,20 +2623,20 @@ var require_parseParams = __commonJS({
 var require_basename = __commonJS({
   "node_modules/@fastify/busboy/lib/utils/basename.js"(exports2, module2) {
     "use strict";
-    module2.exports = function basename(path7) {
-      if (typeof path7 !== "string") {
+    module2.exports = function basename(path8) {
+      if (typeof path8 !== "string") {
         return "";
       }
-      for (var i = path7.length - 1; i >= 0; --i) {
-        switch (path7.charCodeAt(i)) {
+      for (var i = path8.length - 1; i >= 0; --i) {
+        switch (path8.charCodeAt(i)) {
           case 47:
           // '/'
           case 92:
-            path7 = path7.slice(i + 1);
-            return path7 === ".." || path7 === "." ? "" : path7;
+            path8 = path8.slice(i + 1);
+            return path8 === ".." || path8 === "." ? "" : path8;
         }
       }
-      return path7 === ".." || path7 === "." ? "" : path7;
+      return path8 === ".." || path8 === "." ? "" : path8;
     };
   }
 });
@@ -5667,7 +5667,7 @@ var require_request = __commonJS({
     }
     var Request = class _Request {
       constructor(origin, {
-        path: path7,
+        path: path8,
         method,
         body,
         headers,
@@ -5681,11 +5681,11 @@ var require_request = __commonJS({
         throwOnError,
         expectContinue
       }, handler2) {
-        if (typeof path7 !== "string") {
+        if (typeof path8 !== "string") {
           throw new InvalidArgumentError("path must be a string");
-        } else if (path7[0] !== "/" && !(path7.startsWith("http://") || path7.startsWith("https://")) && method !== "CONNECT") {
+        } else if (path8[0] !== "/" && !(path8.startsWith("http://") || path8.startsWith("https://")) && method !== "CONNECT") {
           throw new InvalidArgumentError("path must be an absolute URL or start with a slash");
-        } else if (invalidPathRegex.exec(path7) !== null) {
+        } else if (invalidPathRegex.exec(path8) !== null) {
           throw new InvalidArgumentError("invalid request path");
         }
         if (typeof method !== "string") {
@@ -5748,7 +5748,7 @@ var require_request = __commonJS({
         this.completed = false;
         this.aborted = false;
         this.upgrade = upgrade || null;
-        this.path = query ? util.buildURL(path7, query) : path7;
+        this.path = query ? util.buildURL(path8, query) : path8;
         this.origin = origin;
         this.idempotent = idempotent == null ? method === "HEAD" || method === "GET" : idempotent;
         this.blocking = blocking == null ? false : blocking;
@@ -6756,9 +6756,9 @@ var require_RedirectHandler = __commonJS({
           return this.handler.onHeaders(statusCode, headers, resume, statusText);
         }
         const { origin, pathname, search } = util.parseURL(new URL(this.location, this.opts.origin && new URL(this.opts.path, this.opts.origin)));
-        const path7 = search ? `${pathname}${search}` : pathname;
+        const path8 = search ? `${pathname}${search}` : pathname;
         this.opts.headers = cleanRequestHeaders(this.opts.headers, statusCode === 303, this.opts.origin !== origin);
-        this.opts.path = path7;
+        this.opts.path = path8;
         this.opts.origin = origin;
         this.opts.maxRedirections = 0;
         this.opts.query = null;
@@ -8000,7 +8000,7 @@ var require_client = __commonJS({
         writeH2(client, client[kHTTP2Session], request2);
         return;
       }
-      const { body, method, path: path7, host, upgrade, headers, blocking, reset } = request2;
+      const { body, method, path: path8, host, upgrade, headers, blocking, reset } = request2;
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH";
       if (body && typeof body.read === "function") {
         body.read(0);
@@ -8050,7 +8050,7 @@ var require_client = __commonJS({
       if (blocking) {
         socket[kBlocking] = true;
       }
-      let header = `${method} ${path7} HTTP/1.1\r
+      let header = `${method} ${path8} HTTP/1.1\r
 `;
       if (typeof host === "string") {
         header += `host: ${host}\r
@@ -8113,7 +8113,7 @@ upgrade: ${upgrade}\r
       return true;
     }
     function writeH2(client, session, request2) {
-      const { body, method, path: path7, host, upgrade, expectContinue, signal, headers: reqHeaders } = request2;
+      const { body, method, path: path8, host, upgrade, expectContinue, signal, headers: reqHeaders } = request2;
       let headers;
       if (typeof reqHeaders === "string") headers = Request[kHTTP2CopyHeaders](reqHeaders.trim());
       else headers = reqHeaders;
@@ -8156,7 +8156,7 @@ upgrade: ${upgrade}\r
         });
         return true;
       }
-      headers[HTTP2_HEADER_PATH] = path7;
+      headers[HTTP2_HEADER_PATH] = path8;
       headers[HTTP2_HEADER_SCHEME] = "https";
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH";
       if (body && typeof body.read === "function") {
@@ -10399,20 +10399,20 @@ var require_mock_utils = __commonJS({
       }
       return true;
     }
-    function safeUrl(path7) {
-      if (typeof path7 !== "string") {
-        return path7;
+    function safeUrl(path8) {
+      if (typeof path8 !== "string") {
+        return path8;
       }
-      const pathSegments = path7.split("?");
+      const pathSegments = path8.split("?");
       if (pathSegments.length !== 2) {
-        return path7;
+        return path8;
       }
       const qp = new URLSearchParams(pathSegments.pop());
       qp.sort();
       return [...pathSegments, qp.toString()].join("?");
     }
-    function matchKey(mockDispatch2, { path: path7, method, body, headers }) {
-      const pathMatch = matchValue(mockDispatch2.path, path7);
+    function matchKey(mockDispatch2, { path: path8, method, body, headers }) {
+      const pathMatch = matchValue(mockDispatch2.path, path8);
       const methodMatch = matchValue(mockDispatch2.method, method);
       const bodyMatch = typeof mockDispatch2.body !== "undefined" ? matchValue(mockDispatch2.body, body) : true;
       const headersMatch = matchHeaders(mockDispatch2, headers);
@@ -10430,7 +10430,7 @@ var require_mock_utils = __commonJS({
     function getMockDispatch(mockDispatches, key) {
       const basePath = key.query ? buildURL(key.path, key.query) : key.path;
       const resolvedPath = typeof basePath === "string" ? safeUrl(basePath) : basePath;
-      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path7 }) => matchValue(safeUrl(path7), resolvedPath));
+      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path8 }) => matchValue(safeUrl(path8), resolvedPath));
       if (matchedMockDispatches.length === 0) {
         throw new MockNotMatchedError(`Mock dispatch not matched for path '${resolvedPath}'`);
       }
@@ -10467,9 +10467,9 @@ var require_mock_utils = __commonJS({
       }
     }
     function buildKey(opts) {
-      const { path: path7, method, body, headers, query } = opts;
+      const { path: path8, method, body, headers, query } = opts;
       return {
-        path: path7,
+        path: path8,
         method,
         body,
         headers,
@@ -10918,10 +10918,10 @@ var require_pending_interceptors_formatter = __commonJS({
       }
       format(pendingInterceptors) {
         const withPrettyHeaders = pendingInterceptors.map(
-          ({ method, path: path7, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
+          ({ method, path: path8, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
             Method: method,
             Origin: origin,
-            Path: path7,
+            Path: path8,
             "Status code": statusCode,
             Persistent: persist ? "\u2705" : "\u274C",
             Invocations: timesInvoked,
@@ -15542,8 +15542,8 @@ var require_util6 = __commonJS({
         }
       }
     }
-    function validateCookiePath(path7) {
-      for (const char of path7) {
+    function validateCookiePath(path8) {
+      for (const char of path8) {
         const code = char.charCodeAt(0);
         if (code < 33 || char === ";") {
           throw new Error("Invalid cookie path");
@@ -17223,11 +17223,11 @@ var require_undici = __commonJS({
           if (typeof opts.path !== "string") {
             throw new InvalidArgumentError("invalid opts.path");
           }
-          let path7 = opts.path;
+          let path8 = opts.path;
           if (!opts.path.startsWith("/")) {
-            path7 = `/${path7}`;
+            path8 = `/${path8}`;
           }
-          url = new URL(util.parseOrigin(url).origin + path7);
+          url = new URL(util.parseOrigin(url).origin + path8);
         } else {
           if (!opts) {
             opts = typeof url === "object" ? url : {};
@@ -18450,7 +18450,7 @@ var require_path_utils = __commonJS({
     };
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.toPlatformPath = exports2.toWin32Path = exports2.toPosixPath = void 0;
-    var path7 = __importStar(require("path"));
+    var path8 = __importStar(require("path"));
     function toPosixPath(pth) {
       return pth.replace(/[\\]/g, "/");
     }
@@ -18460,7 +18460,7 @@ var require_path_utils = __commonJS({
     }
     exports2.toWin32Path = toWin32Path;
     function toPlatformPath(pth) {
-      return pth.replace(/[/\\]/g, path7.sep);
+      return pth.replace(/[/\\]/g, path8.sep);
     }
     exports2.toPlatformPath = toPlatformPath;
   }
@@ -18523,12 +18523,12 @@ var require_io_util = __commonJS({
     var _a;
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.getCmdPath = exports2.tryGetExecutablePath = exports2.isRooted = exports2.isDirectory = exports2.exists = exports2.READONLY = exports2.UV_FS_O_EXLOCK = exports2.IS_WINDOWS = exports2.unlink = exports2.symlink = exports2.stat = exports2.rmdir = exports2.rm = exports2.rename = exports2.readlink = exports2.readdir = exports2.open = exports2.mkdir = exports2.lstat = exports2.copyFile = exports2.chmod = void 0;
-    var fs8 = __importStar(require("fs"));
-    var path7 = __importStar(require("path"));
-    _a = fs8.promises, exports2.chmod = _a.chmod, exports2.copyFile = _a.copyFile, exports2.lstat = _a.lstat, exports2.mkdir = _a.mkdir, exports2.open = _a.open, exports2.readdir = _a.readdir, exports2.readlink = _a.readlink, exports2.rename = _a.rename, exports2.rm = _a.rm, exports2.rmdir = _a.rmdir, exports2.stat = _a.stat, exports2.symlink = _a.symlink, exports2.unlink = _a.unlink;
+    var fs9 = __importStar(require("fs"));
+    var path8 = __importStar(require("path"));
+    _a = fs9.promises, exports2.chmod = _a.chmod, exports2.copyFile = _a.copyFile, exports2.lstat = _a.lstat, exports2.mkdir = _a.mkdir, exports2.open = _a.open, exports2.readdir = _a.readdir, exports2.readlink = _a.readlink, exports2.rename = _a.rename, exports2.rm = _a.rm, exports2.rmdir = _a.rmdir, exports2.stat = _a.stat, exports2.symlink = _a.symlink, exports2.unlink = _a.unlink;
     exports2.IS_WINDOWS = process.platform === "win32";
     exports2.UV_FS_O_EXLOCK = 268435456;
-    exports2.READONLY = fs8.constants.O_RDONLY;
+    exports2.READONLY = fs9.constants.O_RDONLY;
     function exists(fsPath) {
       return __awaiter(this, void 0, void 0, function* () {
         try {
@@ -18573,7 +18573,7 @@ var require_io_util = __commonJS({
         }
         if (stats && stats.isFile()) {
           if (exports2.IS_WINDOWS) {
-            const upperExt = path7.extname(filePath).toUpperCase();
+            const upperExt = path8.extname(filePath).toUpperCase();
             if (extensions.some((validExt) => validExt.toUpperCase() === upperExt)) {
               return filePath;
             }
@@ -18597,11 +18597,11 @@ var require_io_util = __commonJS({
           if (stats && stats.isFile()) {
             if (exports2.IS_WINDOWS) {
               try {
-                const directory = path7.dirname(filePath);
-                const upperName = path7.basename(filePath).toUpperCase();
+                const directory = path8.dirname(filePath);
+                const upperName = path8.basename(filePath).toUpperCase();
                 for (const actualName of yield exports2.readdir(directory)) {
                   if (upperName === actualName.toUpperCase()) {
-                    filePath = path7.join(directory, actualName);
+                    filePath = path8.join(directory, actualName);
                     break;
                   }
                 }
@@ -18696,7 +18696,7 @@ var require_io = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.findInPath = exports2.which = exports2.mkdirP = exports2.rmRF = exports2.mv = exports2.cp = void 0;
     var assert_1 = require("assert");
-    var path7 = __importStar(require("path"));
+    var path8 = __importStar(require("path"));
     var ioUtil = __importStar(require_io_util());
     function cp(source, dest, options = {}) {
       return __awaiter(this, void 0, void 0, function* () {
@@ -18705,7 +18705,7 @@ var require_io = __commonJS({
         if (destStat && destStat.isFile() && !force) {
           return;
         }
-        const newDest = destStat && destStat.isDirectory() && copySourceDirectory ? path7.join(dest, path7.basename(source)) : dest;
+        const newDest = destStat && destStat.isDirectory() && copySourceDirectory ? path8.join(dest, path8.basename(source)) : dest;
         if (!(yield ioUtil.exists(source))) {
           throw new Error(`no such file or directory: ${source}`);
         }
@@ -18717,7 +18717,7 @@ var require_io = __commonJS({
             yield cpDirRecursive(source, newDest, 0, force);
           }
         } else {
-          if (path7.relative(source, newDest) === "") {
+          if (path8.relative(source, newDest) === "") {
             throw new Error(`'${newDest}' and '${source}' are the same file`);
           }
           yield copyFile(source, newDest, force);
@@ -18730,7 +18730,7 @@ var require_io = __commonJS({
         if (yield ioUtil.exists(dest)) {
           let destExists = true;
           if (yield ioUtil.isDirectory(dest)) {
-            dest = path7.join(dest, path7.basename(source));
+            dest = path8.join(dest, path8.basename(source));
             destExists = yield ioUtil.exists(dest);
           }
           if (destExists) {
@@ -18741,7 +18741,7 @@ var require_io = __commonJS({
             }
           }
         }
-        yield mkdirP(path7.dirname(dest));
+        yield mkdirP(path8.dirname(dest));
         yield ioUtil.rename(source, dest);
       });
     }
@@ -18804,7 +18804,7 @@ var require_io = __commonJS({
         }
         const extensions = [];
         if (ioUtil.IS_WINDOWS && process.env["PATHEXT"]) {
-          for (const extension of process.env["PATHEXT"].split(path7.delimiter)) {
+          for (const extension of process.env["PATHEXT"].split(path8.delimiter)) {
             if (extension) {
               extensions.push(extension);
             }
@@ -18817,12 +18817,12 @@ var require_io = __commonJS({
           }
           return [];
         }
-        if (tool.includes(path7.sep)) {
+        if (tool.includes(path8.sep)) {
           return [];
         }
         const directories = [];
         if (process.env.PATH) {
-          for (const p of process.env.PATH.split(path7.delimiter)) {
+          for (const p of process.env.PATH.split(path8.delimiter)) {
             if (p) {
               directories.push(p);
             }
@@ -18830,7 +18830,7 @@ var require_io = __commonJS({
         }
         const matches = [];
         for (const directory of directories) {
-          const filePath = yield ioUtil.tryGetExecutablePath(path7.join(directory, tool), extensions);
+          const filePath = yield ioUtil.tryGetExecutablePath(path8.join(directory, tool), extensions);
           if (filePath) {
             matches.push(filePath);
           }
@@ -18943,10 +18943,10 @@ var require_toolrunner = __commonJS({
     };
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.argStringToArray = exports2.ToolRunner = void 0;
-    var os5 = __importStar(require("os"));
+    var os6 = __importStar(require("os"));
     var events = __importStar(require("events"));
     var child = __importStar(require("child_process"));
-    var path7 = __importStar(require("path"));
+    var path8 = __importStar(require("path"));
     var io = __importStar(require_io());
     var ioUtil = __importStar(require_io_util());
     var timers_1 = require("timers");
@@ -18998,12 +18998,12 @@ var require_toolrunner = __commonJS({
       _processLineBuffer(data, strBuffer, onLine) {
         try {
           let s = strBuffer + data.toString();
-          let n = s.indexOf(os5.EOL);
+          let n = s.indexOf(os6.EOL);
           while (n > -1) {
             const line = s.substring(0, n);
             onLine(line);
-            s = s.substring(n + os5.EOL.length);
-            n = s.indexOf(os5.EOL);
+            s = s.substring(n + os6.EOL.length);
+            n = s.indexOf(os6.EOL);
           }
           return s;
         } catch (err) {
@@ -19161,7 +19161,7 @@ var require_toolrunner = __commonJS({
       exec() {
         return __awaiter(this, void 0, void 0, function* () {
           if (!ioUtil.isRooted(this.toolPath) && (this.toolPath.includes("/") || IS_WINDOWS && this.toolPath.includes("\\"))) {
-            this.toolPath = path7.resolve(process.cwd(), this.options.cwd || process.cwd(), this.toolPath);
+            this.toolPath = path8.resolve(process.cwd(), this.options.cwd || process.cwd(), this.toolPath);
           }
           this.toolPath = yield io.which(this.toolPath, true);
           return new Promise((resolve3, reject) => __awaiter(this, void 0, void 0, function* () {
@@ -19172,7 +19172,7 @@ var require_toolrunner = __commonJS({
             }
             const optionsNonNull = this._cloneExecOptions(this.options);
             if (!optionsNonNull.silent && optionsNonNull.outStream) {
-              optionsNonNull.outStream.write(this._getCommandString(optionsNonNull) + os5.EOL);
+              optionsNonNull.outStream.write(this._getCommandString(optionsNonNull) + os6.EOL);
             }
             const state = new ExecState(optionsNonNull, this.toolPath);
             state.on("debug", (message) => {
@@ -19660,8 +19660,8 @@ var require_core = __commonJS({
     var command_1 = require_command();
     var file_command_1 = require_file_command();
     var utils_1 = require_utils();
-    var os5 = __importStar(require("os"));
-    var path7 = __importStar(require("path"));
+    var os6 = __importStar(require("os"));
+    var path8 = __importStar(require("path"));
     var oidc_utils_1 = require_oidc_utils();
     var ExitCode;
     (function(ExitCode2) {
@@ -19689,7 +19689,7 @@ var require_core = __commonJS({
       } else {
         (0, command_1.issueCommand)("add-path", {}, inputPath);
       }
-      process.env["PATH"] = `${inputPath}${path7.delimiter}${process.env["PATH"]}`;
+      process.env["PATH"] = `${inputPath}${path8.delimiter}${process.env["PATH"]}`;
     }
     exports2.addPath = addPath;
     function getInput2(name, options) {
@@ -19728,7 +19728,7 @@ Support boolean input list: \`true | True | TRUE | false | False | FALSE\``);
       if (filePath) {
         return (0, file_command_1.issueFileCommand)("OUTPUT", (0, file_command_1.prepareKeyValueMessage)(name, value));
       }
-      process.stdout.write(os5.EOL);
+      process.stdout.write(os6.EOL);
       (0, command_1.issueCommand)("set-output", { name }, (0, utils_1.toCommandValue)(value));
     }
     exports2.setOutput = setOutput2;
@@ -19762,7 +19762,7 @@ Support boolean input list: \`true | True | TRUE | false | False | FALSE\``);
     }
     exports2.notice = notice;
     function info3(message) {
-      process.stdout.write(message + os5.EOL);
+      process.stdout.write(message + os6.EOL);
     }
     exports2.info = info3;
     function startGroup(name) {
@@ -19845,8 +19845,8 @@ var require_context = __commonJS({
           if ((0, fs_1.existsSync)(process.env.GITHUB_EVENT_PATH)) {
             this.payload = JSON.parse((0, fs_1.readFileSync)(process.env.GITHUB_EVENT_PATH, { encoding: "utf8" }));
           } else {
-            const path7 = process.env.GITHUB_EVENT_PATH;
-            process.stdout.write(`GITHUB_EVENT_PATH ${path7} does not exist${os_1.EOL}`);
+            const path8 = process.env.GITHUB_EVENT_PATH;
+            process.stdout.write(`GITHUB_EVENT_PATH ${path8} does not exist${os_1.EOL}`);
           }
         }
         this.eventName = process.env.GITHUB_EVENT_NAME;
@@ -23933,15 +23933,15 @@ var require_dist_node11 = __commonJS({
         octokit.log.debug("request", options);
         const start = Date.now();
         const requestOptions = octokit.request.endpoint.parse(options);
-        const path7 = requestOptions.url.replace(options.baseUrl, "");
+        const path8 = requestOptions.url.replace(options.baseUrl, "");
         return request2(options).then((response) => {
           octokit.log.info(
-            `${requestOptions.method} ${path7} - ${response.status} in ${Date.now() - start}ms`
+            `${requestOptions.method} ${path8} - ${response.status} in ${Date.now() - start}ms`
           );
           return response;
         }).catch((error) => {
           octokit.log.info(
-            `${requestOptions.method} ${path7} - ${error.status} in ${Date.now() - start}ms`
+            `${requestOptions.method} ${path8} - ${error.status} in ${Date.now() - start}ms`
           );
           throw error;
         });
@@ -29087,10 +29087,285 @@ async function runReviews(options) {
 }
 
 // packages/validate-review/src/main.ts
+var import_child_process5 = require("child_process");
+var fs8 = __toESM(require("fs"));
+var os5 = __toESM(require("os"));
+var path7 = __toESM(require("path"));
+
+// packages/validate-review/src/claude-validate.ts
 var import_child_process4 = require("child_process");
 var fs7 = __toESM(require("fs"));
 var os4 = __toESM(require("os"));
 var path6 = __toESM(require("path"));
+var CLAUDE_VALIDATOR_ALLOWED_TOOLS = [
+  "Read",
+  "Glob",
+  "Grep",
+  "Bash(git diff *)",
+  "Bash(git show *)",
+  "Bash(git log *)",
+  "Bash(git rev-parse *)",
+  "query"
+];
+function readNumber3(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
+}
+function readString2(value) {
+  return typeof value === "string" ? value : void 0;
+}
+function readUsageTokens2(usage) {
+  if (!usage) {
+    return { input: 0, output: 0 };
+  }
+  const input = readNumber3(usage.input_tokens) ?? 0;
+  const output = readNumber3(usage.output_tokens) ?? 0;
+  const reasoning = readNumber3(usage.reasoning_tokens) ?? readNumber3(usage.cache_read_input_tokens);
+  return reasoning === void 0 ? { input, output } : { input, output, reasoning };
+}
+var DEFAULT_TIMEOUT_MINUTES2 = 5;
+var TEMP_DEBUG_PREFIX2 = "ai-review-validate-claude-";
+var LineBufferedWriter2 = class {
+  constructor(filePath) {
+    this.pending = "";
+    this.closed = false;
+    fs7.mkdirSync(path6.dirname(filePath), { recursive: true, mode: 448 });
+    this.fd = fs7.openSync(filePath, "w", 384);
+  }
+  write(chunk) {
+    if (this.closed || chunk == null) return;
+    const text = typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8");
+    this.pending += text;
+    let newlineIndex = this.pending.indexOf("\n");
+    while (newlineIndex >= 0) {
+      fs7.writeSync(this.fd, this.pending.slice(0, newlineIndex + 1), void 0, "utf8");
+      this.pending = this.pending.slice(newlineIndex + 1);
+      newlineIndex = this.pending.indexOf("\n");
+    }
+  }
+  close() {
+    if (this.closed) return;
+    this.closed = true;
+    if (this.pending) {
+      fs7.writeSync(this.fd, this.pending, void 0, "utf8");
+      this.pending = "";
+    }
+    fs7.closeSync(this.fd);
+  }
+};
+function lastNonEmptyLine2(text) {
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  return lines[lines.length - 1] ?? "<none>";
+}
+function diagnostics2(stdoutPath, stderrPath) {
+  const stdout = fs7.existsSync(stdoutPath) ? fs7.readFileSync(stdoutPath, "utf8") : "";
+  const stderr = fs7.existsSync(stderrPath) ? fs7.readFileSync(stderrPath, "utf8") : "";
+  return `last stdout line: ${lastNonEmptyLine2(stdout)}; last stderr line: ${lastNonEmptyLine2(stderr)}`;
+}
+function closeCapture2(writer) {
+  writer?.close();
+}
+var ClaudeCodeValidatorRuntime = class {
+  constructor() {
+    this.tool = "claude";
+  }
+  assertVersion(expectedVersion) {
+    const result = (0, import_child_process4.spawnSync)("claude", ["--version"], {
+      encoding: "utf8",
+      maxBuffer: 1024 * 1024,
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 1e4
+    });
+    const stdout = typeof result.stdout === "string" ? result.stdout.trim() : "";
+    const stderr = typeof result.stderr === "string" ? result.stderr.trim() : "";
+    if (result.error) {
+      throw new Error(`could not execute 'claude --version': ${result.error.message}`);
+    }
+    if (result.status !== 0) {
+      throw new Error(
+        `'claude --version' exited with status ${result.status}${stderr ? `: ${stderr}` : ""}`
+      );
+    }
+    if (!expectedVersion) return;
+    const reportedVersion = stdout || stderr;
+    const versionMatch = reportedVersion.match(/v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)/);
+    const installedVersion = (versionMatch?.[1] ?? reportedVersion.replace(/^v/, "")).trim();
+    const normalizedExpectedVersion = expectedVersion.replace(/^v/, "");
+    if (!installedVersion || installedVersion !== normalizedExpectedVersion) {
+      throw new Error(
+        `expected Claude Code ${normalizedExpectedVersion}, but 'claude --version' reported '${reportedVersion || "<empty>"}'`
+      );
+    }
+  }
+  /**
+   * Strip the `provider/` prefix from the model string. Claude Code
+   * CLI's `--model` flag does NOT consume the OpenCode-style
+   * `provider/model` form; the validator runtime mirrors the
+   * reviewer's `ClaudeCodeRuntime.resolveModel` so both surfaces
+   * surface the same error message when the caller forgets the
+   * prefix.
+   */
+  resolveModel(rawModel) {
+    const slashIndex = rawModel.indexOf("/");
+    if (slashIndex <= 0) {
+      throw new Error(
+        `tool=claude requires model in 'provider/model' format; got '${rawModel}'`
+      );
+    }
+    return rawModel.slice(slashIndex + 1);
+  }
+  /**
+   * Build the env for the spawned process. Mirrors
+   * `process.env` (the action's reviewer's claude runtime already
+   * does this), then layers the explicit `passthroughEnv` overrides
+   * on top so the action layer can route through
+   * `ANTHROPIC_BASE_URL` etc. without the runtime having to know
+   * which keys are interesting.
+   */
+  buildEnvironment(passthroughEnv) {
+    return { ...process.env, ...passthroughEnv ?? {} };
+  }
+  commandArgs(model, prompt) {
+    const args = ["-p"];
+    for (const toolName of CLAUDE_VALIDATOR_ALLOWED_TOOLS) {
+      args.push("--allowedTools", toolName);
+    }
+    args.push(
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--include-partial-messages",
+      "--dangerously-skip-permissions",
+      "--model",
+      model,
+      "--",
+      prompt
+    );
+    return args;
+  }
+  parseEvents(stdout, stdoutPath, stderrPath) {
+    const parts = [];
+    let finalResultEvent;
+    for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
+      let parsed;
+      try {
+        parsed = JSON.parse(line);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(`could not parse Claude Code JSON event: ${message}; ${diagnostics2(stdoutPath, stderrPath)}`);
+      }
+      parts.push(parsed);
+      if (parsed.type === "result") {
+        finalResultEvent = parsed;
+      }
+    }
+    const text = readString2(finalResultEvent?.result) ?? "";
+    const cost = readNumber3(finalResultEvent?.total_cost_usd) ?? 0;
+    const tokens = readUsageTokens2(finalResultEvent?.usage);
+    return {
+      text,
+      cost,
+      tokens,
+      // The runtime contract returns the caller's original model
+      // string (the reviewer's runtime sets `model: ''` here and
+      // then runReview() overwrites it with the caller's input).
+      // For the validator we set the stripped model directly so
+      // downstream accounting keys on the bare Claude Code model id.
+      model: "",
+      parts
+    };
+  }
+};
+function waitForProcess2(proc, timeoutMs, getDiagnostics) {
+  return new Promise((resolve3, reject) => {
+    let settled = false;
+    let timeoutHandle;
+    const finish = (code, signal) => {
+      if (settled) return;
+      settled = true;
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+      resolve3({ code, signal });
+    };
+    proc.on("error", (error) => {
+      if (settled) return;
+      settled = true;
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+      const message = error instanceof Error ? error.message : String(error);
+      reject(new Error(`could not execute claude: ${message}; ${getDiagnostics()}`));
+    });
+    proc.on("close", (code, signal) => {
+      finish(
+        typeof code === "number" ? code : null,
+        typeof signal === "string" ? signal : null
+      );
+    });
+    timeoutHandle = setTimeout(() => {
+      if (settled) return;
+      try {
+        proc.kill("SIGTERM");
+      } catch {
+      }
+      const message = `claude timed out after ${timeoutMs} ms; ${getDiagnostics()}`;
+      reject(new Error(message));
+      settled = true;
+      const killHandle = setTimeout(() => {
+        try {
+          proc.kill("SIGKILL");
+        } catch {
+        }
+      }, 3e3);
+      killHandle.unref?.();
+    }, timeoutMs);
+    timeoutHandle.unref?.();
+  });
+}
+async function runClaudeValidator(options, spawnOverride) {
+  const runtime = new ClaudeCodeValidatorRuntime();
+  const timeoutMinutes = options.timeoutMinutes ?? DEFAULT_TIMEOUT_MINUTES2;
+  if (!Number.isFinite(timeoutMinutes) || timeoutMinutes <= 0) {
+    throw new Error("runClaudeValidator requires a positive timeoutMinutes");
+  }
+  const model = runtime.resolveModel(options.model);
+  const args = runtime.commandArgs(model, options.prompt);
+  const env = runtime.buildEnvironment(options.passthroughEnv);
+  const runnerTemp = process.env.RUNNER_TEMP ?? os4.tmpdir();
+  const homeDir = fs7.mkdtempSync(path6.join(runnerTemp, TEMP_DEBUG_PREFIX2));
+  fs7.chmodSync(homeDir, 448);
+  const stdoutPath = path6.join(homeDir, "stdout.jsonl");
+  const stderrPath = path6.join(homeDir, "stderr.log");
+  const stdoutWriter = new LineBufferedWriter2(stdoutPath);
+  const stderrWriter = new LineBufferedWriter2(stderrPath);
+  const getDiagnostics = () => diagnostics2(stdoutPath, stderrPath);
+  try {
+    let proc;
+    try {
+      proc = (spawnOverride ?? import_child_process4.spawn)("claude", args, {
+        env,
+        stdio: ["ignore", "pipe", "pipe"]
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`could not execute claude: ${message}; ${getDiagnostics()}`);
+    }
+    proc.stdout?.on("data", (chunk) => stdoutWriter.write(chunk));
+    proc.stderr?.on("data", (chunk) => stderrWriter.write(chunk));
+    const exit = await waitForProcess2(proc, timeoutMinutes * 60 * 1e3, getDiagnostics);
+    stdoutWriter.close();
+    stderrWriter.close();
+    const stdout = fs7.readFileSync(stdoutPath, "utf8");
+    if (exit.code !== 0 || exit.signal) {
+      throw new Error(
+        `claude exited unsuccessfully${exit.code !== null ? ` with status ${exit.code}` : ` with signal ${exit.signal}`}; ${getDiagnostics()}`
+      );
+    }
+    return runtime.parseEvents(stdout, stdoutPath, stderrPath);
+  } finally {
+    closeCapture2(stdoutWriter);
+    closeCapture2(stderrWriter);
+    fs7.rmSync(homeDir, { recursive: true, force: true });
+  }
+}
+
+// packages/validate-review/src/main.ts
 var VALIDATOR_PERMISSION2 = {
   read: "deny",
   glob: "deny",
@@ -29115,7 +29390,7 @@ function stripThinkingBlocks(text) {
   return text.replace(/<think>[\s\S]*?<\/think>/g, "");
 }
 function assertOpenCodeVersion(expectedVersion) {
-  const result = (0, import_child_process4.spawnSync)("opencode", ["--version"], {
+  const result = (0, import_child_process5.spawnSync)("opencode", ["--version"], {
     encoding: "utf8",
     maxBuffer: 1024 * 1024,
     stdio: ["ignore", "pipe", "pipe"],
@@ -29142,19 +29417,19 @@ function assertOpenCodeVersion(expectedVersion) {
   }
 }
 function readReviewFile(reviewPath) {
-  if (!fs7.existsSync(reviewPath)) {
+  if (!fs8.existsSync(reviewPath)) {
     throw new Error(`review file not found at ${reviewPath}`);
   }
-  const content = fs7.readFileSync(reviewPath, "utf8");
+  const content = fs8.readFileSync(reviewPath, "utf8");
   if (!content.trim()) {
     throw new Error(`review file at ${reviewPath} is empty`);
   }
   return content;
 }
 function invokeValidator(options) {
-  const runnerTemp = process.env.RUNNER_TEMP ?? os4.tmpdir();
-  const homeDir = fs7.mkdtempSync(path6.join(runnerTemp, "ai-review-validate-"));
-  fs7.chmodSync(homeDir, 448);
+  const runnerTemp = process.env.RUNNER_TEMP ?? os5.tmpdir();
+  const homeDir = fs8.mkdtempSync(path7.join(runnerTemp, "ai-review-validate-"));
+  fs8.chmodSync(homeDir, 448);
   const prompt = VALIDATOR_AGENT_PROMPT_TEMPLATE.replace("__REVIEW_PATH__", options.reviewPath).concat("\n\n---\n\nReview file contents:\n\n", options.reviewContent);
   let baseConfig = {};
   try {
@@ -29187,8 +29462,8 @@ function invokeValidator(options) {
     model: options.model,
     permission: VALIDATOR_PERMISSION2
   };
-  const configPath = path6.join(homeDir, "opencode.json");
-  fs7.writeFileSync(configPath, JSON.stringify(mergedConfig, null, 2), "utf8");
+  const configPath = path7.join(homeDir, "opencode.json");
+  fs8.writeFileSync(configPath, JSON.stringify(mergedConfig, null, 2), "utf8");
   return runOpenCodeRun({
     configPath,
     homeDir,
@@ -29225,16 +29500,7 @@ var EMPTY_RESULT = {
   failureReason: ""
 };
 async function validateReview(options) {
-  try {
-    assertOpenCodeVersion(options.opencodeVersion);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return {
-      ...EMPTY_RESULT,
-      reason: capReason(`OpenCode version assertion failed: ${message}`),
-      failureReason: `OpenCode version assertion failed: ${message}`
-    };
-  }
+  const tool = options.tool ?? "opencode";
   if (!options.reviewPath) {
     const reason = "review-path input is required";
     return {
@@ -29251,7 +29517,7 @@ async function validateReview(options) {
       failureReason: reason
     };
   }
-  if (!options.passedConfigJson) {
+  if (tool === "opencode" && !options.passedConfigJson) {
     const reason = "config-json input is required (resolved validator-only OpenCode config from run-reviews)";
     return {
       ...EMPTY_RESULT,
@@ -29278,23 +29544,12 @@ async function validateReview(options) {
       failureReason: `Review failed structural validation: ${structural.reason}`
     };
   }
-  let result;
-  try {
-    result = await invokeValidator({
-      reviewPath: options.reviewPath,
-      reviewContent,
-      model: options.model,
-      timeoutMinutes: options.timeoutMinutes,
-      passedConfigJson: options.passedConfigJson
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return {
-      ...EMPTY_RESULT,
-      reason: capReason(`validator invocation failed: ${message}`),
-      failureReason: `Validator invocation failed: ${message}`
-    };
+  if (tool === "claude") {
+    return runClaudeValidation(options, reviewContent);
   }
+  return runOpencodeValidation(options, reviewContent);
+}
+function shapeResult(result) {
   const verdict = parseValidatorResponse(result.text);
   return {
     status: verdict.status,
@@ -29303,6 +29558,48 @@ async function validateReview(options) {
     tokens: result.tokens,
     failureReason: verdict.status === "invalid" ? `Review validation failed: ${verdict.reason}` : ""
   };
+}
+function runOpencodeValidation(options, reviewContent) {
+  try {
+    assertOpenCodeVersion(options.opencodeVersion);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return Promise.resolve({
+      ...EMPTY_RESULT,
+      reason: capReason(`OpenCode version assertion failed: ${message}`),
+      failureReason: `OpenCode version assertion failed: ${message}`
+    });
+  }
+  return invokeValidator({
+    reviewPath: options.reviewPath,
+    reviewContent,
+    model: options.model,
+    timeoutMinutes: options.timeoutMinutes,
+    passedConfigJson: options.passedConfigJson
+  }).then(shapeResult).catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      ...EMPTY_RESULT,
+      reason: capReason(`validator invocation failed: ${message}`),
+      failureReason: `Validator invocation failed: ${message}`
+    };
+  });
+}
+function runClaudeValidation(options, reviewContent) {
+  const prompt = VALIDATOR_AGENT_PROMPT_TEMPLATE.replace("__REVIEW_PATH__", options.reviewPath).concat("\n\n---\n\nReview file contents:\n\n", reviewContent);
+  return runClaudeValidator({
+    prompt,
+    model: options.model,
+    timeoutMinutes: options.timeoutMinutes,
+    passthroughEnv: options.passthroughEnv
+  }).then(shapeResult).catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      ...EMPTY_RESULT,
+      reason: capReason(`validator invocation failed: ${message}`),
+      failureReason: `Validator invocation failed: ${message}`
+    };
+  });
 }
 
 // packages/post-comment/src/main.ts
@@ -30341,17 +30638,17 @@ function requestLog(octokit) {
     octokit.log.debug("request", options);
     const start = Date.now();
     const requestOptions = octokit.request.endpoint.parse(options);
-    const path7 = requestOptions.url.replace(options.baseUrl, "");
+    const path8 = requestOptions.url.replace(options.baseUrl, "");
     return request2(options).then((response) => {
       const requestId = response.headers["x-github-request-id"];
       octokit.log.info(
-        `${requestOptions.method} ${path7} - ${response.status} with id ${requestId} in ${Date.now() - start}ms`
+        `${requestOptions.method} ${path8} - ${response.status} with id ${requestId} in ${Date.now() - start}ms`
       );
       return response;
     }).catch((error) => {
       const requestId = error.response?.headers["x-github-request-id"] || "UNKNOWN";
       octokit.log.error(
-        `${requestOptions.method} ${path7} - ${error.status} with id ${requestId} in ${Date.now() - start}ms`
+        `${requestOptions.method} ${path8} - ${error.status} with id ${requestId} in ${Date.now() - start}ms`
       );
       throw error;
     });
@@ -33001,7 +33298,7 @@ var DEFAULT_PERMISSION = {
 // packages/root-action/src/action-entry.ts
 var DEFAULT_OPENCODE_VERSION = "1.18.4";
 var DEFAULT_MODEL = "anthropic/claude-sonnet-4.6";
-var DEFAULT_TIMEOUT_MINUTES2 = 30;
+var DEFAULT_TIMEOUT_MINUTES3 = 30;
 var EMPTY_REVIEW_RESULT = {
   review: "",
   reviewOutputPath: "",
@@ -33066,20 +33363,31 @@ function buildRunReviewsOptions() {
     model: core2.getInput("model") || DEFAULT_MODEL,
     modelsInput: core2.getInput("models"),
     failOnError: getBooleanInput("fail-on-error"),
-    timeoutMinutes: getIntInput("timeout-minutes", DEFAULT_TIMEOUT_MINUTES2),
+    timeoutMinutes: getIntInput("timeout-minutes", DEFAULT_TIMEOUT_MINUTES3),
     prompts: core2.getInput("prompts"),
     permission: readPermissionInput(),
     userConfig: core2.getInput("opencode-config") || void 0,
     githubToken: core2.getInput("github-token") || process.env.GITHUB_TOKEN
   };
 }
-function buildValidateReviewOptions(reviewPath, model, passedConfigJson) {
+function buildClaudePassthroughEnv() {
   return {
+    ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL ?? "",
+    ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN ?? "",
+    ANTHROPIC_API_KEY: "",
+    CLAUDE_ENABLE_BYTE_WATCHDOG: "0",
+    CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: "1"
+  };
+}
+function buildValidateReviewOptions(reviewPath, model, passedConfigJson, tool) {
+  return {
+    tool,
     opencodeVersion: core2.getInput("opencode-version") || DEFAULT_OPENCODE_VERSION,
     reviewPath,
     model,
     timeoutMinutes: 5,
-    passedConfigJson
+    passedConfigJson,
+    passthroughEnv: buildClaudePassthroughEnv()
   };
 }
 function buildPostCommentOptions(review, maxChars) {
@@ -33206,7 +33514,8 @@ async function runWithDeps(deps) {
         buildValidateReviewOptions(
           reviewResult.reviewOutputPath,
           reviewResult.effectiveModel || reviewOptions.model,
-          reviewResult.configJson
+          reviewResult.configJson,
+          reviewOptions.tool
         )
       );
     } catch (error) {

@@ -94,11 +94,11 @@ var require_command = __commonJS({
     };
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.issue = exports2.issueCommand = void 0;
-    var os3 = __importStar(require("os"));
+    var os4 = __importStar(require("os"));
     var utils_1 = require_utils();
     function issueCommand(command, properties, message) {
       const cmd = new Command(command, properties, message);
-      process.stdout.write(cmd.toString() + os3.EOL);
+      process.stdout.write(cmd.toString() + os4.EOL);
     }
     exports2.issueCommand = issueCommand;
     function issue(name, message = "") {
@@ -181,18 +181,18 @@ var require_file_command = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.prepareKeyValueMessage = exports2.issueFileCommand = void 0;
     var crypto = __importStar(require("crypto"));
-    var fs4 = __importStar(require("fs"));
-    var os3 = __importStar(require("os"));
+    var fs5 = __importStar(require("fs"));
+    var os4 = __importStar(require("os"));
     var utils_1 = require_utils();
     function issueFileCommand(command, message) {
       const filePath = process.env[`GITHUB_${command}`];
       if (!filePath) {
         throw new Error(`Unable to find environment variable for file command ${command}`);
       }
-      if (!fs4.existsSync(filePath)) {
+      if (!fs5.existsSync(filePath)) {
         throw new Error(`Missing file at path: ${filePath}`);
       }
-      fs4.appendFileSync(filePath, `${(0, utils_1.toCommandValue)(message)}${os3.EOL}`, {
+      fs5.appendFileSync(filePath, `${(0, utils_1.toCommandValue)(message)}${os4.EOL}`, {
         encoding: "utf8"
       });
     }
@@ -206,7 +206,7 @@ var require_file_command = __commonJS({
       if (convertedValue.includes(delimiter)) {
         throw new Error(`Unexpected input: value should not contain the delimiter "${delimiter}"`);
       }
-      return `${key}<<${delimiter}${os3.EOL}${convertedValue}${os3.EOL}${delimiter}`;
+      return `${key}<<${delimiter}${os4.EOL}${convertedValue}${os4.EOL}${delimiter}`;
     }
     exports2.prepareKeyValueMessage = prepareKeyValueMessage;
   }
@@ -997,14 +997,14 @@ var require_util = __commonJS({
         }
         const port = url.port != null ? url.port : url.protocol === "https:" ? 443 : 80;
         let origin = url.origin != null ? url.origin : `${url.protocol}//${url.hostname}:${port}`;
-        let path3 = url.path != null ? url.path : `${url.pathname || ""}${url.search || ""}`;
+        let path4 = url.path != null ? url.path : `${url.pathname || ""}${url.search || ""}`;
         if (origin.endsWith("/")) {
           origin = origin.substring(0, origin.length - 1);
         }
-        if (path3 && !path3.startsWith("/")) {
-          path3 = `/${path3}`;
+        if (path4 && !path4.startsWith("/")) {
+          path4 = `/${path4}`;
         }
-        url = new URL(origin + path3);
+        url = new URL(origin + path4);
       }
       return url;
     }
@@ -2618,20 +2618,20 @@ var require_parseParams = __commonJS({
 var require_basename = __commonJS({
   "node_modules/@fastify/busboy/lib/utils/basename.js"(exports2, module2) {
     "use strict";
-    module2.exports = function basename(path3) {
-      if (typeof path3 !== "string") {
+    module2.exports = function basename(path4) {
+      if (typeof path4 !== "string") {
         return "";
       }
-      for (var i = path3.length - 1; i >= 0; --i) {
-        switch (path3.charCodeAt(i)) {
+      for (var i = path4.length - 1; i >= 0; --i) {
+        switch (path4.charCodeAt(i)) {
           case 47:
           // '/'
           case 92:
-            path3 = path3.slice(i + 1);
-            return path3 === ".." || path3 === "." ? "" : path3;
+            path4 = path4.slice(i + 1);
+            return path4 === ".." || path4 === "." ? "" : path4;
         }
       }
-      return path3 === ".." || path3 === "." ? "" : path3;
+      return path4 === ".." || path4 === "." ? "" : path4;
     };
   }
 });
@@ -5662,7 +5662,7 @@ var require_request = __commonJS({
     }
     var Request = class _Request {
       constructor(origin, {
-        path: path3,
+        path: path4,
         method,
         body,
         headers,
@@ -5676,11 +5676,11 @@ var require_request = __commonJS({
         throwOnError,
         expectContinue
       }, handler) {
-        if (typeof path3 !== "string") {
+        if (typeof path4 !== "string") {
           throw new InvalidArgumentError("path must be a string");
-        } else if (path3[0] !== "/" && !(path3.startsWith("http://") || path3.startsWith("https://")) && method !== "CONNECT") {
+        } else if (path4[0] !== "/" && !(path4.startsWith("http://") || path4.startsWith("https://")) && method !== "CONNECT") {
           throw new InvalidArgumentError("path must be an absolute URL or start with a slash");
-        } else if (invalidPathRegex.exec(path3) !== null) {
+        } else if (invalidPathRegex.exec(path4) !== null) {
           throw new InvalidArgumentError("invalid request path");
         }
         if (typeof method !== "string") {
@@ -5743,7 +5743,7 @@ var require_request = __commonJS({
         this.completed = false;
         this.aborted = false;
         this.upgrade = upgrade || null;
-        this.path = query ? util.buildURL(path3, query) : path3;
+        this.path = query ? util.buildURL(path4, query) : path4;
         this.origin = origin;
         this.idempotent = idempotent == null ? method === "HEAD" || method === "GET" : idempotent;
         this.blocking = blocking == null ? false : blocking;
@@ -6751,9 +6751,9 @@ var require_RedirectHandler = __commonJS({
           return this.handler.onHeaders(statusCode, headers, resume, statusText);
         }
         const { origin, pathname, search } = util.parseURL(new URL(this.location, this.opts.origin && new URL(this.opts.path, this.opts.origin)));
-        const path3 = search ? `${pathname}${search}` : pathname;
+        const path4 = search ? `${pathname}${search}` : pathname;
         this.opts.headers = cleanRequestHeaders(this.opts.headers, statusCode === 303, this.opts.origin !== origin);
-        this.opts.path = path3;
+        this.opts.path = path4;
         this.opts.origin = origin;
         this.opts.maxRedirections = 0;
         this.opts.query = null;
@@ -7995,7 +7995,7 @@ var require_client = __commonJS({
         writeH2(client, client[kHTTP2Session], request);
         return;
       }
-      const { body, method, path: path3, host, upgrade, headers, blocking, reset } = request;
+      const { body, method, path: path4, host, upgrade, headers, blocking, reset } = request;
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH";
       if (body && typeof body.read === "function") {
         body.read(0);
@@ -8045,7 +8045,7 @@ var require_client = __commonJS({
       if (blocking) {
         socket[kBlocking] = true;
       }
-      let header = `${method} ${path3} HTTP/1.1\r
+      let header = `${method} ${path4} HTTP/1.1\r
 `;
       if (typeof host === "string") {
         header += `host: ${host}\r
@@ -8108,7 +8108,7 @@ upgrade: ${upgrade}\r
       return true;
     }
     function writeH2(client, session, request) {
-      const { body, method, path: path3, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
+      const { body, method, path: path4, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
       let headers;
       if (typeof reqHeaders === "string") headers = Request[kHTTP2CopyHeaders](reqHeaders.trim());
       else headers = reqHeaders;
@@ -8151,7 +8151,7 @@ upgrade: ${upgrade}\r
         });
         return true;
       }
-      headers[HTTP2_HEADER_PATH] = path3;
+      headers[HTTP2_HEADER_PATH] = path4;
       headers[HTTP2_HEADER_SCHEME] = "https";
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH";
       if (body && typeof body.read === "function") {
@@ -10394,20 +10394,20 @@ var require_mock_utils = __commonJS({
       }
       return true;
     }
-    function safeUrl(path3) {
-      if (typeof path3 !== "string") {
-        return path3;
+    function safeUrl(path4) {
+      if (typeof path4 !== "string") {
+        return path4;
       }
-      const pathSegments = path3.split("?");
+      const pathSegments = path4.split("?");
       if (pathSegments.length !== 2) {
-        return path3;
+        return path4;
       }
       const qp = new URLSearchParams(pathSegments.pop());
       qp.sort();
       return [...pathSegments, qp.toString()].join("?");
     }
-    function matchKey(mockDispatch2, { path: path3, method, body, headers }) {
-      const pathMatch = matchValue(mockDispatch2.path, path3);
+    function matchKey(mockDispatch2, { path: path4, method, body, headers }) {
+      const pathMatch = matchValue(mockDispatch2.path, path4);
       const methodMatch = matchValue(mockDispatch2.method, method);
       const bodyMatch = typeof mockDispatch2.body !== "undefined" ? matchValue(mockDispatch2.body, body) : true;
       const headersMatch = matchHeaders(mockDispatch2, headers);
@@ -10425,7 +10425,7 @@ var require_mock_utils = __commonJS({
     function getMockDispatch(mockDispatches, key) {
       const basePath = key.query ? buildURL(key.path, key.query) : key.path;
       const resolvedPath = typeof basePath === "string" ? safeUrl(basePath) : basePath;
-      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path3 }) => matchValue(safeUrl(path3), resolvedPath));
+      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path4 }) => matchValue(safeUrl(path4), resolvedPath));
       if (matchedMockDispatches.length === 0) {
         throw new MockNotMatchedError(`Mock dispatch not matched for path '${resolvedPath}'`);
       }
@@ -10462,9 +10462,9 @@ var require_mock_utils = __commonJS({
       }
     }
     function buildKey(opts) {
-      const { path: path3, method, body, headers, query } = opts;
+      const { path: path4, method, body, headers, query } = opts;
       return {
-        path: path3,
+        path: path4,
         method,
         body,
         headers,
@@ -10913,10 +10913,10 @@ var require_pending_interceptors_formatter = __commonJS({
       }
       format(pendingInterceptors) {
         const withPrettyHeaders = pendingInterceptors.map(
-          ({ method, path: path3, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
+          ({ method, path: path4, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
             Method: method,
             Origin: origin,
-            Path: path3,
+            Path: path4,
             "Status code": statusCode,
             Persistent: persist ? "\u2705" : "\u274C",
             Invocations: timesInvoked,
@@ -15537,8 +15537,8 @@ var require_util6 = __commonJS({
         }
       }
     }
-    function validateCookiePath(path3) {
-      for (const char of path3) {
+    function validateCookiePath(path4) {
+      for (const char of path4) {
         const code = char.charCodeAt(0);
         if (code < 33 || char === ";") {
           throw new Error("Invalid cookie path");
@@ -17218,11 +17218,11 @@ var require_undici = __commonJS({
           if (typeof opts.path !== "string") {
             throw new InvalidArgumentError("invalid opts.path");
           }
-          let path3 = opts.path;
+          let path4 = opts.path;
           if (!opts.path.startsWith("/")) {
-            path3 = `/${path3}`;
+            path4 = `/${path4}`;
           }
-          url = new URL(util.parseOrigin(url).origin + path3);
+          url = new URL(util.parseOrigin(url).origin + path4);
         } else {
           if (!opts) {
             opts = typeof url === "object" ? url : {};
@@ -18445,7 +18445,7 @@ var require_path_utils = __commonJS({
     };
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.toPlatformPath = exports2.toWin32Path = exports2.toPosixPath = void 0;
-    var path3 = __importStar(require("path"));
+    var path4 = __importStar(require("path"));
     function toPosixPath(pth) {
       return pth.replace(/[\\]/g, "/");
     }
@@ -18455,7 +18455,7 @@ var require_path_utils = __commonJS({
     }
     exports2.toWin32Path = toWin32Path;
     function toPlatformPath(pth) {
-      return pth.replace(/[/\\]/g, path3.sep);
+      return pth.replace(/[/\\]/g, path4.sep);
     }
     exports2.toPlatformPath = toPlatformPath;
   }
@@ -18518,12 +18518,12 @@ var require_io_util = __commonJS({
     var _a;
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.getCmdPath = exports2.tryGetExecutablePath = exports2.isRooted = exports2.isDirectory = exports2.exists = exports2.READONLY = exports2.UV_FS_O_EXLOCK = exports2.IS_WINDOWS = exports2.unlink = exports2.symlink = exports2.stat = exports2.rmdir = exports2.rm = exports2.rename = exports2.readlink = exports2.readdir = exports2.open = exports2.mkdir = exports2.lstat = exports2.copyFile = exports2.chmod = void 0;
-    var fs4 = __importStar(require("fs"));
-    var path3 = __importStar(require("path"));
-    _a = fs4.promises, exports2.chmod = _a.chmod, exports2.copyFile = _a.copyFile, exports2.lstat = _a.lstat, exports2.mkdir = _a.mkdir, exports2.open = _a.open, exports2.readdir = _a.readdir, exports2.readlink = _a.readlink, exports2.rename = _a.rename, exports2.rm = _a.rm, exports2.rmdir = _a.rmdir, exports2.stat = _a.stat, exports2.symlink = _a.symlink, exports2.unlink = _a.unlink;
+    var fs5 = __importStar(require("fs"));
+    var path4 = __importStar(require("path"));
+    _a = fs5.promises, exports2.chmod = _a.chmod, exports2.copyFile = _a.copyFile, exports2.lstat = _a.lstat, exports2.mkdir = _a.mkdir, exports2.open = _a.open, exports2.readdir = _a.readdir, exports2.readlink = _a.readlink, exports2.rename = _a.rename, exports2.rm = _a.rm, exports2.rmdir = _a.rmdir, exports2.stat = _a.stat, exports2.symlink = _a.symlink, exports2.unlink = _a.unlink;
     exports2.IS_WINDOWS = process.platform === "win32";
     exports2.UV_FS_O_EXLOCK = 268435456;
-    exports2.READONLY = fs4.constants.O_RDONLY;
+    exports2.READONLY = fs5.constants.O_RDONLY;
     function exists(fsPath) {
       return __awaiter(this, void 0, void 0, function* () {
         try {
@@ -18568,7 +18568,7 @@ var require_io_util = __commonJS({
         }
         if (stats && stats.isFile()) {
           if (exports2.IS_WINDOWS) {
-            const upperExt = path3.extname(filePath).toUpperCase();
+            const upperExt = path4.extname(filePath).toUpperCase();
             if (extensions.some((validExt) => validExt.toUpperCase() === upperExt)) {
               return filePath;
             }
@@ -18592,11 +18592,11 @@ var require_io_util = __commonJS({
           if (stats && stats.isFile()) {
             if (exports2.IS_WINDOWS) {
               try {
-                const directory = path3.dirname(filePath);
-                const upperName = path3.basename(filePath).toUpperCase();
+                const directory = path4.dirname(filePath);
+                const upperName = path4.basename(filePath).toUpperCase();
                 for (const actualName of yield exports2.readdir(directory)) {
                   if (upperName === actualName.toUpperCase()) {
-                    filePath = path3.join(directory, actualName);
+                    filePath = path4.join(directory, actualName);
                     break;
                   }
                 }
@@ -18691,7 +18691,7 @@ var require_io = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.findInPath = exports2.which = exports2.mkdirP = exports2.rmRF = exports2.mv = exports2.cp = void 0;
     var assert_1 = require("assert");
-    var path3 = __importStar(require("path"));
+    var path4 = __importStar(require("path"));
     var ioUtil = __importStar(require_io_util());
     function cp(source, dest, options = {}) {
       return __awaiter(this, void 0, void 0, function* () {
@@ -18700,7 +18700,7 @@ var require_io = __commonJS({
         if (destStat && destStat.isFile() && !force) {
           return;
         }
-        const newDest = destStat && destStat.isDirectory() && copySourceDirectory ? path3.join(dest, path3.basename(source)) : dest;
+        const newDest = destStat && destStat.isDirectory() && copySourceDirectory ? path4.join(dest, path4.basename(source)) : dest;
         if (!(yield ioUtil.exists(source))) {
           throw new Error(`no such file or directory: ${source}`);
         }
@@ -18712,7 +18712,7 @@ var require_io = __commonJS({
             yield cpDirRecursive(source, newDest, 0, force);
           }
         } else {
-          if (path3.relative(source, newDest) === "") {
+          if (path4.relative(source, newDest) === "") {
             throw new Error(`'${newDest}' and '${source}' are the same file`);
           }
           yield copyFile(source, newDest, force);
@@ -18725,7 +18725,7 @@ var require_io = __commonJS({
         if (yield ioUtil.exists(dest)) {
           let destExists = true;
           if (yield ioUtil.isDirectory(dest)) {
-            dest = path3.join(dest, path3.basename(source));
+            dest = path4.join(dest, path4.basename(source));
             destExists = yield ioUtil.exists(dest);
           }
           if (destExists) {
@@ -18736,7 +18736,7 @@ var require_io = __commonJS({
             }
           }
         }
-        yield mkdirP(path3.dirname(dest));
+        yield mkdirP(path4.dirname(dest));
         yield ioUtil.rename(source, dest);
       });
     }
@@ -18799,7 +18799,7 @@ var require_io = __commonJS({
         }
         const extensions = [];
         if (ioUtil.IS_WINDOWS && process.env["PATHEXT"]) {
-          for (const extension of process.env["PATHEXT"].split(path3.delimiter)) {
+          for (const extension of process.env["PATHEXT"].split(path4.delimiter)) {
             if (extension) {
               extensions.push(extension);
             }
@@ -18812,12 +18812,12 @@ var require_io = __commonJS({
           }
           return [];
         }
-        if (tool.includes(path3.sep)) {
+        if (tool.includes(path4.sep)) {
           return [];
         }
         const directories = [];
         if (process.env.PATH) {
-          for (const p of process.env.PATH.split(path3.delimiter)) {
+          for (const p of process.env.PATH.split(path4.delimiter)) {
             if (p) {
               directories.push(p);
             }
@@ -18825,7 +18825,7 @@ var require_io = __commonJS({
         }
         const matches = [];
         for (const directory of directories) {
-          const filePath = yield ioUtil.tryGetExecutablePath(path3.join(directory, tool), extensions);
+          const filePath = yield ioUtil.tryGetExecutablePath(path4.join(directory, tool), extensions);
           if (filePath) {
             matches.push(filePath);
           }
@@ -18938,10 +18938,10 @@ var require_toolrunner = __commonJS({
     };
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.argStringToArray = exports2.ToolRunner = void 0;
-    var os3 = __importStar(require("os"));
+    var os4 = __importStar(require("os"));
     var events = __importStar(require("events"));
     var child = __importStar(require("child_process"));
-    var path3 = __importStar(require("path"));
+    var path4 = __importStar(require("path"));
     var io = __importStar(require_io());
     var ioUtil = __importStar(require_io_util());
     var timers_1 = require("timers");
@@ -18993,12 +18993,12 @@ var require_toolrunner = __commonJS({
       _processLineBuffer(data, strBuffer, onLine) {
         try {
           let s = strBuffer + data.toString();
-          let n = s.indexOf(os3.EOL);
+          let n = s.indexOf(os4.EOL);
           while (n > -1) {
             const line = s.substring(0, n);
             onLine(line);
-            s = s.substring(n + os3.EOL.length);
-            n = s.indexOf(os3.EOL);
+            s = s.substring(n + os4.EOL.length);
+            n = s.indexOf(os4.EOL);
           }
           return s;
         } catch (err) {
@@ -19156,7 +19156,7 @@ var require_toolrunner = __commonJS({
       exec() {
         return __awaiter(this, void 0, void 0, function* () {
           if (!ioUtil.isRooted(this.toolPath) && (this.toolPath.includes("/") || IS_WINDOWS && this.toolPath.includes("\\"))) {
-            this.toolPath = path3.resolve(process.cwd(), this.options.cwd || process.cwd(), this.toolPath);
+            this.toolPath = path4.resolve(process.cwd(), this.options.cwd || process.cwd(), this.toolPath);
           }
           this.toolPath = yield io.which(this.toolPath, true);
           return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
@@ -19167,7 +19167,7 @@ var require_toolrunner = __commonJS({
             }
             const optionsNonNull = this._cloneExecOptions(this.options);
             if (!optionsNonNull.silent && optionsNonNull.outStream) {
-              optionsNonNull.outStream.write(this._getCommandString(optionsNonNull) + os3.EOL);
+              optionsNonNull.outStream.write(this._getCommandString(optionsNonNull) + os4.EOL);
             }
             const state = new ExecState(optionsNonNull, this.toolPath);
             state.on("debug", (message) => {
@@ -19655,8 +19655,8 @@ var require_core = __commonJS({
     var command_1 = require_command();
     var file_command_1 = require_file_command();
     var utils_1 = require_utils();
-    var os3 = __importStar(require("os"));
-    var path3 = __importStar(require("path"));
+    var os4 = __importStar(require("os"));
+    var path4 = __importStar(require("path"));
     var oidc_utils_1 = require_oidc_utils();
     var ExitCode;
     (function(ExitCode2) {
@@ -19684,7 +19684,7 @@ var require_core = __commonJS({
       } else {
         (0, command_1.issueCommand)("add-path", {}, inputPath);
       }
-      process.env["PATH"] = `${inputPath}${path3.delimiter}${process.env["PATH"]}`;
+      process.env["PATH"] = `${inputPath}${path4.delimiter}${process.env["PATH"]}`;
     }
     exports2.addPath = addPath;
     function getInput2(name, options) {
@@ -19723,7 +19723,7 @@ Support boolean input list: \`true | True | TRUE | false | False | FALSE\``);
       if (filePath) {
         return (0, file_command_1.issueFileCommand)("OUTPUT", (0, file_command_1.prepareKeyValueMessage)(name, value));
       }
-      process.stdout.write(os3.EOL);
+      process.stdout.write(os4.EOL);
       (0, command_1.issueCommand)("set-output", { name }, (0, utils_1.toCommandValue)(value));
     }
     exports2.setOutput = setOutput2;
@@ -19757,7 +19757,7 @@ Support boolean input list: \`true | True | TRUE | false | False | FALSE\``);
     }
     exports2.notice = notice;
     function info2(message) {
-      process.stdout.write(message + os3.EOL);
+      process.stdout.write(message + os4.EOL);
     }
     exports2.info = info2;
     function startGroup(name) {
@@ -19825,10 +19825,10 @@ Support boolean input list: \`true | True | TRUE | false | False | FALSE\``);
 var core2 = __toESM(require_core());
 
 // packages/validate-review/src/main.ts
-var import_child_process2 = require("child_process");
-var fs3 = __toESM(require("fs"));
-var os2 = __toESM(require("os"));
-var path2 = __toESM(require("path"));
+var import_child_process3 = require("child_process");
+var fs4 = __toESM(require("fs"));
+var os3 = __toESM(require("os"));
+var path3 = __toESM(require("path"));
 
 // packages/review-contract/src/index.ts
 var MAX_CHARS = 256e3;
@@ -20694,6 +20694,279 @@ async function runOpenCodeRun(options, runtime) {
   return runReview(options, new OpenCodeRuntime(), runtime?.spawn);
 }
 
+// packages/validate-review/src/claude-validate.ts
+var import_child_process2 = require("child_process");
+var fs3 = __toESM(require("fs"));
+var os2 = __toESM(require("os"));
+var path2 = __toESM(require("path"));
+var CLAUDE_VALIDATOR_ALLOWED_TOOLS = [
+  "Read",
+  "Glob",
+  "Grep",
+  "Bash(git diff *)",
+  "Bash(git show *)",
+  "Bash(git log *)",
+  "Bash(git rev-parse *)",
+  "query"
+];
+function readNumber2(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
+}
+function readString(value) {
+  return typeof value === "string" ? value : void 0;
+}
+function readUsageTokens(usage) {
+  if (!usage) {
+    return { input: 0, output: 0 };
+  }
+  const input = readNumber2(usage.input_tokens) ?? 0;
+  const output = readNumber2(usage.output_tokens) ?? 0;
+  const reasoning = readNumber2(usage.reasoning_tokens) ?? readNumber2(usage.cache_read_input_tokens);
+  return reasoning === void 0 ? { input, output } : { input, output, reasoning };
+}
+var DEFAULT_TIMEOUT_MINUTES2 = 5;
+var TEMP_DEBUG_PREFIX2 = "ai-review-validate-claude-";
+var LineBufferedWriter2 = class {
+  constructor(filePath) {
+    this.pending = "";
+    this.closed = false;
+    fs3.mkdirSync(path2.dirname(filePath), { recursive: true, mode: 448 });
+    this.fd = fs3.openSync(filePath, "w", 384);
+  }
+  write(chunk) {
+    if (this.closed || chunk == null) return;
+    const text = typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8");
+    this.pending += text;
+    let newlineIndex = this.pending.indexOf("\n");
+    while (newlineIndex >= 0) {
+      fs3.writeSync(this.fd, this.pending.slice(0, newlineIndex + 1), void 0, "utf8");
+      this.pending = this.pending.slice(newlineIndex + 1);
+      newlineIndex = this.pending.indexOf("\n");
+    }
+  }
+  close() {
+    if (this.closed) return;
+    this.closed = true;
+    if (this.pending) {
+      fs3.writeSync(this.fd, this.pending, void 0, "utf8");
+      this.pending = "";
+    }
+    fs3.closeSync(this.fd);
+  }
+};
+function lastNonEmptyLine2(text) {
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  return lines[lines.length - 1] ?? "<none>";
+}
+function diagnostics2(stdoutPath, stderrPath) {
+  const stdout = fs3.existsSync(stdoutPath) ? fs3.readFileSync(stdoutPath, "utf8") : "";
+  const stderr = fs3.existsSync(stderrPath) ? fs3.readFileSync(stderrPath, "utf8") : "";
+  return `last stdout line: ${lastNonEmptyLine2(stdout)}; last stderr line: ${lastNonEmptyLine2(stderr)}`;
+}
+function closeCapture2(writer) {
+  writer?.close();
+}
+var ClaudeCodeValidatorRuntime = class {
+  constructor() {
+    this.tool = "claude";
+  }
+  assertVersion(expectedVersion) {
+    const result = (0, import_child_process2.spawnSync)("claude", ["--version"], {
+      encoding: "utf8",
+      maxBuffer: 1024 * 1024,
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 1e4
+    });
+    const stdout = typeof result.stdout === "string" ? result.stdout.trim() : "";
+    const stderr = typeof result.stderr === "string" ? result.stderr.trim() : "";
+    if (result.error) {
+      throw new Error(`could not execute 'claude --version': ${result.error.message}`);
+    }
+    if (result.status !== 0) {
+      throw new Error(
+        `'claude --version' exited with status ${result.status}${stderr ? `: ${stderr}` : ""}`
+      );
+    }
+    if (!expectedVersion) return;
+    const reportedVersion = stdout || stderr;
+    const versionMatch = reportedVersion.match(/v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)/);
+    const installedVersion = (versionMatch?.[1] ?? reportedVersion.replace(/^v/, "")).trim();
+    const normalizedExpectedVersion = expectedVersion.replace(/^v/, "");
+    if (!installedVersion || installedVersion !== normalizedExpectedVersion) {
+      throw new Error(
+        `expected Claude Code ${normalizedExpectedVersion}, but 'claude --version' reported '${reportedVersion || "<empty>"}'`
+      );
+    }
+  }
+  /**
+   * Strip the `provider/` prefix from the model string. Claude Code
+   * CLI's `--model` flag does NOT consume the OpenCode-style
+   * `provider/model` form; the validator runtime mirrors the
+   * reviewer's `ClaudeCodeRuntime.resolveModel` so both surfaces
+   * surface the same error message when the caller forgets the
+   * prefix.
+   */
+  resolveModel(rawModel) {
+    const slashIndex = rawModel.indexOf("/");
+    if (slashIndex <= 0) {
+      throw new Error(
+        `tool=claude requires model in 'provider/model' format; got '${rawModel}'`
+      );
+    }
+    return rawModel.slice(slashIndex + 1);
+  }
+  /**
+   * Build the env for the spawned process. Mirrors
+   * `process.env` (the action's reviewer's claude runtime already
+   * does this), then layers the explicit `passthroughEnv` overrides
+   * on top so the action layer can route through
+   * `ANTHROPIC_BASE_URL` etc. without the runtime having to know
+   * which keys are interesting.
+   */
+  buildEnvironment(passthroughEnv) {
+    return { ...process.env, ...passthroughEnv ?? {} };
+  }
+  commandArgs(model, prompt) {
+    const args = ["-p"];
+    for (const toolName of CLAUDE_VALIDATOR_ALLOWED_TOOLS) {
+      args.push("--allowedTools", toolName);
+    }
+    args.push(
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--include-partial-messages",
+      "--dangerously-skip-permissions",
+      "--model",
+      model,
+      "--",
+      prompt
+    );
+    return args;
+  }
+  parseEvents(stdout, stdoutPath, stderrPath) {
+    const parts = [];
+    let finalResultEvent;
+    for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
+      let parsed;
+      try {
+        parsed = JSON.parse(line);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(`could not parse Claude Code JSON event: ${message}; ${diagnostics2(stdoutPath, stderrPath)}`);
+      }
+      parts.push(parsed);
+      if (parsed.type === "result") {
+        finalResultEvent = parsed;
+      }
+    }
+    const text = readString(finalResultEvent?.result) ?? "";
+    const cost = readNumber2(finalResultEvent?.total_cost_usd) ?? 0;
+    const tokens = readUsageTokens(finalResultEvent?.usage);
+    return {
+      text,
+      cost,
+      tokens,
+      // The runtime contract returns the caller's original model
+      // string (the reviewer's runtime sets `model: ''` here and
+      // then runReview() overwrites it with the caller's input).
+      // For the validator we set the stripped model directly so
+      // downstream accounting keys on the bare Claude Code model id.
+      model: "",
+      parts
+    };
+  }
+};
+function waitForProcess2(proc, timeoutMs, getDiagnostics) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let timeoutHandle;
+    const finish = (code, signal) => {
+      if (settled) return;
+      settled = true;
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+      resolve({ code, signal });
+    };
+    proc.on("error", (error) => {
+      if (settled) return;
+      settled = true;
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+      const message = error instanceof Error ? error.message : String(error);
+      reject(new Error(`could not execute claude: ${message}; ${getDiagnostics()}`));
+    });
+    proc.on("close", (code, signal) => {
+      finish(
+        typeof code === "number" ? code : null,
+        typeof signal === "string" ? signal : null
+      );
+    });
+    timeoutHandle = setTimeout(() => {
+      if (settled) return;
+      try {
+        proc.kill("SIGTERM");
+      } catch {
+      }
+      const message = `claude timed out after ${timeoutMs} ms; ${getDiagnostics()}`;
+      reject(new Error(message));
+      settled = true;
+      const killHandle = setTimeout(() => {
+        try {
+          proc.kill("SIGKILL");
+        } catch {
+        }
+      }, 3e3);
+      killHandle.unref?.();
+    }, timeoutMs);
+    timeoutHandle.unref?.();
+  });
+}
+async function runClaudeValidator(options, spawnOverride) {
+  const runtime = new ClaudeCodeValidatorRuntime();
+  const timeoutMinutes = options.timeoutMinutes ?? DEFAULT_TIMEOUT_MINUTES2;
+  if (!Number.isFinite(timeoutMinutes) || timeoutMinutes <= 0) {
+    throw new Error("runClaudeValidator requires a positive timeoutMinutes");
+  }
+  const model = runtime.resolveModel(options.model);
+  const args = runtime.commandArgs(model, options.prompt);
+  const env = runtime.buildEnvironment(options.passthroughEnv);
+  const runnerTemp = process.env.RUNNER_TEMP ?? os2.tmpdir();
+  const homeDir = fs3.mkdtempSync(path2.join(runnerTemp, TEMP_DEBUG_PREFIX2));
+  fs3.chmodSync(homeDir, 448);
+  const stdoutPath = path2.join(homeDir, "stdout.jsonl");
+  const stderrPath = path2.join(homeDir, "stderr.log");
+  const stdoutWriter = new LineBufferedWriter2(stdoutPath);
+  const stderrWriter = new LineBufferedWriter2(stderrPath);
+  const getDiagnostics = () => diagnostics2(stdoutPath, stderrPath);
+  try {
+    let proc;
+    try {
+      proc = (spawnOverride ?? import_child_process2.spawn)("claude", args, {
+        env,
+        stdio: ["ignore", "pipe", "pipe"]
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`could not execute claude: ${message}; ${getDiagnostics()}`);
+    }
+    proc.stdout?.on("data", (chunk) => stdoutWriter.write(chunk));
+    proc.stderr?.on("data", (chunk) => stderrWriter.write(chunk));
+    const exit = await waitForProcess2(proc, timeoutMinutes * 60 * 1e3, getDiagnostics);
+    stdoutWriter.close();
+    stderrWriter.close();
+    const stdout = fs3.readFileSync(stdoutPath, "utf8");
+    if (exit.code !== 0 || exit.signal) {
+      throw new Error(
+        `claude exited unsuccessfully${exit.code !== null ? ` with status ${exit.code}` : ` with signal ${exit.signal}`}; ${getDiagnostics()}`
+      );
+    }
+    return runtime.parseEvents(stdout, stdoutPath, stderrPath);
+  } finally {
+    closeCapture2(stdoutWriter);
+    closeCapture2(stderrWriter);
+    fs3.rmSync(homeDir, { recursive: true, force: true });
+  }
+}
+
 // packages/validate-review/src/main.ts
 var VALIDATOR_PERMISSION = {
   read: "deny",
@@ -20719,7 +20992,7 @@ function stripThinkingBlocks(text) {
   return text.replace(/<think>[\s\S]*?<\/think>/g, "");
 }
 function assertOpenCodeVersion(expectedVersion) {
-  const result = (0, import_child_process2.spawnSync)("opencode", ["--version"], {
+  const result = (0, import_child_process3.spawnSync)("opencode", ["--version"], {
     encoding: "utf8",
     maxBuffer: 1024 * 1024,
     stdio: ["ignore", "pipe", "pipe"],
@@ -20746,19 +21019,19 @@ function assertOpenCodeVersion(expectedVersion) {
   }
 }
 function readReviewFile(reviewPath) {
-  if (!fs3.existsSync(reviewPath)) {
+  if (!fs4.existsSync(reviewPath)) {
     throw new Error(`review file not found at ${reviewPath}`);
   }
-  const content = fs3.readFileSync(reviewPath, "utf8");
+  const content = fs4.readFileSync(reviewPath, "utf8");
   if (!content.trim()) {
     throw new Error(`review file at ${reviewPath} is empty`);
   }
   return content;
 }
 function invokeValidator(options) {
-  const runnerTemp = process.env.RUNNER_TEMP ?? os2.tmpdir();
-  const homeDir = fs3.mkdtempSync(path2.join(runnerTemp, "ai-review-validate-"));
-  fs3.chmodSync(homeDir, 448);
+  const runnerTemp = process.env.RUNNER_TEMP ?? os3.tmpdir();
+  const homeDir = fs4.mkdtempSync(path3.join(runnerTemp, "ai-review-validate-"));
+  fs4.chmodSync(homeDir, 448);
   const prompt = VALIDATOR_AGENT_PROMPT_TEMPLATE.replace("__REVIEW_PATH__", options.reviewPath).concat("\n\n---\n\nReview file contents:\n\n", options.reviewContent);
   let baseConfig = {};
   try {
@@ -20791,8 +21064,8 @@ function invokeValidator(options) {
     model: options.model,
     permission: VALIDATOR_PERMISSION
   };
-  const configPath = path2.join(homeDir, "opencode.json");
-  fs3.writeFileSync(configPath, JSON.stringify(mergedConfig, null, 2), "utf8");
+  const configPath = path3.join(homeDir, "opencode.json");
+  fs4.writeFileSync(configPath, JSON.stringify(mergedConfig, null, 2), "utf8");
   return runOpenCodeRun({
     configPath,
     homeDir,
@@ -20829,16 +21102,7 @@ var EMPTY_RESULT = {
   failureReason: ""
 };
 async function validateReview(options) {
-  try {
-    assertOpenCodeVersion(options.opencodeVersion);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return {
-      ...EMPTY_RESULT,
-      reason: capReason(`OpenCode version assertion failed: ${message}`),
-      failureReason: `OpenCode version assertion failed: ${message}`
-    };
-  }
+  const tool = options.tool ?? "opencode";
   if (!options.reviewPath) {
     const reason = "review-path input is required";
     return {
@@ -20855,7 +21119,7 @@ async function validateReview(options) {
       failureReason: reason
     };
   }
-  if (!options.passedConfigJson) {
+  if (tool === "opencode" && !options.passedConfigJson) {
     const reason = "config-json input is required (resolved validator-only OpenCode config from run-reviews)";
     return {
       ...EMPTY_RESULT,
@@ -20882,23 +21146,12 @@ async function validateReview(options) {
       failureReason: `Review failed structural validation: ${structural.reason}`
     };
   }
-  let result;
-  try {
-    result = await invokeValidator({
-      reviewPath: options.reviewPath,
-      reviewContent,
-      model: options.model,
-      timeoutMinutes: options.timeoutMinutes,
-      passedConfigJson: options.passedConfigJson
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return {
-      ...EMPTY_RESULT,
-      reason: capReason(`validator invocation failed: ${message}`),
-      failureReason: `Validator invocation failed: ${message}`
-    };
+  if (tool === "claude") {
+    return runClaudeValidation(options, reviewContent);
   }
+  return runOpencodeValidation(options, reviewContent);
+}
+function shapeResult(result) {
   const verdict = parseValidatorResponse(result.text);
   return {
     status: verdict.status,
@@ -20908,11 +21161,53 @@ async function validateReview(options) {
     failureReason: verdict.status === "invalid" ? `Review validation failed: ${verdict.reason}` : ""
   };
 }
+function runOpencodeValidation(options, reviewContent) {
+  try {
+    assertOpenCodeVersion(options.opencodeVersion);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return Promise.resolve({
+      ...EMPTY_RESULT,
+      reason: capReason(`OpenCode version assertion failed: ${message}`),
+      failureReason: `OpenCode version assertion failed: ${message}`
+    });
+  }
+  return invokeValidator({
+    reviewPath: options.reviewPath,
+    reviewContent,
+    model: options.model,
+    timeoutMinutes: options.timeoutMinutes,
+    passedConfigJson: options.passedConfigJson
+  }).then(shapeResult).catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      ...EMPTY_RESULT,
+      reason: capReason(`validator invocation failed: ${message}`),
+      failureReason: `Validator invocation failed: ${message}`
+    };
+  });
+}
+function runClaudeValidation(options, reviewContent) {
+  const prompt = VALIDATOR_AGENT_PROMPT_TEMPLATE.replace("__REVIEW_PATH__", options.reviewPath).concat("\n\n---\n\nReview file contents:\n\n", reviewContent);
+  return runClaudeValidator({
+    prompt,
+    model: options.model,
+    timeoutMinutes: options.timeoutMinutes,
+    passthroughEnv: options.passthroughEnv
+  }).then(shapeResult).catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      ...EMPTY_RESULT,
+      reason: capReason(`validator invocation failed: ${message}`),
+      failureReason: `Validator invocation failed: ${message}`
+    };
+  });
+}
 
 // packages/validate-review/src/action.ts
 var DEFAULT_OPENCODE_VERSION = "1.18.4";
 var DEFAULT_MODEL = "anthropic/claude-sonnet-4.6";
-var DEFAULT_TIMEOUT_MINUTES2 = 5;
+var DEFAULT_TIMEOUT_MINUTES3 = 5;
 function readStringInput(name, fallback) {
   const value = core2.getInput(name);
   return value || fallback;
@@ -20928,7 +21223,7 @@ function buildOptionsFromCore() {
     opencodeVersion: readStringInput("opencode-version", DEFAULT_OPENCODE_VERSION),
     reviewPath: core2.getInput("review-path"),
     model: readStringInput("model", DEFAULT_MODEL),
-    timeoutMinutes: readIntInput("timeout-minutes", DEFAULT_TIMEOUT_MINUTES2),
+    timeoutMinutes: readIntInput("timeout-minutes", DEFAULT_TIMEOUT_MINUTES3),
     passedConfigJson: core2.getInput("config-json")
   };
 }
