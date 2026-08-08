@@ -25502,6 +25502,10 @@ var LOCATION_ITEM_PATTERN2 = /^([^:]+):(\d+)(?:-(\d+))?$/;
 var NEW_FINDINGS_PATTERN = /^\s*-\s*New findings:\s*(\d+)\s*$/;
 var UNRESOLVED_PATTERN = /^\s*-\s*Unresolved from prior review:\s*(\d+)\s*$/;
 var RESOLVED_PATTERN = /^\s*-\s*Resolved by latest commits:\s*(\d+)\s*$/;
+var SUMMARY_CONTENT_NEW = /^- New findings:\s*\d+\s*$/;
+var SUMMARY_CONTENT_UNRESOLVED = /^- Unresolved from prior review:\s*\d+\s*$/;
+var SUMMARY_CONTENT_RESOLVED = /^- Resolved by latest commits:\s*\d+\s*$/;
+var SUMMARY_BULLET_PREFIX = /^\s*-\s*/;
 var NEW_STATUSES = /* @__PURE__ */ new Set(["new", "new variant"]);
 function locationItems(value) {
   return value.split(",").map((item) => item.trim());
@@ -25649,6 +25653,19 @@ function formatReviewDocumentIssues(text) {
       issues.push(
         `count mismatch: summary says New=${summary.new}, Unresolved=${summary.unresolved}, Resolved=${summary.resolved}; blocks yield New=${actual.new}, Unresolved=${actual.unresolved}, Resolved=${actual.resolved}`
       );
+    }
+  }
+  const summaryIdx = lines.findIndex((l) => SUMMARY_HEADING_PATTERN2.test(l));
+  if (summaryIdx !== -1) {
+    for (let i = summaryIdx + 1; i < lines.length; i += 1) {
+      const line = lines[i];
+      if (FINDING_HEADING_PATTERN2.test(line) || /^\s*##\s+/.test(line)) {
+        break;
+      }
+      if (!SUMMARY_BULLET_PREFIX.test(line)) continue;
+      if (!SUMMARY_CONTENT_NEW.test(line) && !SUMMARY_CONTENT_UNRESOLVED.test(line) && !SUMMARY_CONTENT_RESOLVED.test(line)) {
+        issues.push(`unexpected content in ## Summary: ${line}`);
+      }
     }
   }
   return issues;
