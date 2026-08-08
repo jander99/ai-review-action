@@ -20490,7 +20490,8 @@ async function runReview(options, runtime, spawnOverride) {
     throw new Error("runReview requires a positive options.timeoutMinutes");
   }
   const resolvedModel = runtime.resolveModel(options.model);
-  const args = runtime.commandArgs(resolvedModel, options.prompt);
+  const useStdin = options.input !== void 0;
+  const args = runtime.commandArgs(resolvedModel, options.prompt, useStdin);
   const binary = runtime.tool;
   const temporaryDebugDirectory = options.debugCapture ? null : fs.mkdtempSync(path.join(os.tmpdir(), TEMP_DEBUG_PREFIX));
   const stdoutPath = options.debugCapture?.stdoutPath ?? path.join(temporaryDebugDirectory, "stdout.jsonl");
@@ -20500,15 +20501,23 @@ async function runReview(options, runtime, spawnOverride) {
   const getDiagnostics = () => diagnostics(stdoutPath, stderrPath);
   try {
     const env = runtime.buildEnvironment(options);
+    const stdinMode = useStdin ? "pipe" : "ignore";
     let proc;
     try {
       proc = (spawnOverride ?? childProcess.spawn)(binary, args, {
         env,
-        stdio: ["ignore", "pipe", "pipe"]
+        stdio: [stdinMode, "pipe", "pipe"]
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(`could not execute ${binary}: ${message}; ${getDiagnostics()}`);
+    }
+    if (useStdin && options.input !== void 0 && proc.stdin) {
+      try {
+        proc.stdin.write(options.input);
+        proc.stdin.end();
+      } catch {
+      }
     }
     proc.stdout?.on("data", (chunk) => stdoutWriter.write(chunk));
     proc.stderr?.on("data", (chunk) => stderrWriter.write(chunk));
@@ -20640,7 +20649,15 @@ var OpenCodeRuntime = class {
     });
     return env;
   }
-  commandArgs(model, prompt) {
+  commandArgs(model, prompt, useStdin) {
+    if (useStdin) {
+      return [
+        `--model=${model}`,
+        "run",
+        "--format=json",
+        "-"
+      ];
+    }
     return [
       `--model=${model}`,
       "run",
@@ -20826,7 +20843,7 @@ var ClaudeCodeValidatorRuntime = class {
   buildEnvironment(passthroughEnv) {
     return { ...process.env, ...passthroughEnv ?? {} };
   }
-  commandArgs(model, prompt) {
+  commandArgs(model, prompt, useStdin) {
     const args = ["-p"];
     for (const toolName of CLAUDE_VALIDATOR_ALLOWED_TOOLS) {
       args.push("--allowedTools", toolName);
@@ -20837,10 +20854,13 @@ var ClaudeCodeValidatorRuntime = class {
       "--verbose",
       "--include-partial-messages",
       "--model",
-      model,
-      "--",
-      prompt
+      model
     );
+    if (useStdin) {
+      args.push("-");
+    } else {
+      args.push("--", prompt);
+    }
     return args;
   }
   parseEvents(stdout, stdoutPath, stderrPath) {
@@ -20926,7 +20946,8 @@ async function runClaudeValidator(options, spawnOverride) {
     throw new Error("runClaudeValidator requires a positive timeoutMinutes");
   }
   const model = runtime.resolveModel(options.model);
-  const args = runtime.commandArgs(model, options.prompt);
+  const useStdin = true;
+  const args = runtime.commandArgs(model, options.prompt, useStdin);
   const env = runtime.buildEnvironment(options.passthroughEnv);
   const runnerTemp = process.env.RUNNER_TEMP ?? os2.tmpdir();
   const homeDir = fs3.mkdtempSync(path2.join(runnerTemp, TEMP_DEBUG_PREFIX2));
@@ -20941,11 +20962,18 @@ async function runClaudeValidator(options, spawnOverride) {
     try {
       proc = (spawnOverride ?? import_child_process2.spawn)("claude", args, {
         env,
-        stdio: ["ignore", "pipe", "pipe"]
+        stdio: ["pipe", "pipe", "pipe"]
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(`could not execute claude: ${message}; ${getDiagnostics()}`);
+    }
+    if (proc.stdin) {
+      try {
+        proc.stdin.write(options.prompt);
+        proc.stdin.end();
+      } catch {
+      }
     }
     proc.stdout?.on("data", (chunk) => stdoutWriter.write(chunk));
     proc.stderr?.on("data", (chunk) => stderrWriter.write(chunk));

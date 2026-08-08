@@ -25118,7 +25118,8 @@ async function runReview(options, runtime, spawnOverride) {
     throw new Error("runReview requires a positive options.timeoutMinutes");
   }
   const resolvedModel = runtime.resolveModel(options.model);
-  const args = runtime.commandArgs(resolvedModel, options.prompt);
+  const useStdin = options.input !== void 0;
+  const args = runtime.commandArgs(resolvedModel, options.prompt, useStdin);
   const binary = runtime.tool;
   const temporaryDebugDirectory = options.debugCapture ? null : fs3.mkdtempSync(path3.join(os2.tmpdir(), TEMP_DEBUG_PREFIX));
   const stdoutPath = options.debugCapture?.stdoutPath ?? path3.join(temporaryDebugDirectory, "stdout.jsonl");
@@ -25128,15 +25129,23 @@ async function runReview(options, runtime, spawnOverride) {
   const getDiagnostics = () => diagnostics(stdoutPath, stderrPath);
   try {
     const env = runtime.buildEnvironment(options);
+    const stdinMode = useStdin ? "pipe" : "ignore";
     let proc;
     try {
       proc = (spawnOverride ?? childProcess.spawn)(binary, args, {
         env,
-        stdio: ["ignore", "pipe", "pipe"]
+        stdio: [stdinMode, "pipe", "pipe"]
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(`could not execute ${binary}: ${message}; ${getDiagnostics()}`);
+    }
+    if (useStdin && options.input !== void 0 && proc.stdin) {
+      try {
+        proc.stdin.write(options.input);
+        proc.stdin.end();
+      } catch {
+      }
     }
     proc.stdout?.on("data", (chunk) => stdoutWriter.write(chunk));
     proc.stderr?.on("data", (chunk) => stderrWriter.write(chunk));
@@ -25268,7 +25277,15 @@ var OpenCodeRuntime = class {
     });
     return env;
   }
-  commandArgs(model, prompt) {
+  commandArgs(model, prompt, useStdin) {
+    if (useStdin) {
+      return [
+        `--model=${model}`,
+        "run",
+        "--format=json",
+        "-"
+      ];
+    }
     return [
       `--model=${model}`,
       "run",
@@ -25392,7 +25409,7 @@ var ClaudeCodeRuntime = class {
   buildEnvironment(_options) {
     return { ...process.env };
   }
-  commandArgs(model, prompt) {
+  commandArgs(model, prompt, useStdin) {
     const args = ["-p"];
     for (const toolName of CLAUDE_ALLOWED_TOOLS) {
       args.push("--allowedTools", toolName);
@@ -25403,10 +25420,13 @@ var ClaudeCodeRuntime = class {
       "--verbose",
       "--include-partial-messages",
       "--model",
-      model,
-      "--",
-      prompt
+      model
     );
+    if (useStdin) {
+      args.push("-");
+    } else {
+      args.push("--", prompt);
+    }
     return args;
   }
   parseEvents(stdout, stdoutPath, stderrPath) {
@@ -25688,6 +25708,16 @@ async function runOnce(prompt, model, configPath, options, debugCapture, runtime
     homeDir: options.homeDir,
     model,
     prompt,
+    // Always deliver the prompt via stdin. The reviewer prompt
+    // includes the embedded diff (up to REVIEW_DIFF_MAX_BYTES =
+    // 200 KB on top of the system prompt + task prompt), which
+    // exceeds the OS `ARG_MAX` (`E2BIG` on Linux, ~128 KB) on
+    // any reasonably-sized PR. Routing through stdin keeps the
+    // argv under the limit regardless of which runtime is in
+    // use. The runtime substitutes `-` for the prompt in
+    // `commandArgs`; the orchestrator writes the prompt to
+    // `proc.stdin`.
+    input: prompt,
     timeoutMinutes: options.timeoutMinutes ?? 30,
     disableTools: options.disableTools,
     debugCapture
