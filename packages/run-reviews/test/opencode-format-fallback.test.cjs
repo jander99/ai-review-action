@@ -310,8 +310,10 @@ test('invokeOpenCode retries when the first call has a heading but ## Scope has 
 
   const retryPrompt = spawnCalls[1].args[spawnCalls[1].args.length - 1];
   // The retry directive must call out the specific validator reason
-  // so the model knows exactly which rule to fix.
-  assert.match(retryPrompt, /the validator rejected it for format reasons: `[^`]*no bullets/i);
+  // (now formatted as a numbered list) so the model knows exactly
+  // which rule to fix.
+  assert.match(retryPrompt, /the validator rejected it for the following format reasons:/);
+  assert.match(retryPrompt, /\n\s+1\. ## Scope section is present but contains no bullets/);
   assert.ok(retryPrompt.includes(scopeWithoutBullets), 'retry prompt must include the first-call text as context');
   // Tokens / cost still sum across both calls.
   assert.equal(resultValue.tokens.input, 200 + 220);
@@ -351,9 +353,11 @@ test('invokeOpenCode retries when the first call has a finding with a Location t
   assert.equal(resultValue.text, CANONICAL_DOCUMENT);
 
   const retryPrompt = spawnCalls[1].args[spawnCalls[1].args.length - 1];
-  // The validator's rejection surfaces in the directive so the model
-  // can fix the Location format on the retry.
-  assert.match(retryPrompt, /the validator rejected it for format reasons: `[^`]*must match <path>:<line>/);
+  // The validator's rejection surfaces in the directive as a single-
+  // entry numbered list so the model can fix the Location format on
+  // the retry.
+  assert.match(retryPrompt, /the validator rejected it for the following format reasons:/);
+  assert.match(retryPrompt, /\n\s+1\. finding at line 13 has invalid Location: .*must match <path>:<line>/);
   assert.ok(retryPrompt.includes(findingWithoutLineNumber), 'retry prompt must include the first-call text as context');
   assert.equal(resultValue.cost, 0.12 + 0.07);
 });
@@ -372,10 +376,102 @@ test('invokeOpenCode does NOT retry when the first call is fully valid (heading 
   assert.equal(resultValue.cost, 0.15);
 });
 
-test('formatReviewDocumentIssues returns the specific reason for a bare-path Location', () => {
-  // Direct unit-level check of the helper exposed for testing. The
-  // validator emits a rejection reason that begins with "Location
-  // item ... must match"; we surface that substring here.
+test('invokeOpenCode retries with a numbered list when the first call has BOTH a bad Location AND a Summary count mismatch', async () => {
+  // Multi-issue document: the bare-path Location AND a Summary that
+  // says "Unresolved: 3" when blocks yield "Unresolved: 3, Resolved: 0".
+  // Mirrors the production failure mode in run #31226995889: single-fix
+  // retry + multi-issue document = leak.
+  const multiIssue = [
+    '# Review — title',
+    '',
+    '## Scope',
+    '- Reviewed the change.',
+    '',
+    '## Summary',
+    '- New findings: 1',
+    '- Unresolved from prior review: 3',
+    '- Resolved by latest commits: 1',
+    '',
+    '## Findings',
+    '',
+    '### 🔴 Critical — bogus /dev/null probe',
+    '- Status: new',
+    '- Location: packages/run-reviews/src/main.ts',
+    '- Description: probe targets /dev/null instead of working dir.',
+    '',
+    '### 🟡 Warning — unresolved issue A',
+    '- Status: unresolved',
+    '- Location: packages/run-reviews/src/opencode.ts:100',
+    '- Description: pre-existing unresolved.',
+    '',
+    '### 🟡 Warning — unresolved issue B',
+    '- Status: unresolved',
+    '- Location: packages/run-reviews/src/opencode.ts:110',
+    '- Description: pre-existing unresolved.',
+    '',
+    '### 🟡 Warning — unresolved issue C',
+    '- Status: unresolved',
+    '- Location: packages/run-reviews/src/opencode.ts:120',
+    '- Description: pre-existing unresolved.',
+  ].join('\n');
+
+  const { result, spawnCalls } = runWithScript([
+    { events: reviewEvents(multiIssue, { input: 350, output: 120, cost: 0.20 }) },
+    { events: reviewEvents(CANONICAL_DOCUMENT, { input: 380, output: 90, cost: 0.08 }) },
+  ]);
+
+  const resultValue = await result;
+  assert.equal(spawnCalls.length, 2, 'retry must fire when the first call has multi-issue format failures');
+  assert.equal(resultValue.text, CANONICAL_DOCUMENT);
+
+  const retryPrompt = spawnCalls[1].args[spawnCalls[1].args.length - 1];
+  // The retry directive must surface BOTH issues as a numbered list
+  // so the model fixes them in one pass.
+  assert.match(retryPrompt, /the validator rejected it for the following format reasons:/);
+  assert.match(retryPrompt, /\n\s+1\. finding at line 13 has invalid Location: .*must match <path>:<line>/);
+  assert.match(retryPrompt, /\n\s+2\. count mismatch: summary says New=1, Unresolved=3, Resolved=1; blocks yield New=1, Unresolved=3, Resolved=0/);
+  assert.ok(retryPrompt.includes(multiIssue), 'retry prompt must include the first-call text as context');
+});
+
+test('invokeOpenCode retries on Summary-count mismatch alone (no Location or Scope issues)', async () => {
+  // Valid Scope + valid Locations, but Summary says New=2 while
+  // blocks only yield New=1. Validator rejects with the count
+  // mismatch reason.
+  const countMismatch = [
+    '# Review — title',
+    '',
+    '## Scope',
+    '- Reviewed the change.',
+    '',
+    '## Summary',
+    '- New findings: 2',
+    '- Unresolved from prior review: 0',
+    '- Resolved by latest commits: 0',
+    '',
+    '## Findings',
+    '',
+    '### 🔴 Critical — one real bug',
+    '- Status: new',
+    '- Location: packages/foo.ts:42',
+    '- Description: a real bug.',
+  ].join('\n');
+
+  const { result, spawnCalls } = runWithScript([
+    { events: reviewEvents(countMismatch, { input: 250, output: 60, cost: 0.12 }) },
+    { events: reviewEvents(CANONICAL_DOCUMENT, { input: 270, output: 90, cost: 0.07 }) },
+  ]);
+
+  const resultValue = await result;
+  assert.equal(spawnCalls.length, 2, 'retry must fire on the count-mismatch failure');
+  assert.equal(resultValue.text, CANONICAL_DOCUMENT);
+
+  const retryPrompt = spawnCalls[1].args[spawnCalls[1].args.length - 1];
+  assert.match(retryPrompt, /the validator rejected it for the following format reasons:/);
+  assert.match(retryPrompt, /\n\s+1\. count mismatch: summary says New=2, Unresolved=0, Resolved=0; blocks yield New=1, Unresolved=0, Resolved=0/);
+  assert.ok(retryPrompt.includes(countMismatch), 'retry prompt must include the first-call text as context');
+});
+
+test('formatReviewDocumentIssues returns the bare-path Location reason', () => {
   const { formatReviewDocumentIssues } = bundle;
   const document = [
     '# Review — title',
@@ -395,9 +491,9 @@ test('formatReviewDocumentIssues returns the specific reason for a bare-path Loc
     '- Location: packages/run-reviews/src/runtime.ts',
     '- Description: bad',
   ].join('\n');
-  const issue = formatReviewDocumentIssues(document);
-  assert.ok(issue !== null);
-  assert.match(issue, /must match <path>:<line>/);
+  const issues = formatReviewDocumentIssues(document);
+  assert.equal(issues.length, 1);
+  assert.match(issues[0], /must match <path>:<line>/);
 });
 
 test('formatReviewDocumentIssues returns the Scope-no-bullets reason', () => {
@@ -413,11 +509,77 @@ test('formatReviewDocumentIssues returns the Scope-no-bullets reason', () => {
     '- Unresolved from prior review: 0',
     '- Resolved by latest commits: 0',
   ].join('\n');
-  const issue = formatReviewDocumentIssues(document);
-  assert.equal(issue, '## Scope section is present but contains no bullets');
+  const issues = formatReviewDocumentIssues(document);
+  assert.deepEqual(issues, ['## Scope section is present but contains no bullets']);
 });
 
-test('formatReviewDocumentIssues returns null for a fully valid document', () => {
+test('formatReviewDocumentIssues returns the count-mismatch reason', () => {
   const { formatReviewDocumentIssues } = bundle;
-  assert.equal(formatReviewDocumentIssues(CANONICAL_DOCUMENT), null);
+  const document = [
+    '# Review — title',
+    '',
+    '## Scope',
+    '- Reviewed.',
+    '',
+    '## Summary',
+    '- New findings: 2',
+    '- Unresolved from prior review: 0',
+    '- Resolved by latest commits: 0',
+    '',
+    '## Findings',
+    '',
+    '### 🔴 Critical — one real bug',
+    '- Status: new',
+    '- Location: packages/foo.ts:42',
+    '- Description: a real bug.',
+  ].join('\n');
+  const issues = formatReviewDocumentIssues(document);
+  assert.equal(issues.length, 1);
+  assert.match(issues[0], /^count mismatch: summary says New=2, Unresolved=0, Resolved=0; blocks yield New=1, Unresolved=0, Resolved=0$/);
+});
+
+test('formatReviewDocumentIssues returns BOTH a Location issue and the count-mismatch for a multi-issue document', () => {
+  const { formatReviewDocumentIssues } = bundle;
+  const document = [
+    '# Review — title',
+    '',
+    '## Scope',
+    '- Reviewed.',
+    '',
+    '## Summary',
+    '- New findings: 1',
+    '- Unresolved from prior review: 3',
+    '- Resolved by latest commits: 1',
+    '',
+    '## Findings',
+    '',
+    '### 🔴 Critical — bogus',
+    '- Status: new',
+    '- Location: packages/run-reviews/src/main.ts',
+    '- Description: bad.',
+    '',
+    '### 🟡 Warning — A',
+    '- Status: unresolved',
+    '- Location: a.ts:1',
+    '- Description: a.',
+    '',
+    '### 🟡 Warning — B',
+    '- Status: unresolved',
+    '- Location: b.ts:2',
+    '- Description: b.',
+    '',
+    '### 🟡 Warning — C',
+    '- Status: unresolved',
+    '- Location: c.ts:3',
+    '- Description: c.',
+  ].join('\n');
+  const issues = formatReviewDocumentIssues(document);
+  assert.equal(issues.length, 2);
+  assert.match(issues[0], /finding at line \d+ has invalid Location: .*must match <path>:<line>/);
+  assert.match(issues[1], /^count mismatch: summary says New=1, Unresolved=3, Resolved=1; blocks yield New=1, Unresolved=3, Resolved=0$/);
+});
+
+test('formatReviewDocumentIssues returns an empty array for a fully valid document', () => {
+  const { formatReviewDocumentIssues } = bundle;
+  assert.deepEqual(formatReviewDocumentIssues(CANONICAL_DOCUMENT), []);
 });
