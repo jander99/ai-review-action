@@ -583,3 +583,115 @@ test('formatReviewDocumentIssues returns an empty array for a fully valid docume
   const { formatReviewDocumentIssues } = bundle;
   assert.deepEqual(formatReviewDocumentIssues(CANONICAL_DOCUMENT), []);
 });
+
+test('formatReviewDocumentIssues returns the unexpected-content reason when Summary has trailing parentheticals', () => {
+  // Mirrors the production failure mode in run 31230589499 / job
+  // 93033507321: the model puts inline reasoning in the Summary
+  // bullets and the validator rejects with "unexpected content in
+  // ## Summary: <line>". The client-side check surfaces the same
+  // reason so the retry can fire and the model can drop the
+  // parenthetical.
+  const { formatReviewDocumentIssues } = bundle;
+  const document = [
+    '# Review — title',
+    '',
+    '## Scope',
+    '- Reviewed.',
+    '',
+    '## Summary',
+    '- New findings: 1',
+    '- Unresolved from prior review: 0 (cannot verify diff not in context)',
+    '- Resolved by latest commits: 1 (the OpenCode-only validator rejection fixed b)',
+    '',
+    '## Findings',
+    '',
+    '### 🔴 Critical — one real bug',
+    '- Status: new',
+    '- Location: packages/foo.ts:42',
+    '- Description: a real bug.',
+  ].join('\n');
+  const issues = formatReviewDocumentIssues(document);
+  // Two bullets fail the strict-shape check (one per offending line).
+  // The other Summary issues (Scope, Location) are clean.
+  assert.equal(issues.length, 2);
+  assert.match(issues[0], /unexpected content in ## Summary: - Unresolved from prior review: 0 \(cannot verify diff not in context\)/);
+  assert.match(issues[1], /unexpected content in ## Summary: - Resolved by latest commits: 1 \(the OpenCode-only validator rejection fixed b\)/);
+});
+
+test('formatReviewDocumentIssues flags extra bullets in the Summary section', () => {
+  // A Summary section with 4 bullets (3 correct + 1 extra) — the
+  // 4th bullet ("- Note: 0") doesn't match any of the three strict
+  // patterns, so the client-side check flags it.
+  const { formatReviewDocumentIssues } = bundle;
+  const document = [
+    '# Review — title',
+    '',
+    '## Scope',
+    '- Reviewed.',
+    '',
+    '## Summary',
+    '- New findings: 0',
+    '- Unresolved from prior review: 0',
+    '- Resolved by latest commits: 0',
+    '- Note: 0',
+    '',
+    '## Findings',
+  ].join('\n');
+  const issues = formatReviewDocumentIssues(document);
+  assert.equal(issues.length, 1);
+  assert.match(issues[0], /unexpected content in ## Summary: - Note: 0/);
+});
+
+test('invokeOpenCode retries with BOTH a count-mismatch AND unexpected Summary content in the directive', async () => {
+  // The first call's Summary is broken in TWO ways simultaneously:
+  //   - 3 valid bullets, but the counts don't match the findings
+  //     (Summary says New=0/Resolved=1 while blocks yield New=1/Resolved=0)
+  //   - A 4th bullet with trailing text the model emitted as
+  //     inline reasoning
+  // The retry directive must surface BOTH issues in a numbered
+  // list so the model fixes them in one pass.
+  //
+  // Note: the production failure mode (trailing parenthetical on a
+  // VALID field) trips BOTH checks at once in spirit, but the
+  // parser stops at the first malformed bullet and so the
+  // count-mismatch check can't fire when a field can't be parsed.
+  // We exercise BOTH checks via a 4th extra bullet, not a
+  // parenthetical, so both report reasons are reachable.
+  const summaryAndCountOff = [
+    '# Review — title',
+    '',
+    '## Scope',
+    '- Reviewed.',
+    '',
+    '## Summary',
+    '- New findings: 0',
+    '- Unresolved from prior review: 0',
+    '- Resolved by latest commits: 1',
+    '- Note: 0',
+    '',
+    '## Findings',
+    '',
+    '### 🔴 Critical — one real bug',
+    '- Status: new',
+    '- Location: packages/foo.ts:42',
+    '- Description: a real bug.',
+  ].join('\n');
+
+  const { result, spawnCalls } = runWithScript([
+    { events: reviewEvents(summaryAndCountOff, { input: 250, output: 60, cost: 0.12 }) },
+    { events: reviewEvents(CANONICAL_DOCUMENT, { input: 270, output: 90, cost: 0.07 }) },
+  ]);
+
+  const resultValue = await result;
+  assert.equal(spawnCalls.length, 2, 'retry must fire when the first call has both count-mismatch AND unexpected Summary content');
+  assert.equal(resultValue.text, CANONICAL_DOCUMENT);
+
+  const retryPrompt = spawnCalls[1].args[spawnCalls[1].args.length - 1];
+  // The retry directive must call out BOTH issues in validator order:
+  // count-mismatch (Summary parsing) first, then the strict-shape
+  // check that walks every Summary bullet.
+  assert.match(retryPrompt, /the validator rejected it for the following format reasons:/);
+  assert.match(retryPrompt, /\n\s+1\. count mismatch: summary says New=0, Unresolved=0, Resolved=1; blocks yield New=1, Unresolved=0, Resolved=0/);
+  assert.match(retryPrompt, /\n\s+2\. unexpected content in ## Summary: - Note: 0/);
+  assert.ok(retryPrompt.includes(summaryAndCountOff), 'retry prompt must include the first-call text as context');
+});

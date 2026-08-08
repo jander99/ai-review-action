@@ -166,6 +166,20 @@ const LOCATION_ITEM_PATTERN = /^([^:]+):(\d+)(?:-(\d+))?$/;
 const NEW_FINDINGS_PATTERN = /^\s*-\s*New findings:\s*(\d+)\s*$/;
 const UNRESOLVED_PATTERN = /^\s*-\s*Unresolved from prior review:\s*(\d+)\s*$/;
 const RESOLVED_PATTERN = /^\s*-\s*Resolved by latest commits:\s*(\d+)\s*$/;
+// Mirrors the validator's strict `## Summary` shape: each bullet
+// must be exactly `- <field>: <integer>` with no trailing text.
+// Models that emit parenthetical reasoning inline
+// (e.g. `- Resolved by latest commits: 1 (validator fixed b)`)
+// trigger the validator's `unexpected content in ## Summary`
+// rejection; the retry directive surfaces this so the model drops
+// the parenthetical.
+const SUMMARY_CONTENT_NEW = /^- New findings:\s*\d+\s*$/;
+const SUMMARY_CONTENT_UNRESOLVED = /^- Unresolved from prior review:\s*\d+\s*$/;
+const SUMMARY_CONTENT_RESOLVED = /^- Resolved by latest commits:\s*\d+\s*$/;
+// A `-` line in the Summary section that fails to match any of
+// the three strict patterns above. Used by the Summary-content
+// check below.
+const SUMMARY_BULLET_PREFIX = /^\s*-\s*/;
 // Mirrors `STATUS_COUNTS_AS_NEW` in the contract: `new` and
 // `new variant` both count toward New findings.
 const NEW_STATUSES = new Set(['new', 'new variant']);
@@ -310,11 +324,12 @@ function extractSummaryCounts(lines: string[]): { new: number; unresolved: numbe
 }
 
 /**
- * Client-side mirror of the validator's three most common rejection
- * modes. Returns the issues found in the order the validator would
+ * Client-side mirror of the validator's most common rejection modes.
+ * Returns the issues found in the order the validator would
  * encounter them (Scope first, then per-finding Location issues in
- * document order, then the Summary count mismatch). Empty array
- * means the document passes all three checks.
+ * document order, then the Summary count mismatch, then the Summary
+ * strict-shape check). Empty array means the document passes all
+ * checks.
  *
  * Fence tracking is intentionally NOT included: the checks operate
  * on top-level structural markers (`## Scope`, `- Location:`,
@@ -382,6 +397,38 @@ export function formatReviewDocumentIssues(text: string): string[] {
   // If Summary is missing or incomplete, `extractSummaryCounts`
   // returns null; the downstream `validateReviewDocument` call
   // catches that as a separate rejection mode.
+
+  // ----- 4. Summary strict-shape check. -----
+  // The validator's `parseSummary` only matches `- <field>: <integer>`
+  // bullets with no trailing text. Models that emit parenthetical
+  // reasoning inline (e.g. `- Resolved by latest commits: 1
+  // (validator fixed b)`) cause the validator to reject with
+  // `unexpected content in ## Summary: <line>`. Walk every `-`
+  // bullet in the Summary section; anything that doesn't match one
+  // of the three strict patterns gets flagged here.
+  const summaryIdx = lines.findIndex((l) => SUMMARY_HEADING_PATTERN.test(l));
+  if (summaryIdx !== -1) {
+    for (let i = summaryIdx + 1; i < lines.length; i += 1) {
+      const line = lines[i];
+      // Stop at the next major heading or finding block (Summary
+      // is followed by ## Findings when present).
+      if (FINDING_HEADING_PATTERN.test(line) || /^\s*##\s+/.test(line)) {
+        break;
+      }
+      // Only `-` lines are bullets; skip blank lines and prose.
+      if (!SUMMARY_BULLET_PREFIX.test(line)) continue;
+      // The line is a `-` bullet; it must match one of the three
+      // strict integer patterns exactly. A trailing parenthetical,
+      // extra bullet, or wrong field name all fail.
+      if (
+        !SUMMARY_CONTENT_NEW.test(line)
+        && !SUMMARY_CONTENT_UNRESOLVED.test(line)
+        && !SUMMARY_CONTENT_RESOLVED.test(line)
+      ) {
+        issues.push(`unexpected content in ## Summary: ${line}`);
+      }
+    }
+  }
 
   return issues;
 }
