@@ -49,9 +49,6 @@ jobs:
         # not drift between local and CI builds.
         run: yarn nx run run-reviews:build-tests --skip-nx-cache
 
-      - name: Build setup-opencode test bundle
-        run: yarn nx run setup-opencode:build-tests --skip-nx-cache
-
       - name: Check dist is up to date
         run: |
           set -euo pipefail
@@ -67,7 +64,6 @@ jobs:
             "dist/main.cjs"
             "packages/root-action/dist/main.cjs"
             "packages/run-reviews/dist/main.cjs"
-            "packages/setup-opencode/dist/main.cjs"
             "packages/post-comment/dist/main.cjs"
             "packages/post-check-run/dist/main.cjs"
             "packages/post-error-comment/dist/main.cjs"

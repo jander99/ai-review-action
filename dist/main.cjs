@@ -17607,12 +17607,12 @@ var require_lib = __commonJS({
             throw new Error("Client has already been disposed.");
           }
           const parsedUrl = new URL(requestUrl);
-          let info2 = this._prepareRequest(verb, parsedUrl, headers);
+          let info = this._prepareRequest(verb, parsedUrl, headers);
           const maxTries = this._allowRetries && RetryableHttpVerbs.includes(verb) ? this._maxRetries + 1 : 1;
           let numTries = 0;
           let response;
           do {
-            response = yield this.requestRaw(info2, data);
+            response = yield this.requestRaw(info, data);
             if (response && response.message && response.message.statusCode === HttpCodes.Unauthorized) {
               let authenticationHandler;
               for (const handler2 of this.handlers) {
@@ -17622,7 +17622,7 @@ var require_lib = __commonJS({
                 }
               }
               if (authenticationHandler) {
-                return authenticationHandler.handleAuthentication(this, info2, data);
+                return authenticationHandler.handleAuthentication(this, info, data);
               } else {
                 return response;
               }
@@ -17645,8 +17645,8 @@ var require_lib = __commonJS({
                   }
                 }
               }
-              info2 = this._prepareRequest(verb, parsedRedirectUrl, headers);
-              response = yield this.requestRaw(info2, data);
+              info = this._prepareRequest(verb, parsedRedirectUrl, headers);
+              response = yield this.requestRaw(info, data);
               redirectsRemaining--;
             }
             if (!response.message.statusCode || !HttpResponseRetryCodes.includes(response.message.statusCode)) {
@@ -17675,7 +17675,7 @@ var require_lib = __commonJS({
        * @param info
        * @param data
        */
-      requestRaw(info2, data) {
+      requestRaw(info, data) {
         return __awaiter(this, void 0, void 0, function* () {
           return new Promise((resolve3, reject) => {
             function callbackForResult(err, res) {
@@ -17687,7 +17687,7 @@ var require_lib = __commonJS({
                 resolve3(res);
               }
             }
-            this.requestRawWithCallback(info2, data, callbackForResult);
+            this.requestRawWithCallback(info, data, callbackForResult);
           });
         });
       }
@@ -17697,12 +17697,12 @@ var require_lib = __commonJS({
        * @param data
        * @param onResult
        */
-      requestRawWithCallback(info2, data, onResult) {
+      requestRawWithCallback(info, data, onResult) {
         if (typeof data === "string") {
-          if (!info2.options.headers) {
-            info2.options.headers = {};
+          if (!info.options.headers) {
+            info.options.headers = {};
           }
-          info2.options.headers["Content-Length"] = Buffer.byteLength(data, "utf8");
+          info.options.headers["Content-Length"] = Buffer.byteLength(data, "utf8");
         }
         let callbackCalled = false;
         function handleResult(err, res) {
@@ -17711,7 +17711,7 @@ var require_lib = __commonJS({
             onResult(err, res);
           }
         }
-        const req = info2.httpModule.request(info2.options, (msg) => {
+        const req = info.httpModule.request(info.options, (msg) => {
           const res = new HttpClientResponse(msg);
           handleResult(void 0, res);
         });
@@ -17723,7 +17723,7 @@ var require_lib = __commonJS({
           if (socket) {
             socket.end();
           }
-          handleResult(new Error(`Request timeout: ${info2.options.path}`));
+          handleResult(new Error(`Request timeout: ${info.options.path}`));
         });
         req.on("error", function(err) {
           handleResult(err);
@@ -17759,27 +17759,27 @@ var require_lib = __commonJS({
         return this._getProxyAgentDispatcher(parsedUrl, proxyUrl);
       }
       _prepareRequest(method, requestUrl, headers) {
-        const info2 = {};
-        info2.parsedUrl = requestUrl;
-        const usingSsl = info2.parsedUrl.protocol === "https:";
-        info2.httpModule = usingSsl ? https2 : http3;
+        const info = {};
+        info.parsedUrl = requestUrl;
+        const usingSsl = info.parsedUrl.protocol === "https:";
+        info.httpModule = usingSsl ? https2 : http3;
         const defaultPort = usingSsl ? 443 : 80;
-        info2.options = {};
-        info2.options.host = info2.parsedUrl.hostname;
-        info2.options.port = info2.parsedUrl.port ? parseInt(info2.parsedUrl.port) : defaultPort;
-        info2.options.path = (info2.parsedUrl.pathname || "") + (info2.parsedUrl.search || "");
-        info2.options.method = method;
-        info2.options.headers = this._mergeHeaders(headers);
+        info.options = {};
+        info.options.host = info.parsedUrl.hostname;
+        info.options.port = info.parsedUrl.port ? parseInt(info.parsedUrl.port) : defaultPort;
+        info.options.path = (info.parsedUrl.pathname || "") + (info.parsedUrl.search || "");
+        info.options.method = method;
+        info.options.headers = this._mergeHeaders(headers);
         if (this.userAgent != null) {
-          info2.options.headers["user-agent"] = this.userAgent;
+          info.options.headers["user-agent"] = this.userAgent;
         }
-        info2.options.agent = this._getAgent(info2.parsedUrl);
+        info.options.agent = this._getAgent(info.parsedUrl);
         if (this.handlers) {
           for (const handler2 of this.handlers) {
-            handler2.prepareRequest(info2.options);
+            handler2.prepareRequest(info.options);
           }
         }
-        return info2;
+        return info;
       }
       _mergeHeaders(headers) {
         if (this.requestOptions && this.requestOptions.headers) {
@@ -19769,10 +19769,10 @@ Support boolean input list: \`true | True | TRUE | false | False | FALSE\``);
       (0, command_1.issueCommand)("notice", (0, utils_1.toCommandProperties)(properties), message instanceof Error ? message.toString() : message);
     }
     exports2.notice = notice;
-    function info2(message) {
+    function info(message) {
       process.stdout.write(message + os3.EOL);
     }
-    exports2.info = info2;
+    exports2.info = info;
     function startGroup(name) {
       (0, command_1.issue)("group", name);
     }
@@ -37395,13 +37395,13 @@ var require_oauth2client = __commonJS({
           },
           url: this.endpoints.tokenInfoUrl.toString()
         });
-        const info2 = Object.assign({
+        const info = Object.assign({
           expiry_date: (/* @__PURE__ */ new Date()).getTime() + data.expires_in * 1e3,
           scopes: data.scope.split(" ")
         }, data);
-        delete info2.expires_in;
-        delete info2.scope;
-        return info2;
+        delete info.expires_in;
+        delete info.scope;
+        return info;
       }
       getFederatedSignonCerts(callback) {
         if (callback) {
@@ -46720,13 +46720,13 @@ var require_websocket_server = __commonJS({
           }
         }
         if (this.options.verifyClient) {
-          const info2 = {
+          const info = {
             origin: req.headers[`${version === 8 ? "sec-websocket-origin" : "origin"}`],
             secure: !!(req.socket.authorized || req.socket.encrypted),
             req
           };
           if (this.options.verifyClient.length === 2) {
-            this.options.verifyClient(info2, (verified, code, message, headers) => {
+            this.options.verifyClient(info, (verified, code, message, headers) => {
               if (!verified) {
                 return abortHandshake(socket, code || 401, message, headers);
               }
@@ -46742,7 +46742,7 @@ var require_websocket_server = __commonJS({
             });
             return;
           }
-          if (!this.options.verifyClient(info2)) return abortHandshake(socket, 401);
+          if (!this.options.verifyClient(info)) return abortHandshake(socket, 401);
         }
         this.completeUpgrade(extensions, key, protocols, req, socket, head, cb);
       }
@@ -51865,7 +51865,7 @@ var require_core3 = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     var id_1 = require_id();
     var ref_1 = require_ref();
-    var core3 = [
+    var core2 = [
       "$schema",
       "$id",
       "$defs",
@@ -51875,7 +51875,7 @@ var require_core3 = __commonJS({
       id_1.default,
       ref_1.default
     ];
-    exports2.default = core3;
+    exports2.default = core2;
   }
 });
 
@@ -60041,7 +60041,7 @@ var require_sha256 = __commonJS({
         return digest;
       }
       exports3.hmac = hmac;
-      function fillBuffer(buffer, hmac2, info2, counter) {
+      function fillBuffer(buffer, hmac2, info, counter) {
         var num = counter[0];
         if (num === 0) {
           throw new Error("hkdf: cannot expand more");
@@ -60050,15 +60050,15 @@ var require_sha256 = __commonJS({
         if (num > 1) {
           hmac2.update(buffer);
         }
-        if (info2) {
-          hmac2.update(info2);
+        if (info) {
+          hmac2.update(info);
         }
         hmac2.update(counter);
         hmac2.finish(buffer);
         counter[0]++;
       }
       var hkdfSalt = new Uint8Array(exports3.digestLength);
-      function hkdf(key, salt, info2, length) {
+      function hkdf(key, salt, info, length) {
         if (salt === void 0) {
           salt = hkdfSalt;
         }
@@ -60073,7 +60073,7 @@ var require_sha256 = __commonJS({
         var out = new Uint8Array(length);
         for (var i2 = 0; i2 < length; i2++) {
           if (bufpos === buffer.length) {
-            fillBuffer(buffer, hmac_, info2, counter);
+            fillBuffer(buffer, hmac_, info, counter);
             bufpos = 0;
           }
           out[i2] = buffer[bufpos++];
@@ -88693,7 +88693,7 @@ __export(action_entry_exports, {
 module.exports = __toCommonJS(action_entry_exports);
 
 // packages/root-action/src/orchestrate.ts
-var core2 = __toESM(require_core());
+var core = __toESM(require_core());
 var import_github = __toESM(require_github());
 
 // packages/review-contract/src/policy.ts
@@ -110719,10 +110719,10 @@ var ApiClient = class {
       minTimeout,
       maxTimeout,
       randomize: ((_f = retryOptions.jitter) !== null && _f !== void 0 ? _f : DEFAULT_RETRY_JITTER) > 0,
-      onFailedAttempt: (info2) => {
+      onFailedAttempt: (info) => {
         var _a8;
         if (abortSignal === null || abortSignal === void 0 ? void 0 : abortSignal.aborted) {
-          throw (_a8 = info2.error) !== null && _a8 !== void 0 ? _a8 : info2;
+          throw (_a8 = info.error) !== null && _a8 !== void 0 ? _a8 : info;
         }
       }
     });
@@ -145802,9 +145802,6 @@ async function postReview(options, ctx, octokitFactory = (token) => new import_r
   }
 }
 
-// packages/run-reviews/src/config-builder.ts
-var core = __toESM(require_core());
-
 // packages/run-reviews/src/main.ts
 var import_child_process = require("child_process");
 var fs9 = __toESM(require("fs"));
@@ -146586,7 +146583,7 @@ async function runReviewPipeline(input, deps) {
   return { status: "ok", document: document2, triage: triage.line, kept, uncertain, counts, usage, failureReason: "" };
 }
 
-// packages/run-reviews/src/agent-definition.ts
+// packages/run-reviews/src/event-context.ts
 var fs7 = __toESM(require("fs"));
 var os2 = __toESM(require("os"));
 var path6 = __toESM(require("path"));
@@ -146847,14 +146844,14 @@ var DEFAULT_MAX_COMMENT_CHARS = 65e3;
 var REVIEW_EVENTS = ["COMMENT", "REQUEST_CHANGES", "APPROVE"];
 var runDeps = { runReviews, postReview, postCheckRun, postErrorComment };
 function requiredInput(name) {
-  const value = core2.getInput(name);
+  const value = core.getInput(name);
   if (!value) {
     throw new Error(`missing required input: ${name}`);
   }
   return value;
 }
 function numberInput(name, fallback) {
-  const raw = core2.getInput(name).trim();
+  const raw = core.getInput(name).trim();
   if (!raw) {
     return fallback;
   }
@@ -146865,7 +146862,7 @@ function numberInput(name, fallback) {
   return value;
 }
 function booleanInput(name, fallback) {
-  const raw = core2.getInput(name).trim().toLowerCase();
+  const raw = core.getInput(name).trim().toLowerCase();
   if (!raw) {
     return fallback;
   }
@@ -146874,7 +146871,7 @@ function booleanInput(name, fallback) {
   throw new Error(`Input does not meet boolean specification for '${name}': '${raw}'. Expected true|false.`);
 }
 function reviewEventInput() {
-  const raw = (core2.getInput("review-event") || "COMMENT").trim().toUpperCase();
+  const raw = (core.getInput("review-event") || "COMMENT").trim().toUpperCase();
   const event = REVIEW_EVENTS.find((candidate) => candidate === raw);
   if (!event) {
     throw new Error(`review-event must be one of ${REVIEW_EVENTS.join(", ")} (received '${raw}')`);
@@ -146900,7 +146897,7 @@ function readActionInputs() {
     llm: {
       provider: providerInput("llm-provider", listLlmProviders()),
       config: {
-        baseUrl: core2.getInput("llm-base-url") || void 0,
+        baseUrl: core.getInput("llm-base-url") || void 0,
         apiKey: requiredInput("llm-api-key"),
         model: requiredInput("llm-model")
       }
@@ -146908,13 +146905,13 @@ function readActionInputs() {
     decision: {
       provider: providerInput("decision-provider", listDecisionProviders()),
       config: {
-        baseUrl: core2.getInput("decision-base-url") || void 0,
+        baseUrl: core.getInput("decision-base-url") || void 0,
         apiKey: requiredInput("decision-api-key"),
         model: requiredInput("decision-model")
       }
     },
     thresholds,
-    githubToken: core2.getInput("github-token") || process.env.GITHUB_TOKEN || void 0,
+    githubToken: core.getInput("github-token") || process.env.GITHUB_TOKEN || void 0,
     reviewEvent: reviewEventInput()
   };
 }
@@ -146930,20 +146927,20 @@ function publishContext(githubToken) {
     maxCommentChars: numberInput("max-comment-chars", DEFAULT_MAX_COMMENT_CHARS),
     postComment: booleanInput("post-comment", true),
     postCheckRun: booleanInput("post-check-run", true),
-    checkName: core2.getInput("check-name") || "ai-review",
-    checkConclusion: core2.getInput("check-conclusion") || "neutral",
-    checkDetailsUrl: core2.getInput("check-details-url") || "https://github.com"
+    checkName: core.getInput("check-name") || "ai-review",
+    checkConclusion: core.getInput("check-conclusion") || "neutral",
+    checkDetailsUrl: core.getInput("check-details-url") || "https://github.com"
   };
 }
 var MISSING_TOKEN_WARNING = "github-token is not available; review and error comments/check-runs will not be published. Pass github-token: ${{ github.token }} to the action.";
 async function publishError(reason, deps, ctx) {
-  core2.setOutput("comment-url", "");
-  core2.setOutput("check-run-url", "");
+  core.setOutput("comment-url", "");
+  core.setOutput("check-run-url", "");
   if (!reason) {
     return;
   }
   if (!ctx.githubToken) {
-    core2.warning(MISSING_TOKEN_WARNING);
+    core.warning(MISSING_TOKEN_WARNING);
     return;
   }
   if (ctx.eventName === "pull_request" && ctx.postComment) {
@@ -146957,7 +146954,7 @@ async function publishError(reason, deps, ctx) {
       },
       { owner: ctx.owner, repo: ctx.repo, issueNumber: ctx.issueNumber }
     );
-    core2.setOutput("comment-url", result.commentUrl);
+    core.setOutput("comment-url", result.commentUrl);
   } else if (ctx.eventName !== "pull_request" && ctx.postCheckRun) {
     const result = await deps.postCheckRun({
       token: ctx.githubToken,
@@ -146969,17 +146966,17 @@ async function publishError(reason, deps, ctx) {
       owner: ctx.owner,
       repo: ctx.repo
     });
-    core2.setOutput("check-run-url", result.checkRunUrl);
+    core.setOutput("check-run-url", result.checkRunUrl);
   }
 }
 function writeReviewOutputs(result) {
-  core2.setOutput("review", result.review);
-  core2.setOutput("triage", result.triage);
-  core2.setOutput("review-output-path", result.reviewOutputPath);
-  core2.setOutput("findings-kept", result.counts.kept);
-  core2.setOutput("findings-uncertain", result.counts.uncertain);
-  core2.setOutput("findings-dropped", result.counts.dropped);
-  core2.setOutput(
+  core.setOutput("review", result.review);
+  core.setOutput("triage", result.triage);
+  core.setOutput("review-output-path", result.reviewOutputPath);
+  core.setOutput("findings-kept", result.counts.kept);
+  core.setOutput("findings-uncertain", result.counts.uncertain);
+  core.setOutput("findings-dropped", result.counts.dropped);
+  core.setOutput(
     "tokens",
     JSON.stringify({
       llmInput: result.usage.llmInputTokens,
@@ -146987,13 +146984,13 @@ function writeReviewOutputs(result) {
       decisionInput: result.usage.decisionInputTokens
     })
   );
-  core2.setOutput("failure-reason", result.failureReason);
+  core.setOutput("failure-reason", result.failureReason);
 }
 async function publishReview(result, reviewEvent, deps, ctx) {
-  core2.setOutput("comment-url", "");
-  core2.setOutput("check-run-url", "");
+  core.setOutput("comment-url", "");
+  core.setOutput("check-run-url", "");
   if (!ctx.githubToken) {
-    core2.warning(MISSING_TOKEN_WARNING);
+    core.warning(MISSING_TOKEN_WARNING);
     return;
   }
   if (ctx.eventName === "pull_request") {
@@ -147010,7 +147007,7 @@ async function publishReview(result, reviewEvent, deps, ctx) {
       },
       { owner: ctx.owner, repo: ctx.repo, pullNumber: ctx.pullNumber }
     );
-    core2.setOutput("comment-url", review.reviewUrl);
+    core.setOutput("comment-url", review.reviewUrl);
     return;
   }
   if (ctx.postCheckRun) {
@@ -147026,26 +147023,26 @@ async function publishReview(result, reviewEvent, deps, ctx) {
       owner: ctx.owner,
       repo: ctx.repo
     });
-    core2.setOutput("check-run-url", check.checkRunUrl);
+    core.setOutput("check-run-url", check.checkRunUrl);
   }
 }
 async function runWithDeps(deps) {
-  const githubToken = core2.getInput("github-token") || process.env.GITHUB_TOKEN || "";
+  const githubToken = core.getInput("github-token") || process.env.GITHUB_TOKEN || "";
   if (!githubToken) {
-    core2.warning(MISSING_TOKEN_WARNING);
+    core.warning(MISSING_TOKEN_WARNING);
   }
   const ctx = publishContext(githubToken);
-  const llmApiKey = core2.getInput("llm-api-key");
-  const decisionApiKey = core2.getInput("decision-api-key");
-  if (llmApiKey) core2.setSecret(llmApiKey);
-  if (decisionApiKey) core2.setSecret(decisionApiKey);
+  const llmApiKey = core.getInput("llm-api-key");
+  const decisionApiKey = core.getInput("decision-api-key");
+  if (llmApiKey) core.setSecret(llmApiKey);
+  if (decisionApiKey) core.setSecret(decisionApiKey);
   let inputs;
   try {
     inputs = readActionInputs();
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     await publishError(reason, deps, ctx);
-    core2.setFailed(reason);
+    core.setFailed(reason);
     return;
   }
   const { reviewEvent, ...reviewOptions } = inputs;
@@ -147053,11 +147050,11 @@ async function runWithDeps(deps) {
   writeReviewOutputs(result);
   if (result.status === "failed") {
     await publishError(result.failureReason, deps, ctx);
-    core2.setFailed(`Review failed: ${result.failureReason}`);
+    core.setFailed(`Review failed: ${result.failureReason}`);
     return;
   }
   if (result.status === "no_findings_produced") {
-    core2.warning("No findings produced: the proposer returned no valid findings after one retry.");
+    core.warning("No findings produced: the proposer returned no valid findings after one retry.");
   }
   await publishReview(result, reviewEvent, deps, ctx);
 }
@@ -147068,10 +147065,10 @@ async function run() {
     const message = error instanceof Error ? error.message : String(error);
     const reason = `Root action failed: ${message}`;
     try {
-      await publishError(reason, runDeps, publishContext(core2.getInput("github-token") || process.env.GITHUB_TOKEN || ""));
+      await publishError(reason, runDeps, publishContext(core.getInput("github-token") || process.env.GITHUB_TOKEN || ""));
     } catch {
     }
-    core2.setFailed(reason);
+    core.setFailed(reason);
   }
 }
 

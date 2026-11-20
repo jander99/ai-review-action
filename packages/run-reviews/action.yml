@@ -1,66 +1,68 @@
 name: 'Run Reviews'
-description: 'Run AI reviews with the OpenCode CLI'
+description: 'Run AI reviews on the decision-API pipeline'
 inputs:
   github-token:
-    description: 'Token forwarded to the action. Used for fetching prior AI review comments and forwarded to the validator.'
-    required: false
-    default: ''
-  opencode-version:
-    description: 'Expected OpenCode version installed on PATH'
-    required: false
-    default: '1.18.4'
-  debug:
-    description: 'Capture, redact, and gzip OpenCode stdout and stderr'
-    required: false
-    default: 'false'
-  model:
-    description: 'OpenCode model in provider/model format'
-    required: false
-    default: 'anthropic/claude-sonnet-4.6'
-  models:
-    description: 'Comma-separated OpenCode models; overrides model when set'
+    description: 'Token used to fetch prior AI review comments. Needs pull-requests: read.'
     required: false
     default: ''
   prompts:
     description: 'Comma-separated prompt sources using file: or text: prefixes'
     required: true
-  opencode-config:
-    description: 'Path to a user-provided OpenCode config'
+  llm-provider:
+    description: 'Proposing LLM provider (openai, anthropic, gemini)'
+    required: true
+  llm-base-url:
+    description: 'Override the LLM provider base URL'
     required: false
-  permission:
-    description: 'JSON object defining OpenCode tool permissions'
+    default: ''
+  llm-model:
+    description: 'Model id for the proposing LLM'
+    required: true
+  llm-api-key:
+    description: 'API key for the proposing LLM'
+    required: true
+  decision-provider:
+    description: 'Decision provider used to judge findings (systemone, google)'
+    required: true
+  decision-base-url:
+    description: 'Override the decision provider base URL'
     required: false
-  timeout-minutes:
-    description: 'Timeout for each OpenCode invocation'
+    default: ''
+  decision-model:
+    description: 'Model id for the judging decision API'
+    required: true
+  decision-api-key:
+    description: 'API key for the decision provider'
+    required: true
+  keep-threshold:
+    description: 'Minimum support probability to keep a finding'
     required: false
-    default: '30'
-  fail-on-error:
-    description: 'Fail the action when any review fails'
+    default: '0.7'
+  drop-threshold:
+    description: 'Maximum support probability to drop a finding'
     required: false
-    default: 'false'
+    default: '0.3'
+  severity-threshold:
+    description: 'Judge severity below this is treated as a suggestion'
+    required: false
+    default: '0.5'
 outputs:
   review:
-    description: 'The review text output'
-  models-used:
-    description: 'Comma-separated list of models that completed successfully'
-  cost:
-    description: 'Total cost in USD'
-  cost-by-model:
-    description: 'JSON object containing cost by model'
-  tokens:
-    description: 'JSON object containing total input and output tokens'
-  tokens-by-model:
-    description: 'JSON object containing token usage by model'
-  debug-artifact-path:
-    description: 'Directory containing redacted, gzipped debug output when debug is enabled'
+    description: 'The rendered review document (markdown)'
+  triage:
+    description: 'One-line triage of the pull request (empty when skipped)'
   review-output-path:
-    description: 'Runner-local path to the authoritative review markdown file written by the action from a validated model response'
-  config-json:
-    description: 'Deterministic JSON serialization of a validator-only OpenCode config. Contains the resolved providers (built-in and user-supplied, with secret-bearing fields redacted), the effective first model, the deny-all validator permission, and a single agent.validator definition. The config carries a __validator__: true marker and does NOT include agent.review or any prompt that embeds reviewOutputPath.'
-  effective-model:
-    description: 'The effective first model (provider/model format) selected from the inputs.model or inputs.models list. Downstream actions should pass this to the validator as the model input.'
+    description: 'Runner-local path to the review document written by the action'
+  findings-kept:
+    description: 'Findings kept after judging and policy'
+  findings-uncertain:
+    description: 'Findings in the uncertain band (not posted inline)'
+  findings-dropped:
+    description: 'Findings dropped as unsupported, duplicate, or below threshold'
+  tokens:
+    description: 'JSON object of token usage: { llmInput, llmOutput, decisionInput }'
   failure-reason:
-    description: 'Latest failure message produced by the action (empty on success). Captures pre-document failures (all invocations failed or returned invalid documents, or the deterministic merge exceeded the 256 KB contract maximum), and post-document failures (file write/read errors).'
+    description: 'Canonical failure message (empty on success)'
 runs:
   using: node24
   main: dist/main.cjs

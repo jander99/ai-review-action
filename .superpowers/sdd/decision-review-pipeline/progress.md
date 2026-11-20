@@ -1,5 +1,19 @@
-# SDD ledger — plan: docs/superpowers/plans/2026-11-19-decision-review-pipeline.md
+# Ledger — decision-review pipeline
 
-Part 5 — PR 5: wire the action to the pipeline (Tasks 19-21). Worktree `.worktrees/drp-5`, branch `feat/decision-review-5` off origin/main f8d3cdf.
-Pre-flight: Task 19 consumes runReviewPipeline (Part 3), createLlmClient/createDecisionClient (Part 2), fetchPriorReviews + parsePriorFindings (Part 4) — all on main. Task 20 consumes postReview (Part 4) and runReviews (Task 19). Task 21 extends the study CLI from Part 1. Handoffs are sequential within the part.
-Task 19 also depends on readBaseInstructions trimming: the plan says `git show <sha>:<path>` but the test requires the base rules to fit the context; trimming is done by the context builder.
+Plan: `docs/superpowers/plans/2026-11-19-decision-review-pipeline.md`
+Part 6 / PR 6 — remove the harness runtimes; v2. Worktree: `.worktrees/drp-6`, branch `feat/decision-review-6` off `origin/main` (a83fdc2).
+
+## Task 22: Delete OpenCode/Claude runtimes, setup-opencode, validate-review; docs; major version
+
+- [x] Created worktree from origin/main
+- [ ] Step 1: failing test in packages/root-action/test/inputs.test.cjs (no `opencode`, `--allowedTools`, `validateReview` in either bundle)
+- [ ] Step 2: confirm RED
+- [ ] Step 3: delete and update
+- [ ] Step 4: full verification
+- [ ] Step 5: commit, push, open PR 6
+- [ ] Step 6: gate the release on the stability study + e2e measure
+
+## Notes
+
+- Known drift to fix here: `release.yml` tracked-dist list vs `ci.yml`.
+- Part 5 taught a pattern worth carrying: stale export/input lists in ci.yml and smoke.yml are the most common CI breakage after an API change. Check both for every removed export.

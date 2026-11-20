@@ -39,9 +39,7 @@ __export(index_exports, {
   VALIDATOR_AGENT_PROMPT_TEMPLATE: () => VALIDATOR_AGENT_PROMPT_TEMPLATE,
   applyPolicy: () => applyPolicy,
   countChangedLines: () => countChangedLines,
-  extractReviewDocument: () => extractReviewDocument,
   findAnchorHunk: () => findAnchorHunk,
-  findHeadingBoundary: () => findHeadingBoundary,
   findingId: () => findingId,
   formatLocations: () => formatLocations,
   mergeReviewDocuments: () => mergeReviewDocuments,
@@ -54,8 +52,6 @@ __export(index_exports, {
   renderFinding: () => renderFinding,
   renderFindingComment: () => renderFindingComment,
   resolveSeverity: () => resolveSeverity,
-  selectTerminalText: () => selectTerminalText,
-  stripSentinelBoundary: () => stripSentinelBoundary,
   suggestionFence: () => suggestionFence,
   validateReviewDocument: () => validateReviewDocument,
   validateThresholds: () => validateThresholds
@@ -359,27 +355,6 @@ var EMOJI_TO_SEVERITY = {
 var STATUSES = ["new", "unresolved", "resolved", "new variant"];
 var STATUS_VALUES_SET = new Set(STATUSES);
 var STATUS_COUNTS_AS_NEW = /* @__PURE__ */ new Set(["new", "new variant"]);
-function selectTerminalText(parts) {
-  if (!Array.isArray(parts) || parts.length === 0) {
-    return { text: "", parts: [] };
-  }
-  let terminalIndex = -1;
-  for (let i = parts.length - 1; i >= 0; i -= 1) {
-    const candidate = parts[i];
-    if (candidate && (candidate.type === "step-finish" || candidate.type === "step_finish") && candidate.reason === "stop") {
-      terminalIndex = i;
-      break;
-    }
-  }
-  const upperBound = terminalIndex >= 0 ? terminalIndex : parts.length;
-  for (let i = upperBound - 1; i >= 0; i -= 1) {
-    const candidate = parts[i];
-    if (candidate && candidate.type === "text" && typeof candidate.text === "string") {
-      return { text: candidate.text, parts };
-    }
-  }
-  return { text: "", parts };
-}
 var HEADING_LINE_PATTERN = /^# Review — \S.*$/;
 var FENCE_LINE_PATTERN = /^```/;
 var SCOPE_HEADING_PATTERN = /^## Scope\s*$/;
@@ -532,46 +507,6 @@ If the file is missing or malformed, reply with exactly one line: INVALID <reaso
 where <reason> is a short human-readable cause (e.g. "missing ## Summary section", "finding 2 missing Status field"). Do not include any other text in your reply.
 
 Path to validate: __REVIEW_PATH__`;
-function stripSentinelBoundary(text) {
-  const lines = text.split("\n");
-  let fenceOpen = false;
-  for (let i = 0; i < lines.length; i += 1) {
-    const line = lines[i];
-    if (FENCE_LINE_PATTERN.test(line)) {
-      fenceOpen = !fenceOpen;
-      continue;
-    }
-    if (fenceOpen) {
-      continue;
-    }
-    if (line === REVIEW_DONE_SENTINEL) {
-      return lines.slice(0, i).join("\n");
-    }
-  }
-  return text;
-}
-function findHeadingBoundary(text) {
-  const lines = text.split("\n");
-  let fenceOpen = false;
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (FENCE_LINE_PATTERN.test(line)) {
-      fenceOpen = !fenceOpen;
-      continue;
-    }
-    if (fenceOpen) {
-      continue;
-    }
-    if (HEADING_LINE_PATTERN.test(line)) {
-      return lines.slice(i).join("\n");
-    }
-  }
-  return null;
-}
-function extractReviewDocument(text) {
-  const sliced = stripSentinelBoundary(text);
-  return findHeadingBoundary(sliced);
-}
 function isFenceOpenAt(lines, index) {
   let fenceOpen = false;
   for (let i = 0; i < index; i++) {
@@ -1164,9 +1099,7 @@ function normalizeTitleForHeading(titleOrRef) {
   VALIDATOR_AGENT_PROMPT_TEMPLATE,
   applyPolicy,
   countChangedLines,
-  extractReviewDocument,
   findAnchorHunk,
-  findHeadingBoundary,
   findingId,
   formatLocations,
   mergeReviewDocuments,
@@ -1179,8 +1112,6 @@ function normalizeTitleForHeading(titleOrRef) {
   renderFinding,
   renderFindingComment,
   resolveSeverity,
-  selectTerminalText,
-  stripSentinelBoundary,
   suggestionFence,
   validateReviewDocument,
   validateThresholds

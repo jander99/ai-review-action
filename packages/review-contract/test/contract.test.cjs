@@ -6,16 +6,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const {
-  stripSentinelBoundary,
-  extractReviewDocument,
   validateReviewDocument,
   mergeReviewDocuments,
   MAX_CHARS,
   renderDocument,
   formatLocations,
-  REVIEW_DONE_SENTINEL,
-  REVIEW_AGENT_PROMPT_TEMPLATE,
-  VALIDATOR_AGENT_PROMPT_TEMPLATE,
   CANONICAL_FIELD_ORDER_TEXT,
 } = require('../dist/index.cjs');
 
@@ -111,54 +106,8 @@ test('loose `# Review plan` heading is invalid', () => {
   assert.match(result.reason, /heading/);
 });
 
-test('extraction strips preamble', () => {
-  const raw = [
-    'reasoning preamble here',
-    '   ',
-    'still thinking...',
-    `${'# Review — '}${TITLE}`,
-    '',
-    '## Scope',
-    '- Reviewed test fixture',
-    '',
-    '## Summary',
-    '',
-    '- New findings: 0',
-    '- Unresolved from prior review: 0',
-    '- Resolved by latest commits: 0',
-  ].join('\n');
-  const extracted = extractReviewDocument(raw);
-  assert.ok(extracted);
-  assert.ok(extracted.startsWith(`# Review — ${TITLE}`));
-  assert.ok(!extracted.includes('reasoning preamble'));
-});
 
-test('extraction ignores heading inside fenced code block', () => {
-  const raw = [
-    '```',
-    `# Review — fake heading on purpose`,
-    '```',
-    `# Review — ${TITLE}`,
-    '',
-    '## Scope',
-    '- Reviewed test fixture',
-    '',
-    '## Summary',
-    '',
-    '- New findings: 0',
-    '- Unresolved from prior review: 0',
-    '- Resolved by latest commits: 0',
-  ].join('\n');
-  const extracted = extractReviewDocument(raw);
-  assert.ok(extracted);
-  assert.ok(extracted.startsWith(`# Review — ${TITLE}`));
-  assert.ok(!extracted.includes('fake heading on purpose'));
-});
 
-test('extraction returns null when no strict heading exists', () => {
-  const raw = 'no heading here at all';
-  assert.equal(extractReviewDocument(raw), null);
-});
 
 test('missing Status field is invalid', () => {
   const doc = [
@@ -712,142 +661,9 @@ test('unterminated fenced block containing Summary is invalid', () => {
   assert.match(result.reason, /malformed fenced code block before ## Summary/);
 });
 
-test('prompt templates reference the canonical field order text', () => {
-  // The validator template embeds the CANONICAL_FIELD_ORDER_TEXT
-  // string directly so the structural validator can match it
-  // field-for-field. The reviewer template, with its new
-  // front-loaded CANONICAL SHAPE worked example, expresses the
-  // field order inline ("Status, then Location, then Description")
-  // rather than interpolating the constant. Assert the literal
-  // string is present ONLY in the validator template; the
-  // reviewer template is asserted separately below to carry
-  // the field order in a model-readable form.
-  assert.ok(
-    VALIDATOR_AGENT_PROMPT_TEMPLATE.includes(CANONICAL_FIELD_ORDER_TEXT),
-    `VALIDATOR_AGENT_PROMPT_TEMPLATE must reference the canonical field order text: "${CANONICAL_FIELD_ORDER_TEXT}"`,
-  );
-  // The reviewer template carries the field order as a numeric
-  // list ("Field 1: Status", "Field 2: Location", "Field 3:
-  // Description").
-  assert.match(
-    REVIEW_AGENT_PROMPT_TEMPLATE,
-    /Field 1[:\s][^\n]*Status/,
-    'REVIEW_AGENT_PROMPT_TEMPLATE must list Status as the first field',
-  );
-  assert.match(
-    REVIEW_AGENT_PROMPT_TEMPLATE,
-    /Field 2[:\s][^\n]*Location/,
-    'REVIEW_AGENT_PROMPT_TEMPLATE must list Location as the second field',
-  );
-  assert.match(
-    REVIEW_AGENT_PROMPT_TEMPLATE,
-    /Field 3[:\s][^\n]*Description/,
-    'REVIEW_AGENT_PROMPT_TEMPLATE must list Description as the third field',
-  );
-});
 
-test('review agent prompt declares the heading-first reply constraint', () => {
-  // Bound the regression where the model emitted preamble prose /
-  // tool-call XML before the '# Review — <title-or-ref>' heading.
-  // The constraint must appear near the top of the prompt so the
-  // model sees it before any other guidance. The new template
-  // expresses the constraint in the CANONICAL SHAPE block:
-  //   - "# Review — <title-or-ref>" appears as the first line of
-  //     the worked example, AND
-  //   - "The first character of your reply is `#`." appears in
-  //     the HOW TO PRODUCE IT block.
-  // Both must precede the RUNTIME CONTEXT section.
-  const headingExampleIdx = REVIEW_AGENT_PROMPT_TEMPLATE.indexOf('# Review — <title-or-ref>');
-  const firstCharacterIdx = REVIEW_AGENT_PROMPT_TEMPLATE.indexOf('first character of your reply');
-  const runtimeContextIdx = REVIEW_AGENT_PROMPT_TEMPLATE.indexOf('RUNTIME CONTEXT');
-  assert.ok(headingExampleIdx >= 0, 'worked example must include the heading shape');
-  assert.ok(firstCharacterIdx >= 0, 'HOW TO PRODUCE IT block must mention the first character');
-  assert.ok(runtimeContextIdx >= 0, 'RUNTIME CONTEXT header must be present');
-  assert.ok(
-    headingExampleIdx < runtimeContextIdx,
-    `worked example heading must precede RUNTIME CONTEXT (heading=${headingExampleIdx}, runtime=${runtimeContextIdx})`,
-  );
-  assert.ok(
-    firstCharacterIdx < runtimeContextIdx,
-    `first-character constraint must precede RUNTIME CONTEXT (constraint=${firstCharacterIdx}, runtime=${runtimeContextIdx})`,
-  );
-  // The worked example is the FIRST non-blank, non-comment
-  // # Review — heading in the prompt (i.e. it appears before
-  // any other rule).
-  assert.match(
-    REVIEW_AGENT_PROMPT_TEMPLATE,
-    /CANONICAL SHAPE[\s\S]*?# Review — <title-or-ref>/,
-    'the CANONICAL SHAPE block must include the heading shape',
-  );
-});
 
-test('review agent prompt front-loads the canonical shape as a worked example', () => {
-  // The hardened template puts a fenced code block containing the
-  // full canonical document shape BEFORE any other guidance, so
-  // the model pattern-matches the shape before reading any prose.
-  // Lock in: the canonical shape block is present, the worked
-  // example is fenced (so the model doesn't accidentally emit it
-  // as literal output), and the block is near the top of the
-  // prompt (before RUNTIME CONTEXT).
-  assert.match(
-    REVIEW_AGENT_PROMPT_TEMPLATE,
-    /CANONICAL SHAPE[\s\S]*?```[\s\S]*?# Review — <title-or-ref>[\s\S]*?```/,
-    'REVIEW_AGENT_PROMPT_TEMPLATE must contain a fenced CANONICAL SHAPE block with the worked example',
-  );
-  // The CANONICAL SHAPE block must precede the RUNTIME CONTEXT
-  // section (the shape is the first thing the model sees).
-  const shapeIdx = REVIEW_AGENT_PROMPT_TEMPLATE.indexOf('CANONICAL SHAPE');
-  const runtimeContextIdx = REVIEW_AGENT_PROMPT_TEMPLATE.indexOf('RUNTIME CONTEXT');
-  assert.ok(shapeIdx >= 0, 'CANONICAL SHAPE block must be present');
-  assert.ok(runtimeContextIdx >= 0, 'RUNTIME CONTEXT header must be present');
-  assert.ok(
-    shapeIdx < runtimeContextIdx,
-    `CANONICAL SHAPE must precede RUNTIME CONTEXT (shape=${shapeIdx}, runtime=${runtimeContextIdx})`,
-  );
-});
 
-test('review agent prompt embeds the "common slips" wording to lock in the contract', () => {
-  // The hardened template lists common slips the model has
-  // produced (self-talk in Description, multi-line fields,
-  // extra Summary bullets, preambles) so the model
-  // pattern-matches the WRONG examples with the WRONG
-  // verdict. Lock in the wording so a future template edit
-  // can't accidentally drop the slip list.
-  assert.match(
-    REVIEW_AGENT_PROMPT_TEMPLATE,
-    /WHAT NOT TO DO/i,
-    'REVIEW_AGENT_PROMPT_TEMPLATE must include a "WHAT NOT TO DO" section naming common slips',
-  );
-  // Specific slips the prompt must name explicitly:
-  assert.match(
-    REVIEW_AGENT_PROMPT_TEMPLATE,
-    /self-talk|thinking aloud/i,
-    'REVIEW_AGENT_PROMPT_TEMPLATE must warn against self-talk / thinking aloud',
-  );
-  assert.match(
-    REVIEW_AGENT_PROMPT_TEMPLATE,
-    /extra bullets to Summary|Note: |Total: /,
-    'REVIEW_AGENT_PROMPT_TEMPLATE must warn against extra Summary bullets',
-  );
-  assert.match(
-    REVIEW_AGENT_PROMPT_TEMPLATE,
-    /multi-line|continuation lines/i,
-    'REVIEW_AGENT_PROMPT_TEMPLATE must warn against multi-line continuation lines',
-  );
-  assert.match(
-    REVIEW_AGENT_PROMPT_TEMPLATE,
-    /preamble before/i,
-    'REVIEW_AGENT_PROMPT_TEMPLATE must warn against preambles before the heading',
-  );
-  // The summary must include the worked example with the
-  // expected sentinel so the model has a concrete shape to
-  // pattern-match.
-  assert.match(
-    REVIEW_AGENT_PROMPT_TEMPLATE,
-    /<!-- AI_REVIEW_DONE -->/,
-    'REVIEW_AGENT_PROMPT_TEMPLATE must include the AI_REVIEW_DONE sentinel in the worked example',
-  );
-});
 
 test('review-contract project.json declares a test target that runs node --test', () => {
   const projectPath = path.join(__dirname, '..', 'project.json');
@@ -1040,27 +856,6 @@ test('mergeReviewDocuments dedupes by canonical multi-location string', () => {
   assert.equal(validation.document.summary.new, 1);
 });
 
-test('prompt templates declare the comma-separated multi-location grammar', () => {
-  for (const [name, template] of [
-    ['REVIEW_AGENT_PROMPT_TEMPLATE', REVIEW_AGENT_PROMPT_TEMPLATE],
-    ['VALIDATOR_AGENT_PROMPT_TEMPLATE', VALIDATOR_AGENT_PROMPT_TEMPLATE],
-  ]) {
-    assert.match(
-      template,
-      /comma-separated/i,
-      `${name} must mention the comma-separated multi-location grammar`,
-    );
-    // The model must also be steered AWAY from natural-language
-    // connectors. Each template either spells out the literal
-    // connector tokens (`and` / `or` / `&`) or warns about
-    // semicolons / markdown links / bullets. Match any of those.
-    assert.match(
-      template,
-      /(and|or|&|semicolon|markdown|bullets?)/i,
-      `${name} must steer the model away from natural-language connectors`,
-    );
-  }
-});
 
 // -----------------------------------------------------------------------------
 // Phase-7 bounded implementation: completion sentinel.
@@ -1076,195 +871,14 @@ test('prompt templates declare the comma-separated multi-location grammar', () =
 
 const SENTINEL = '<!-- AI_REVIEW_DONE -->';
 
-test('REVIEW_DONE_SENTINEL is exported and uses the exact approved token', () => {
-  assert.equal(REVIEW_DONE_SENTINEL, SENTINEL);
-});
 
-test('valid review + sentinel + trailing prose extracts to the review with no sentinel and no trailing prose', () => {
-  const doc = [
-    `# Review — ${TITLE}`,
-    '',
-    '## Scope',
-    '- Reviewed test fixture',
-    '',
-    '## Summary',
-    '',
-    '- New findings: 0',
-    '- Unresolved from prior review: 0',
-    '- Resolved by latest commits: 0',
-    '',
-    SENTINEL,
-    'extra scratch prose the model emitted after completion',
-    'second line of scratch prose that must also be discarded',
-  ].join('\n');
 
-  const extracted = extractReviewDocument(doc);
-  assert.ok(extracted, 'extractor must return a non-null document');
-  assert.ok(extracted.startsWith(`# Review — ${TITLE}`), 'extracted text must begin with the canonical heading');
-  assert.ok(!extracted.includes(SENTINEL), `extracted text must not contain the sentinel; got: ${JSON.stringify(extracted)}`);
-  assert.ok(
-    !extracted.includes('extra scratch prose'),
-    'extracted text must not contain post-sentinel scratch prose',
-  );
-  assert.ok(
-    !extracted.includes('second line of scratch prose'),
-    'extracted text must not contain the second scratch-prose line',
-  );
 
-  // The extracted document must also pass deterministic validation
-  // end-to-end (summary zero, no findings).
-  const result = validateReviewDocument(extracted);
-  assert.equal(result.valid, true, result.reason);
-  assert.equal(result.document.findings.length, 0);
-});
 
-test('sentinel with trailing prose and a finding still validates and yields the finding', () => {
-  const doc = [
-    `# Review — ${TITLE}`,
-    '',
-    '## Scope',
-    '- Reviewed test fixture',
-    '',
-    '## Summary',
-    '',
-    '- New findings: 1',
-    '- Unresolved from prior review: 0',
-    '- Resolved by latest commits: 0',
-    '',
-    '## Findings',
-    '',
-    '### 🔴 Critical — Bug',
-    '- Status: new',
-    '- Location: src/foo.ts:1',
-    '- Description: d',
-    '',
-    SENTINEL,
-    'junk that must be discarded',
-  ].join('\n');
 
-  const extracted = extractReviewDocument(doc);
-  assert.ok(extracted);
-  const result = validateReviewDocument(extracted);
-  assert.equal(result.valid, true, result.reason);
-  assert.equal(result.document.findings.length, 1);
-  assert.equal(result.document.findings[0].title, 'Bug');
-  assert.ok(!extracted.includes(SENTINEL));
-  assert.ok(!extracted.includes('junk that must be discarded'));
-});
 
-test('text without a sentinel preserves existing behavior (input passes through unchanged)', () => {
-  const doc = [
-    `# Review — ${TITLE}`,
-    '',
-    '## Scope',
-    '- Reviewed test fixture',
-    '',
-    '## Summary',
-    '',
-    '- New findings: 0',
-    '- Unresolved from prior review: 0',
-    '- Resolved by latest commits: 0',
-  ].join('\n');
 
-  const extracted = extractReviewDocument(doc);
-  assert.ok(extracted);
-  // No sentinel in the input -> the extracted body must equal what
-  // the heading extractor would produce on its own.
-  const validation = validateReviewDocument(extracted);
-  assert.equal(validation.valid, true, validation.reason);
-});
 
-test('sentinel inside a fenced code block is ignored', () => {
-  const doc = [
-    `# Review — ${TITLE}`,
-    '',
-    '## Scope',
-    '- Reviewed test fixture',
-    '',
-    '## Summary',
-    '',
-    '- New findings: 0',
-    '- Unresolved from prior review: 0',
-    '- Resolved by latest commits: 0',
-    '',
-    '```markdown',
-    SENTINEL,
-    'inside a code block - must NOT trigger sentinel slicing',
-    '```',
-    '',
-    'after the fence: still part of the document',
-  ].join('\n');
-
-  const extracted = extractReviewDocument(doc);
-  assert.ok(extracted);
-  // The extractor discards preamble before the heading, but the
-  // sentinel inside the fence should NOT have triggered slicing.
-  // Concretely: 'after the fence: still part of the document' is on
-  // a blank-after-findings document so it would itself trigger the
-  // 'unexpected content after final finding' rejection if it were
-  // preserved. We assert the rejection fires so we know the
-  // sentinel did NOT truncate the document prematurely.
-  const validation = validateReviewDocument(extracted);
-  assert.equal(validation.valid, false, 'document must remain intact (sentinel inside fence is ignored)');
-  assert.match(
-    validation.reason,
-    /after final finding|unexpected content/i,
-    `expected a post-finding content rejection; got: ${validation.reason}`,
-  );
-});
-
-test('first eligible sentinel wins when more than one exists', () => {
-  // First sentinel (before the second prose block) is eligible and
-  // must win. The second sentinel (inside the post-prose) is never
-  // reached.
-  const doc = [
-    `# Review — ${TITLE}`,
-    '',
-    '## Scope',
-    '- Reviewed test fixture',
-    '',
-    '## Summary',
-    '',
-    '- New findings: 0',
-    '- Unresolved from prior review: 0',
-    '- Resolved by latest commits: 0',
-    '',
-    SENTINEL,
-    'prose between the two sentinels',
-    SENTINEL,
-    'prose after the second sentinel',
-  ].join('\n');
-
-  const extracted = extractReviewDocument(doc);
-  assert.ok(extracted);
-  assert.ok(extracted.startsWith(`# Review — ${TITLE}`));
-  assert.ok(!extracted.includes(SENTINEL), 'both sentinels must be stripped');
-  assert.ok(
-    !extracted.includes('prose between the two sentinels'),
-    'prose between the two sentinels must be stripped (first eligible wins)',
-  );
-  assert.ok(
-    !extracted.includes('prose after the second sentinel'),
-    'prose after the second sentinel must also be stripped',
-  );
-});
-
-test('stripSentinelBoundary is a pure no-op when the token is absent', () => {
-  const text = 'just some prose\nno sentinel here\n';
-  assert.equal(stripSentinelBoundary(text), text);
-});
-
-test('stripSentinelBoundary preserves everything before the sentinel and discards the rest', () => {
-  const before = 'first line\nsecond line';
-  const after = SENTINEL;
-  const text = `${before}\n${after}\ntail`;
-  assert.equal(stripSentinelBoundary(text), before);
-});
-
-test('stripSentinelBoundary inside a fenced code block is ignored', () => {
-  const before = 'first line\n```\n' + SENTINEL + '\n```\nlast line';
-  assert.equal(stripSentinelBoundary(before), before);
-});
 
 test('Scope section with bullet lines validates before Summary', () => {
   const doc = [
@@ -1367,39 +981,6 @@ test('renderDocument renders required Scope before Summary', () => {
   });
   assert.match(rendered, /^# Review — My Pull Request\n\n## Scope\n- Reviewed X\n\n## Summary\n/);
   assert.equal(validateReviewDocument(rendered).valid, true);
-});
-test('REVIEW template requires the final-line sentinel; VALIDATOR template does not', () => {
-  // The review template must instruct the model to emit the exact
-  // token on its own line and treat it as a stand-alone completion
-  // marker. The exact token MUST appear in the prompt so the model
-  // does not invent a near-miss variant.
-  for (const [name, template] of [
-    ['REVIEW_AGENT_PROMPT_TEMPLATE', REVIEW_AGENT_PROMPT_TEMPLATE],
-  ]) {
-    assert.ok(
-      template.includes(SENTINEL),
-      `${name} must embed the exact sentinel token "${SENTINEL}"`,
-    );
-    assert.match(
-      template,
-      /own line|last line/i,
-      `${name} must instruct the model to put the sentinel on its own / as the last line`,
-    );
-    // The model must be told the sentinel is OPTIONAL so absence
-    // doesn't accidentally produce an INVALID verdict.
-    assert.match(
-      template,
-      /OPTIONAL|absence/i,
-      `${name} must declare the sentinel as OPTIONAL (absence accepted)`,
-    );
-  }
-
-  // The validator template MUST NOT mention the sentinel - the
-  // validator replies with VALID / INVALID, not review Markdown.
-  assert.ok(
-    !VALIDATOR_AGENT_PROMPT_TEMPLATE.includes(SENTINEL),
-    'VALIDATOR_AGENT_PROMPT_TEMPLATE must NOT mention the sentinel',
-  );
 });
 
 test('document without a Scope section is invalid', () => {

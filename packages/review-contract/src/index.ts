@@ -41,45 +41,6 @@ export const STATUS_VALUES_SET: ReadonlySet<Status> = new Set(STATUSES);
 
 export const STATUS_COUNTS_AS_NEW: ReadonlySet<Status> = new Set(['new', 'new variant']);
 
-export interface TerminalTextSelection {
-  text: string;
-  parts: ReadonlyArray<unknown>;
-}
-
-/**
- * Select the terminal assistant text from an ordered OpenCode parts array.
- * The last stop step-finish is the terminal boundary; when it is absent,
- * the last text part is used as a defensive fallback. No text parts yields
- * an empty string so callers can apply their own response validation.
- */
-export function selectTerminalText(parts: ReadonlyArray<unknown>): TerminalTextSelection {
-  if (!Array.isArray(parts) || parts.length === 0) {
-    return { text: '', parts: [] };
-  }
-
-  let terminalIndex = -1;
-  for (let i = parts.length - 1; i >= 0; i -= 1) {
-    const candidate = parts[i] as { type?: unknown; reason?: unknown } | null;
-    if (
-      candidate &&
-      (candidate.type === 'step-finish' || candidate.type === 'step_finish') &&
-      candidate.reason === 'stop'
-    ) {
-      terminalIndex = i;
-      break;
-    }
-  }
-
-  const upperBound = terminalIndex >= 0 ? terminalIndex : parts.length;
-  for (let i = upperBound - 1; i >= 0; i -= 1) {
-    const candidate = parts[i] as { type?: unknown; text?: unknown } | null;
-    if (candidate && candidate.type === 'text' && typeof candidate.text === 'string') {
-      return { text: candidate.text, parts };
-    }
-  }
-
-  return { text: '', parts };
-}
 
 // Patterns used by the extractor and validator. Kept private to the module
 // so callers do not depend on them.
@@ -269,80 +230,6 @@ If the file is missing or malformed, reply with exactly one line: INVALID <reaso
 where <reason> is a short human-readable cause (e.g. "missing ## Summary section", "finding 2 missing Status field"). Do not include any other text in your reply.
 
 Path to validate: __REVIEW_PATH__`;
-
-// -----------------------------------------------------------------------------
-// Extraction
-// -----------------------------------------------------------------------------
-
-
-/**
- * Strip the model text from the first eligible completion sentinel
- * onward, preserving everything before it. The sentinel only
- * matches when it appears on its own line outside a fenced code
- * block; inline occurrences are ignored, and any token inside a
- * still-open fence is also ignored so a model that quotes the
- * token in a code sample never breaks the parser.
- *
- * Pure function: no side effects, idempotent, never throws. The
- * sentinel is OPTIONAL, so this helper is a no-op when the token
- * is absent - the input text is returned unchanged.
- */
-export function stripSentinelBoundary(text: string): string {
-  const lines = text.split('\n');
-  let fenceOpen = false;
-  for (let i = 0; i < lines.length; i += 1) {
-    const line = lines[i];
-    if (FENCE_LINE_PATTERN.test(line)) {
-      fenceOpen = !fenceOpen;
-      continue;
-    }
-    if (fenceOpen) {
-      continue;
-    }
-    if (line === REVIEW_DONE_SENTINEL) {
-      return lines.slice(0, i).join('\n');
-    }
-  }
-  return text;
-}
-
-export function findHeadingBoundary(text: string): string | null {
-  const lines = text.split('\n');
-  let fenceOpen = false;
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (FENCE_LINE_PATTERN.test(line)) {
-      fenceOpen = !fenceOpen;
-      continue;
-    }
-    if (fenceOpen) {
-      continue;
-    }
-    if (HEADING_LINE_PATTERN.test(line)) {
-      return lines.slice(i).join('\n');
-    }
-  }
-  return null;
-}
-
-/**
- * Extract the canonical review document from a model's text reply.
- *
- * Steps:
- *   1. Strip the optional completion sentinel and any trailing
- *      scratch prose FIRST. The sentinel is matched on its own line
- *      and only outside a fenced code block; its presence never
- *      causes rejection, but when it is found we discard it and
- *      everything after so a model that emits post-review prose
- *      never breaks structural validation downstream.
- *   2. Walk lines, ignoring any heading found inside a fenced code block.
- *   3. Slice from the first strict '# Review — <title-or-ref>' heading.
- *   4. Return null if no strict heading exists.
- */
-export function extractReviewDocument(text: string): string | null {
-  const sliced = stripSentinelBoundary(text);
-  return findHeadingBoundary(sliced);
-}
 
 // -----------------------------------------------------------------------------
 // Validation
