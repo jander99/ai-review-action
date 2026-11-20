@@ -21,7 +21,10 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 var index_exports = {};
 __export(index_exports, {
   CANONICAL_FIELD_ORDER_TEXT: () => CANONICAL_FIELD_ORDER_TEXT,
+  DEFAULT_THRESHOLDS: () => DEFAULT_THRESHOLDS,
   EMOJI_TO_SEVERITY: () => EMOJI_TO_SEVERITY,
+  JUDGE_SEVERITIES: () => JUDGE_SEVERITIES,
+  JUDGE_TO_CONTRACT_SEVERITY: () => JUDGE_TO_CONTRACT_SEVERITY,
   MAX_CHARS: () => MAX_CHARS,
   REVIEW_AGENT_PROMPT_TEMPLATE: () => REVIEW_AGENT_PROMPT_TEMPLATE,
   REVIEW_DONE_SENTINEL: () => REVIEW_DONE_SENTINEL,
@@ -32,18 +35,90 @@ __export(index_exports, {
   STATUS_COUNTS_AS_NEW: () => STATUS_COUNTS_AS_NEW,
   STATUS_VALUES_SET: () => STATUS_VALUES_SET,
   VALIDATOR_AGENT_PROMPT_TEMPLATE: () => VALIDATOR_AGENT_PROMPT_TEMPLATE,
+  applyPolicy: () => applyPolicy,
   extractReviewDocument: () => extractReviewDocument,
   findHeadingBoundary: () => findHeadingBoundary,
+  findingId: () => findingId,
   formatLocations: () => formatLocations,
   mergeReviewDocuments: () => mergeReviewDocuments,
+  normalizeForKey: () => normalizeForKey,
   normalizeTitleForHeading: () => normalizeTitleForHeading,
+  redactSecret: () => redactSecret,
   renderDocument: () => renderDocument,
   renderFinding: () => renderFinding,
+  resolveSeverity: () => resolveSeverity,
   selectTerminalText: () => selectTerminalText,
   stripSentinelBoundary: () => stripSentinelBoundary,
-  validateReviewDocument: () => validateReviewDocument
+  validateReviewDocument: () => validateReviewDocument,
+  validateThresholds: () => validateThresholds
 });
 module.exports = __toCommonJS(index_exports);
+
+// packages/review-contract/src/policy.ts
+var JUDGE_SEVERITIES = ["blocker", "major", "minor", "nit"];
+var DEFAULT_THRESHOLDS = { keep: 0.7, drop: 0.3, severity: 0.5 };
+function checkThreshold(name, value) {
+  if (typeof value !== "number" || Number.isNaN(value) || value < 0 || value > 1) {
+    throw new Error(`${name}-threshold must be between 0 and 1 (received ${value})`);
+  }
+}
+function validateThresholds(t) {
+  checkThreshold("keep", t.keep);
+  checkThreshold("drop", t.drop);
+  checkThreshold("severity", t.severity);
+  if (t.drop >= t.keep) {
+    throw new Error(`drop-threshold must be less than keep-threshold (received keep=${t.keep}, drop=${t.drop})`);
+  }
+}
+function resolveSeverity(p, threshold) {
+  let winner = JUDGE_SEVERITIES[0];
+  let best = -Infinity;
+  for (let i = JUDGE_SEVERITIES.length - 1; i >= 0; i--) {
+    const level = JUDGE_SEVERITIES[i];
+    const value = p[level] ?? 0;
+    if (value > best) {
+      best = value;
+      winner = level;
+    }
+  }
+  if (best >= threshold) return winner;
+  const idx = JUDGE_SEVERITIES.indexOf(winner);
+  return JUDGE_SEVERITIES[Math.min(idx + 1, JUDGE_SEVERITIES.length - 1)];
+}
+function applyPolicy(j, t) {
+  const severity = resolveSeverity(j.severity, t.severity);
+  if (j.pSupported <= t.drop) return { verdict: "drop", severity, duplicateOf: null };
+  if (j.duplicate && j.duplicate.p >= t.keep) {
+    return { verdict: "duplicate", severity, duplicateOf: j.duplicate.id };
+  }
+  if (j.pSupported >= t.keep) return { verdict: "keep", severity, duplicateOf: null };
+  return { verdict: "uncertain", severity, duplicateOf: null };
+}
+var JUDGE_TO_CONTRACT_SEVERITY = {
+  blocker: "Critical",
+  major: "Warning",
+  minor: "Suggestion",
+  nit: "Suggestion"
+};
+
+// packages/review-contract/src/providers.ts
+function redactSecret(text, secret) {
+  if (!secret || secret.length < 4) return text;
+  return text.split(secret).join("[REDACTED]");
+}
+
+// packages/review-contract/src/findings.ts
+var import_node_crypto = require("node:crypto");
+function normalizeKey(value) {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+function findingId(file, title) {
+  const hash = (0, import_node_crypto.createHash)("sha256").update(`${file}
+${normalizeKey(title)}`).digest("hex");
+  return `F${hash.slice(0, 10)}`;
+}
+
+// packages/review-contract/src/index.ts
 var SCHEMA_VERSION = "1";
 var MAX_CHARS = 256e3;
 var SEVERITIES = ["Critical", "Warning", "Suggestion"];
@@ -758,7 +833,10 @@ function normalizeTitleForHeading(titleOrRef) {
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   CANONICAL_FIELD_ORDER_TEXT,
+  DEFAULT_THRESHOLDS,
   EMOJI_TO_SEVERITY,
+  JUDGE_SEVERITIES,
+  JUDGE_TO_CONTRACT_SEVERITY,
   MAX_CHARS,
   REVIEW_AGENT_PROMPT_TEMPLATE,
   REVIEW_DONE_SENTINEL,
@@ -769,14 +847,20 @@ function normalizeTitleForHeading(titleOrRef) {
   STATUS_COUNTS_AS_NEW,
   STATUS_VALUES_SET,
   VALIDATOR_AGENT_PROMPT_TEMPLATE,
+  applyPolicy,
   extractReviewDocument,
   findHeadingBoundary,
+  findingId,
   formatLocations,
   mergeReviewDocuments,
+  normalizeForKey,
   normalizeTitleForHeading,
+  redactSecret,
   renderDocument,
   renderFinding,
+  resolveSeverity,
   selectTerminalText,
   stripSentinelBoundary,
-  validateReviewDocument
+  validateReviewDocument,
+  validateThresholds
 });

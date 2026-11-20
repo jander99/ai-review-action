@@ -1,0 +1,7 @@
+{
+  "model": "subq-snap-1.2",
+  "answers": {
+    "supported": { "type": "noul", "noul": 0.82 }
+  },
+  "usage": { "input_tokens": 512, "output_tokens": 12 }
+}

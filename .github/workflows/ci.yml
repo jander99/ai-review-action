@@ -20,7 +20,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Enable Corepack
         run: corepack enable
@@ -36,6 +36,9 @@ jobs:
         # repository-root `dist/main.cjs` so consumers can reference
         # `jander99/ai-review-action@v1` directly.
         run: yarn nx run repo-root:build --skip-nx-cache
+
+      - name: Run tests
+        run: yarn nx run-many --target=test --skip-nx-cache
 
       - name: Build run-reviews test bundle
         # packages/*/dist-test/ is gitignored (see .gitignore); the

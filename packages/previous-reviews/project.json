@@ -15,7 +15,7 @@
         "tsConfig": "packages/previous-reviews/tsconfig.json",
         "bundle": true,
         "platform": "node",
-        "target": "node20",
+        "target": "node22",
         "format": ["cjs"],
         "thirdParty": true
       }

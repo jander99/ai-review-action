@@ -59,7 +59,10 @@ function setUp() {
 
   // Required inputs.
   process.env.INPUT_PROMPTS = 'text:test prompt';
-  process.env.INPUT_GITHUB_TOKEN = 'fake-token';
+  // @actions/core maps input names by replacing only SPACES with underscores,
+  // so 'github-token' reads INPUT_GITHUB-TOKEN (dash kept). Relying on an
+  // ambient GITHUB_TOKEN hid this locally but failed in CI.
+  process.env['INPUT_GITHUB-TOKEN'] = 'fake-token';
   // Event context for the bundled @actions/github Context.
   process.env.GITHUB_EVENT_NAME = 'pull_request';
   process.env.GITHUB_REPOSITORY = REPO;
@@ -323,7 +326,7 @@ function captureStdoutWrites() {
 test('missing github-token -> warning is emitted, no throw, publishError skips the API call', async () => {
   setUp();
   // Remove every source of a token so `resolveGithubToken()` returns ''.
-  delete process.env.INPUT_GITHUB_TOKEN;
+  delete process.env['INPUT_GITHUB-TOKEN'];
   delete process.env.GITHUB_TOKEN;
 
   const stdoutSpy = captureStdoutWrites();
