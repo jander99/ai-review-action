@@ -89,6 +89,67 @@ decision-api-key: ${{ secrets.DECISION_API_KEY }}
 
 Any provider can be pointed at a compatible gateway with `llm-base-url` or `decision-base-url`.
 
+## Setup reference: credentials and endpoints
+
+Every run needs one credential for the proposing LLM and one for the decision API, passed as `llm-api-key` and `decision-api-key`. The env var column below lists the conventional secret names you'd store them under.
+
+| Provider | Input value | Conventional secret | Default base URL | Notes |
+|---|---|---|---|---|
+| OpenAI | `llm-provider: openai` | `OPENAI_API_KEY` | `https://api.openai.com/v1` | OpenAI-shaped. Any compatible gateway (OpenRouter, vLLM, LiteLLM, Azure-style proxies) works via `llm-base-url`. |
+| Anthropic | `llm-provider: anthropic` | `ANTHROPIC_API_KEY` | `https://api.anthropic.com` | Anthropic-shaped. Works against any Messages-API-compatible endpoint via `llm-base-url` (e.g. MiniMax's `/anthropic`). |
+| Gemini | `llm-provider: gemini` | `GEMINI_API_KEY` | `https://generativelanguage.googleapis.com` | Same endpoint as the `google` decision provider. |
+| TypeSafe | `decision-provider: systemone` | `TYPESAFE_API_KEY` | `https://api.typesafe.ai` | |
+| SubQ | `decision-provider: systemone` | `SUBQ_API_KEY` | `https://api.subq.ai` | Same adapter as TypeSafe; pass `decision-base-url: https://api.subq.ai`. Verified wire-compatible. |
+| Google | `decision-provider: google` | `GEMINI_API_KEY` | `https://generativelanguage.googleapis.com` | |
+
+Most LLM endpoints are OpenAI-shaped or Anthropic-shaped, so those two adapters cover almost everything: if a provider speaks the OpenAI API, use `llm-provider: openai` with its `llm-base-url`; if it speaks the Anthropic Messages API, use `llm-provider: anthropic` with its `llm-base-url`. `gemini` is for Google's native generateContent API. Both roles are required and independent — you can pair any LLM with any decision provider. The adapters do not read keys from the environment themselves: pass the key as `llm-api-key` / `decision-api-key` (the names above are the conventional secret names, which is what `ai-review.yml` uses via `LLM_API_KEY` and `DECISION_API_KEY`).
+
+### GitHub token
+
+`github-token` is optional and defaults to `github.token`. It is only used to publish results:
+
+| Event | Permission needed | What it does |
+|---|---|---|
+| `pull_request` | `pull-requests: write` | Posts a batched PR review with inline comments. |
+| push / `workflow_dispatch` | `checks: write` | Creates a check run. |
+| `contents: read` | always | Reads the diff and repository instructions from the base commit. |
+
+Without a token the review still runs and its outputs are still set — it just cannot publish, and the action emits a warning instead of failing.
+
+### Minimal workflow
+
+```yaml
+permissions:
+  contents: read
+  pull-requests: write   # checks: write for non-PR events
+
+steps:
+  - uses: actions/checkout@v6
+    with:
+      fetch-depth: 0     # required: the action resolves the base commit
+  - uses: jander99/ai-review-action@v1
+    with:
+      prompts: file:examples/prompts/code-review.md
+      llm-provider: openai
+      llm-model: gpt-5
+      llm-api-key: ${{ secrets.OPENAI_API_KEY }}
+      decision-provider: systemone
+      decision-model: subq-snap-1.2
+      decision-api-key: ${{ secrets.SUBQ_API_KEY }}
+```
+
+### Running the stability study locally
+
+The pipeline's repeat-stability study uses environment variables rather than action inputs:
+
+```bash
+DECISION_PROVIDER=systemone \
+DECISION_API_KEY=... \
+DECISION_MODEL=subq-snap-1.2 \
+DECISION_BASE_URL=https://api.subq.ai \  # optional
+  yarn nx run review-pipeline:study -- --runs 20
+```
+
 ## What gets sent where
 
 Your diff, file contents the pipeline reads for context, and the repository instruction files go to the proposing LLM provider. Each proposed finding, with its surrounding context, goes to the decision provider for judging. Both providers see review material; neither sees your other provider's credential.
@@ -102,8 +163,7 @@ Your diff, file contents the pipeline reads for context, and the repository inst
 | `llm-provider` | **Yes** | — | Proposing LLM provider: `openai`, `anthropic`, or `gemini`. |
 | `llm-base-url` | No | — | Override the LLM provider base URL. |
 | `llm-model` | **Yes** | — | Model id for the proposing LLM. |
-| `llm-api-key` | **Yes** | — | API key for the proposing LLM. |
-| `decision-provider` | **Yes** | — | Decision provider: `systemone` or `google`. |
+| `llm-api-key` | **Yes** | — | API key for the proposing LLM. || `decision-provider` | **Yes** | — | Decision provider: `systemone` or `google`. |
 | `decision-base-url` | No | — | Override the decision provider base URL. |
 | `decision-model` | **Yes** | — | Model id for the judging decision API. |
 | `decision-api-key` | **Yes** | — | API key for the decision provider. |
