@@ -588,6 +588,10 @@ function parseFindings(lines: string[], findingsStart: number): {
     }
     const headingMatch = line.match(FINDING_HEADING_PATTERN);
     if (!headingMatch) {
+      if (UNCERTAIN_HEADING_PATTERN.test(line)) {
+        // ## Uncertain is the optional collapsed tail parsed by the caller.
+        return { findings, endLine: i, error: null };
+      }
       return { findings, endLine: i, error: `unexpected content under ## Findings: ${line.slice(0, 80)}` };
     }
     const emoji = headingMatch[1].split(' ')[0];
@@ -606,7 +610,7 @@ function parseFindings(lines: string[], findingsStart: number): {
     let j = i + 1;
     while (j < lines.length) {
       const innerLine = lines[j];
-      if (FINDING_HEADING_PATTERN.test(innerLine)) {
+      if (FINDING_HEADING_PATTERN.test(innerLine) || UNCERTAIN_HEADING_PATTERN.test(innerLine)) {
         break;
       }
       if (innerLine.trim() === '') {
