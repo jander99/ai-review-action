@@ -1782,7 +1782,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@jander99/ai-review-decisions@workspace:packages/decisions":
+"@jander99/ai-review-decisions@npm:1.0.0, @jander99/ai-review-decisions@workspace:packages/decisions":
   version: 0.0.0-use.local
   resolution: "@jander99/ai-review-decisions@workspace:packages/decisions"
   dependencies:
@@ -1813,6 +1813,15 @@ __metadata:
 "@jander99/ai-review-review-contract@npm:1.0.0, @jander99/ai-review-review-contract@workspace:packages/review-contract":
   version: 0.0.0-use.local
   resolution: "@jander99/ai-review-review-contract@workspace:packages/review-contract"
+  languageName: unknown
+  linkType: soft
+
+"@jander99/ai-review-review-pipeline@workspace:packages/review-pipeline":
+  version: 0.0.0-use.local
+  resolution: "@jander99/ai-review-review-pipeline@workspace:packages/review-pipeline"
+  dependencies:
+    "@jander99/ai-review-decisions": "npm:1.0.0"
+    "@jander99/ai-review-review-contract": "npm:1.0.0"
   languageName: unknown
   linkType: soft
 

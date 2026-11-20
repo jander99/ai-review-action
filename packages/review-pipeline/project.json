@@ -1,0 +1,25 @@
+{
+  "name": "review-pipeline",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "root": "packages/review-pipeline",
+  "sourceRoot": "packages/review-pipeline/src",
+  "targets": {
+    "build-tests": {
+      "_comment": "dist-test/index.cjs is gitignored; rebuilt on demand before :test.",
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/review-pipeline",
+        "command": "esbuild src/index.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist-test/index.cjs"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build-tests"],
+      "options": {
+        "cwd": "packages/review-pipeline",
+        "command": "node --test test/*.test.cjs"
+      }
+    }
+  }
+}

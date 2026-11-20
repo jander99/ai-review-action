@@ -1,0 +1,10 @@
+{
+  "name": "@jander99/ai-review-review-pipeline",
+  "version": "1.0.0",
+  "main": "dist/index.cjs",
+  "private": true,
+  "dependencies": {
+    "@jander99/ai-review-decisions": "1.0.0",
+    "@jander99/ai-review-review-contract": "1.0.0"
+  }
+}
