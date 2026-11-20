@@ -19,6 +19,7 @@
     "paths": {
       "@jander99/ai-review-review-contract": ["packages/review-contract/src/index.ts"],
       "@jander99/ai-review-decisions": ["packages/decisions/src/index.ts"],
+      "@jander99/ai-review-llm-clients": ["packages/llm-clients/src/index.ts"],
       "@jander99/ai-review-review-pipeline": ["packages/review-pipeline/src/index.ts"],
       "@jander99/ai-review-review-contract/dist": ["packages/review-contract/src/index.ts"],
       "@jander99/ai-review-previous-reviews": ["packages/previous-reviews/src/index.ts"],
