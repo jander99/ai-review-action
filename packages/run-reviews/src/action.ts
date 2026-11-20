@@ -77,6 +77,8 @@ async function run(): Promise<void> {
 if (require.main === module) {
   run().catch((error) => {
     const message = error instanceof Error ? error.message : String(error);
+    // Emit the canonical failure output before failing the step.
+    core.setOutput('failure-reason', `run-reviews failed: ${message}`);
     core.setFailed(`run-reviews failed: ${message}`);
   });
 }

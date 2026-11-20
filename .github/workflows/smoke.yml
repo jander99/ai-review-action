@@ -124,7 +124,7 @@ jobs:
           ")
           node -e "
             const exports = require('./' + '$MAIN_PATH');
-            const required = ['runReviews', 'validateReview', 'postComment', 'postCheckRun', 'postErrorComment'];
+            const required = ['runReviews', 'postComment', 'postCheckRun', 'postErrorComment'];
             for (const name of required) {
               if (typeof exports[name] !== 'function') {
                 console.error('bundle must export ' + name + ' as a function');

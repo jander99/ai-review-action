@@ -140225,6 +140225,7 @@ async function run() {
 if (require.main === module) {
   run().catch((error) => {
     const message = error instanceof Error ? error.message : String(error);
+    core.setOutput("failure-reason", `run-reviews failed: ${message}`);
     core.setFailed(`run-reviews failed: ${message}`);
   });
 }

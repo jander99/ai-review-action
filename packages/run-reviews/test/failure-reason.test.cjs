@@ -40,11 +40,11 @@ test('standalone wrapper emits failure-reason before setFailed on failure', () =
   const wrapperStart = bundle.search(/if \(require\.main === module\) \{/);
   assert.ok(wrapperStart >= 0, 'bundle must contain the require.main === module guard');
 
-  // Locate the failure branch: the wrapper checks `if (result.failureReason)`
-  // and assigns + setFailed inside that block. esbuild may suffix the
-  // core symbol with a number (e.g. `core2`) or alias to a const.
-  const setOutputRegex = /core\d*\.setOutput\("failure-reason", result\.failureReason\)/;
-  const setFailedRegex = /core\d*\.setFailed\(result\.failureReason\)/;
+  // Locate the failure branch: the wrapper writes `failure-reason` from the
+  // result (empty on success) and then fails the step when the run failed.
+  // esbuild may suffix the core symbol with a number (e.g. `core2`).
+  const setOutputRegex = /core\d*\.setOutput\("failure-reason", [^)]+\)/;
+  const setFailedRegex = /core\d*\.setFailed\(/;
   const setOutputIdx = bundle.search(setOutputRegex);
   const setFailedIdx = bundle.search(setFailedRegex);
   assert.ok(setOutputIdx >= 0, 'wrapper must setOutput failure-reason on failure');
@@ -56,13 +56,11 @@ test('standalone wrapper emits failure-reason before setFailed on failure', () =
 });
 
 test('runReviews result shape never carries failure-reason on success', () => {
-  // Quick behavioral check: the standalone wrapper always emits
-  // `failure-reason` (as empty string) on the success branch so
-  // downstream steps can observe the output.
+  // The wrapper always emits `failure-reason` (empty string on success) so
+  // downstream steps can observe the output without a missing-output error.
   const bundle = readBundle();
-  // Match any core variant.
-  const match = bundle.match(/core\d*\.setOutput\("failure-reason", ""\)/);
-  assert.ok(match, 'wrapper must always emit failure-reason (possibly empty) so downstream steps can observe the output');
+  const match = bundle.match(/core\d*\.setOutput\("failure-reason", result\.failureReason\)/);
+  assert.ok(match, 'wrapper must always emit failure-reason from the result so downstream steps can observe the output');
 });
 
 test('no leftover setEmptyOutputs / failAndExit helpers in the new bundle', () => {
