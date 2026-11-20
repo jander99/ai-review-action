@@ -27,14 +27,23 @@ export interface RenderReviewArgs {
   readonly changedLines: number;
 }
 
+const MAX_FIELD_CHARS = 400;
+
+/** One line, no markdown block syntax at the start, bounded length. */
+function oneLine(text: string, max = MAX_FIELD_CHARS): string {
+  const flat = text.replace(/\s+/g, ' ').trim();
+  return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
+}
+
 function location(finding: PostableFinding): string {
   const { file, startLine, endLine } = finding.finding;
-  return startLine === endLine ? `${file}:${startLine}` : `${file}:${startLine}-${endLine}`;
+  const path = file.replace(/[\s,]+/g, '_');
+  return startLine === endLine ? `${path}:${startLine}` : `${path}:${startLine}-${endLine}`;
 }
 
 function description(finding: PostableFinding): string {
   const { claim } = finding.finding;
-  return finding.note ? `${claim} (${finding.note})` : claim;
+  return oneLine(finding.note ? `${claim} (${finding.note})` : claim);
 }
 
 export function renderReview(args: RenderReviewArgs): string {
@@ -49,7 +58,7 @@ export function renderReview(args: RenderReviewArgs): string {
   const toParsed = (finding: PostableFinding) => ({
     severity: finding.severity,
     emoji: finding.severity === 'Critical' ? '🔴' : finding.severity === 'Warning' ? '🟡' : '🟢',
-    title: finding.finding.title,
+    title: oneLine(finding.finding.title, 150),
     status: 'new' as const,
     location: location(finding),
     description: description(finding),

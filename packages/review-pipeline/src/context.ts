@@ -7,7 +7,6 @@
  * shrinking the prompt.
  */
 
-import { parseUnifiedDiff } from '@jander99/ai-review-review-contract';
 
 export const CONTEXT_MAX_BYTES = 300_000;
 export const PROMPT_RESERVE_TOKENS = 8_000;
@@ -35,25 +34,12 @@ export interface ReviewContext {
 }
 
 function splitDiffSections(diff: string): string[] {
-  // parseUnifiedDiff knows what a section is; reuse it to find boundaries.
-  const files = parseUnifiedDiff(diff);
-  if (files.length === 0) {
-    return diff.trim() === '' ? [] : [diff];
+  // Split on the raw `diff --git` headers: renames, quoted paths and git's
+  // byte-order file order all stay correct because no path is re-derived.
+  if (diff.trim() === '') {
+    return [];
   }
-  const sections: string[] = [];
-  let rest = diff;
-  for (const file of files) {
-    const marker = `diff --git a/${file.path} b/${file.path}`;
-    const idx = rest.indexOf(marker);
-    if (idx === -1) {
-      continue;
-    }
-    const next = files[files.indexOf(file) + 1];
-    const end = next ? rest.indexOf(`diff --git a/${next.path} b/${next.path}`, idx + marker.length) : rest.length;
-    sections.push(rest.slice(idx, end === -1 ? rest.length : end));
-    rest = rest.slice(0, idx) + rest.slice(end === -1 ? rest.length : end);
-  }
-  return sections;
+  return diff.split(/^(?=diff --git )/m).filter((section) => section.trim() !== '');
 }
 
 export function buildReviewContext(

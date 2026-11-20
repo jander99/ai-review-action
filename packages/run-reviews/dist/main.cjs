@@ -85953,13 +85953,13 @@ function parseUnifiedDiff(diff) {
       status = "renamed";
       continue;
     }
-    if (line.startsWith("+++")) {
+    if (!hunkHeader && line.startsWith("+++")) {
       if (stripDiffPath(line.slice(4)) === "") {
         status = "deleted";
       }
       continue;
     }
-    if (line.startsWith("---")) {
+    if (!hunkHeader && line.startsWith("---")) {
       continue;
     }
     if (!hunkHeader) {
@@ -139397,24 +139397,10 @@ ${neutralized}
 </${tag}>`;
 }
 function splitDiffSections(diff) {
-  const files = parseUnifiedDiff(diff);
-  if (files.length === 0) {
-    return diff.trim() === "" ? [] : [diff];
+  if (diff.trim() === "") {
+    return [];
   }
-  const sections = [];
-  let rest = diff;
-  for (const file of files) {
-    const marker = `diff --git a/${file.path} b/${file.path}`;
-    const idx = rest.indexOf(marker);
-    if (idx === -1) {
-      continue;
-    }
-    const next = files[files.indexOf(file) + 1];
-    const end = next ? rest.indexOf(`diff --git a/${next.path} b/${next.path}`, idx + marker.length) : rest.length;
-    sections.push(rest.slice(idx, end === -1 ? rest.length : end));
-    rest = rest.slice(0, idx) + rest.slice(end === -1 ? rest.length : end);
-  }
-  return sections;
+  return diff.split(/^(?=diff --git )/m).filter((section) => section.trim() !== "");
 }
 function buildReviewContext(input, budgetTokens) {
   const notes = [];
@@ -139505,7 +139491,7 @@ function decideTriage(res, changedLines, hasIntent, t2) {
     return {
       depth: "light",
       reasons: [],
-      line: `Safe to skim: low risk, ${changedLines} changed lines, matches the stated intent.`
+      line: `Safe to skim: low risk, ${changedLines} changed lines${hasIntent ? ", matches the stated intent" : ""}.`
     };
   }
   const reasons = [];
@@ -139612,17 +139598,17 @@ Your previous reply failed schema validation: ${err.details ?? err.message}. Rep
     }
     kept.push({
       ...finding,
+      id: findingId(finding.file, finding.title),
       relatedFiles: finding.relatedFiles.filter((p) => byPath.has(p))
     });
   }
   kept.sort((a, b) => a.file.localeCompare(b.file) || a.startLine - b.startLine || a.title.localeCompare(b.title));
   const seen = /* @__PURE__ */ new Set();
   const unique = kept.filter((f3) => {
-    const id = findingId(f3.file, f3.title);
-    if (seen.has(id)) {
+    if (seen.has(f3.id)) {
       return false;
     }
-    seen.add(id);
+    seen.add(f3.id);
     return true;
   });
   const limit3 = depth === "light" ? LIGHT_MAX_FINDINGS : MAX_FINDINGS;
@@ -139699,13 +139685,19 @@ async function judgeAll(client, findings, ctx) {
 
 // packages/review-pipeline/src/render.ts
 var SEVERITY_RANK = { Critical: 0, Warning: 1, Suggestion: 2 };
+var MAX_FIELD_CHARS = 400;
+function oneLine2(text, max = MAX_FIELD_CHARS) {
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length > max ? `${flat.slice(0, max - 1)}\u2026` : flat;
+}
 function location(finding) {
   const { file, startLine, endLine } = finding.finding;
-  return startLine === endLine ? `${file}:${startLine}` : `${file}:${startLine}-${endLine}`;
+  const path9 = file.replace(/[\s,]+/g, "_");
+  return startLine === endLine ? `${path9}:${startLine}` : `${path9}:${startLine}-${endLine}`;
 }
 function description(finding) {
   const { claim } = finding.finding;
-  return finding.note ? `${claim} (${finding.note})` : claim;
+  return oneLine2(finding.note ? `${claim} (${finding.note})` : claim);
 }
 function renderReview(args) {
   const sortFindings = (list) => [...list].sort(
@@ -139714,7 +139706,7 @@ function renderReview(args) {
   const toParsed = (finding) => ({
     severity: finding.severity,
     emoji: finding.severity === "Critical" ? "\u{1F534}" : finding.severity === "Warning" ? "\u{1F7E1}" : "\u{1F7E2}",
-    title: finding.finding.title,
+    title: oneLine2(finding.finding.title, 150),
     status: "new",
     location: location(finding),
     description: description(finding)
@@ -140010,10 +140002,15 @@ function computeReviewDiff(ctx, workingDir) {
     stdio: ["ignore", "pipe", "pipe"],
     timeout: 15e3
   });
-  if (result.error || result.status !== 0) {
-    return { diff: "", truncated: false };
-  }
   const stdout = typeof result.stdout === "string" ? result.stdout : "";
+  const overflowed = result.error?.code === "ENOBUFS";
+  if (overflowed) {
+    return { diff: stdout.slice(0, REVIEW_DIFF_MAX_BYTES), truncated: true };
+  }
+  if (result.error || result.status !== 0) {
+    const detail = result.error?.message ?? String(result.stderr ?? "").trim();
+    throw new Error(`git diff ${range2} failed${detail ? `: ${detail}` : ""}. Is the base commit fetched (fetch-depth: 0)?`);
+  }
   if (!stdout.trim()) {
     return { diff: "", truncated: false };
   }

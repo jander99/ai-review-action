@@ -239,7 +239,8 @@ async function publishReview(
         findings: result.kept,
         diff: result.diff,
         commitSha: result.headSha,
-        event: reviewEvent,
+        // Only a completed review may approve or request changes.
+        event: result.status === 'ok' ? reviewEvent : 'COMMENT',
         maxChars: ctx.maxCommentChars,
       },
       { owner: ctx.owner, repo: ctx.repo, pullNumber: ctx.pullNumber },

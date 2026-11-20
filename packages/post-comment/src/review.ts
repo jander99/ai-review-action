@@ -122,16 +122,12 @@ export async function postReview(
     return { reviewUrl: response.data.html_url ?? '', inlineCount: inline.length, bodyOnlyCount: bodyOnly.length };
   } catch (err) {
     if ((err as { status?: number }).status !== ANCHOR_FAILURE_STATUS) {
-      return { reviewUrl: '', inlineCount: inline.length, bodyOnlyCount: bodyOnly.length };
+      throw err;
     }
     // The inline anchors were rejected: keep the content by posting every
     // finding in the body instead of losing the review.
     const fallback = truncateBody(withBodyOnlySection(options.body, options.findings), options.maxChars);
-    try {
-      const retry = await octokit.rest.pulls.createReview({ ...base, body: fallback, comments: [] });
-      return { reviewUrl: retry.data.html_url ?? '', inlineCount: 0, bodyOnlyCount: options.findings.length };
-    } catch {
-      return { reviewUrl: '', inlineCount: inline.length, bodyOnlyCount: bodyOnly.length };
-    }
+    const retry = await octokit.rest.pulls.createReview({ ...base, body: fallback, comments: [] });
+    return { reviewUrl: retry.data.html_url ?? '', inlineCount: 0, bodyOnlyCount: options.findings.length };
   }
 }

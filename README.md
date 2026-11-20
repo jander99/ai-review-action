@@ -102,7 +102,7 @@ Every run needs one credential for the proposing LLM and one for the decision AP
 | SubQ | `decision-provider: systemone` | `SUBQ_API_KEY` | `https://api.subq.ai` | Same adapter as TypeSafe; pass `decision-base-url: https://api.subq.ai`. Verified wire-compatible. |
 | Google | `decision-provider: google` | `GEMINI_API_KEY` | `https://generativelanguage.googleapis.com` | |
 
-Most LLM endpoints are OpenAI-shaped or Anthropic-shaped, so those two adapters cover almost everything: if a provider speaks the OpenAI API, use `llm-provider: openai` with its `llm-base-url`; if it speaks the Anthropic Messages API, use `llm-provider: anthropic` with its `llm-base-url`. `gemini` is for Google's native generateContent API. Both roles are required and independent — you can pair any LLM with any decision provider. The adapters do not read keys from the environment themselves: pass the key as `llm-api-key` / `decision-api-key` (the names above are the conventional secret names, which is what `ai-review.yml` uses via `LLM_API_KEY` and `DECISION_API_KEY`).
+Most LLM endpoints are OpenAI-shaped or Anthropic-shaped, so those two adapters cover almost everything: if a provider speaks the OpenAI API, use `llm-provider: openai` with its `llm-base-url`; if it speaks the Anthropic Messages API, use `llm-provider: anthropic` with its `llm-base-url`. `gemini` is for Google's native generateContent API. Both roles are required and independent — you can pair any LLM with any decision provider. The adapters do not read keys from the environment themselves: pass the key as `llm-api-key` / `decision-api-key` (the names above are the conventional secret names; `ai-review.yml` passes `secrets.LLM_API_KEY` and `secrets.DECISION_API_KEY` through those inputs).
 
 ### GitHub token
 
@@ -210,7 +210,7 @@ Your diff, file contents the pipeline reads for context, and the repository inst
 | `models:` (comma-separated) | Removed — one proposing model per run |
 | OpenCode install step (`setup-opencode`) | Removed |
 | `opencode-config`, `permission`, `opencode-version`, `claude-version`, `debug`, `timeout-minutes`, `fail-on-error` | Removed |
-| `ANTHROPIC_API_KEY` etc. as the only credential path | `llm-api-key` / `decision-api-key` inputs (env vars also work) |
+| `ANTHROPIC_API_KEY` etc. as the only credential path | `llm-api-key` / `decision-api-key` inputs (env vars are not read) |
 
 ## Sub-actions
 

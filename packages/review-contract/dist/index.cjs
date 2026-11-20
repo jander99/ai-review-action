@@ -244,13 +244,13 @@ function parseUnifiedDiff(diff) {
       status = "renamed";
       continue;
     }
-    if (line.startsWith("+++")) {
+    if (!hunkHeader && line.startsWith("+++")) {
       if (stripDiffPath(line.slice(4)) === "") {
         status = "deleted";
       }
       continue;
     }
-    if (line.startsWith("---")) {
+    if (!hunkHeader && line.startsWith("---")) {
       continue;
     }
     if (!hunkHeader) {

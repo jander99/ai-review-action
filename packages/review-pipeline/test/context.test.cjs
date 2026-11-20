@@ -27,3 +27,10 @@ test('estimateTokens is ceil(length / 4)', () => {
   assert.equal(estimateTokens(''), 0);
   assert.equal(estimateTokens('abcde'), 2);
 });
+
+test('keeps a renamed file in the diff sections', () => {
+  const renamed = 'diff --git a/old.ts b/new.ts\nsimilarity index 90%\nrename from old.ts\nrename to new.ts\n--- a/old.ts\n+++ b/new.ts\n@@ -1 +1 @@\n-p\n+q\n';
+  const ctx = buildReviewContext({ diff: SECTION_A + renamed, diffTruncated: false, files: [] }, 100_000);
+  assert.ok(ctx.diff.includes('rename to new.ts'));
+  assert.ok(ctx.diff.includes('diff --git a/a.ts b/a.ts'));
+});
