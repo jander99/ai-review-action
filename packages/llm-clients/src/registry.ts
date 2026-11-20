@@ -10,10 +10,12 @@ import type { LlmClient, LlmClientFactory } from './types';
 import { LlmError } from './errors';
 import { createOpenAiClient } from './adapters/openai';
 import { createAnthropicClient } from './adapters/anthropic';
+import { createGeminiClient } from './adapters/gemini';
 
 const factories: Record<string, LlmClientFactory> = {
   openai: createOpenAiClient,
   anthropic: createAnthropicClient,
+  gemini: createGeminiClient,
 };
 
 export function registerLlmProvider(provider: string, factory: LlmClientFactory): void {
