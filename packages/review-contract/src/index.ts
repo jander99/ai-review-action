@@ -359,13 +359,16 @@ export interface ParsedFinding {
 
 export interface ParsedDocument {
   readonly title: string;
+  readonly triage?: string;
   readonly scope?: ReadonlyArray<string>;
   readonly summary: {
     readonly new: number;
     readonly unresolved: number;
     readonly resolved: number;
+    readonly uncertain?: number;
   };
   readonly findings: ReadonlyArray<ParsedFinding>;
+  readonly uncertain?: ReadonlyArray<ParsedFinding>;
 }
 
 export interface ValidationResult {
@@ -482,14 +485,16 @@ function parseSummary(lines: string[], summaryStart: number): {
     new: number;
     unresolved: number;
     resolved: number;
+    uncertain?: number;
   };
   endLine: number;
   error: string | null;
 } {
-  const result = { new: 0, unresolved: 0, resolved: 0 };
+  const result = { new: 0, unresolved: 0, resolved: 0 } as { new: number; unresolved: number; resolved: number; uncertain?: number };
   let newCount: number | null = null;
   let unresolvedCount: number | null = null;
   let resolvedCount: number | null = null;
+  let uncertainCount: number | null = null;
   let endLine = summaryStart + 1;
 
   for (let i = summaryStart + 1; i < lines.length; i++) {
@@ -530,6 +535,15 @@ function parseSummary(lines: string[], summaryStart: number): {
       endLine = i;
       continue;
     }
+    const uncertainMatch = line.match(/^\s*-\s*Uncertain \(not confirmed\):\s*(\d+)\s*$/);
+    if (uncertainMatch) {
+      if (uncertainCount !== null) {
+        return { document: result, endLine: i, error: 'duplicate Uncertain (not confirmed) line in ## Summary' };
+      }
+      uncertainCount = Number.parseInt(uncertainMatch[1], 10);
+      endLine = i;
+      continue;
+    }
     return { document: result, endLine: i, error: `unexpected content in ## Summary: ${line.slice(0, 80)}` };
   }
 
@@ -546,6 +560,9 @@ function parseSummary(lines: string[], summaryStart: number): {
   result.new = newCount;
   result.unresolved = unresolvedCount;
   result.resolved = resolvedCount;
+  if (uncertainCount !== null) {
+    result.uncertain = uncertainCount;
+  }
   return { document: result, endLine, error: null };
 }
 
@@ -661,6 +678,62 @@ function parseFindings(lines: string[], findingsStart: number): {
   return { findings, endLine: i, error: null };
 }
 
+const UNCERTAIN_HEADING_PATTERN = /^## Uncertain\s*$/;
+
+/**
+ * Parse the optional collapsed tail after ## Findings:
+ *
+ *   ## Uncertain
+ *
+ *   <details><summary>...</summary>
+ *
+ *   ### ... finding blocks ...
+ *
+ *   </details>
+ */
+function parseUncertainTail(lines: string[], start: number): { uncertain?: ParsedFinding[]; error: string | null } {
+  let i = start;
+  while (i < lines.length && lines[i].trim() === '') {
+    i += 1;
+  }
+  if (i >= lines.length) {
+    return { error: null };
+  }
+  if (!UNCERTAIN_HEADING_PATTERN.test(lines[i])) {
+    return { error: `unexpected content after final finding: ${lines[i].slice(0, 80)}` };
+  }
+  i += 1;
+  while (i < lines.length && lines[i].trim() === '') {
+    i += 1;
+  }
+  if (i >= lines.length || !lines[i].trim().startsWith('<details>')) {
+    return { error: '## Uncertain must contain a <details> block' };
+  }
+  const innerStart = i + 1;
+  let innerEnd = -1;
+  for (let j = innerStart; j < lines.length; j++) {
+    if (lines[j].trim() === '</details>') {
+      innerEnd = j;
+      break;
+    }
+  }
+  if (innerEnd === -1) {
+    return { error: '## Uncertain <details> block is not closed' };
+  }
+  for (let j = innerEnd + 1; j < lines.length; j++) {
+    if (lines[j].trim() !== '') {
+      return { error: `unexpected content after ## Uncertain: ${lines[j].slice(0, 80)}` };
+    }
+  }
+
+  const inner = lines.slice(innerStart, innerEnd).filter((line) => !line.trim().startsWith('<summary>'));
+  const parsed = parseFindings(['## Findings', ...inner], 0);
+  if (parsed.error) {
+    return { error: `## Uncertain: ${parsed.error}` };
+  }
+  return { uncertain: parsed.findings, error: null };
+}
+
 export function validateReviewDocument(content: string): ValidationResult {
   if (content.length > MAX_CHARS) {
     return { valid: false, reason: `review document exceeds ${MAX_CHARS} chars` };
@@ -675,10 +748,22 @@ export function validateReviewDocument(content: string): ValidationResult {
     return { valid: false, reason: '# Review — heading must have a non-empty title-or-ref' };
   }
 
+  // Optional triage line: a blockquote right after the heading.
+  let triage: string | undefined;
+  let cursor = 1;
+  while (cursor < lines.length && lines[cursor].trim() === '') {
+    cursor += 1;
+  }
+  const triageMatch = lines[cursor]?.match(/^>\s*Triage:\s*(\S.*)$/);
+  if (triageMatch) {
+    triage = triageMatch[1].trim();
+    cursor += 1;
+  }
+
   let summaryIdx = -1;
   let findingsIdx = -1;
   let scope: string[] | undefined;
-  let i = 1;
+  let i = cursor;
   while (i < lines.length && lines[i].trim() === '') {
     i += 1;
   }
@@ -770,6 +855,7 @@ if (i < lines.length && SCOPE_HEADING_PATTERN.test(lines[i])) {
 
   const actualCounts = { new: 0, unresolved: 0, resolved: 0 };
   let findings: ParsedFinding[] = [];
+  let uncertain: ParsedFinding[] | undefined;
   if (findingsIdx !== -1) {
     const parsed = parseFindings(lines, findingsIdx);
     if (parsed.error) {
@@ -789,16 +875,21 @@ if (i < lines.length && SCOPE_HEADING_PATTERN.test(lines[i])) {
       }
     }
 
-    for (let i = parsed.endLine; i < lines.length; i++) {
-      const line = lines[i];
-      if (line.trim() === '') {
-        continue;
-      }
-      if (isFenceOpenAt(lines, i)) {
-        continue;
-      }
-      return { valid: false, reason: `unexpected content after final finding: ${line.slice(0, 80)}` };
+    const tail = parseUncertainTail(lines, parsed.endLine);
+    if (tail.error) {
+      return { valid: false, reason: tail.error };
     }
+    uncertain = tail.uncertain;
+  }
+
+  if (uncertain && summary.document.uncertain !== uncertain.length) {
+    return {
+      valid: false,
+      reason: `uncertain count mismatch: summary says ${summary.document.uncertain}; ## Uncertain yields ${uncertain.length}`,
+    };
+  }
+  if (uncertain && summary.document.uncertain === undefined) {
+    return { valid: false, reason: '## Uncertain section is present but ## Summary has no Uncertain (not confirmed) line' };
   }
 
   if (findings.length === 0 && (actualCounts.new > 0 || actualCounts.unresolved > 0 || actualCounts.resolved > 0)) {
@@ -825,9 +916,11 @@ if (i < lines.length && SCOPE_HEADING_PATTERN.test(lines[i])) {
     reason: '',
     document: {
       title,
+      triage,
       scope,
       summary: summary.document,
       findings,
+      uncertain,
     },
   };
 }
@@ -863,6 +956,9 @@ export function renderDocument(document: ParsedDocument): string {
   const lines = [
     `# Review — ${document.title}`,
   ];
+  if (document.triage) {
+    lines.push('', `> Triage: ${document.triage}`);
+  }
   if (document.scope && document.scope.length > 0) {
     lines.push('');
     lines.push('## Scope');
@@ -878,6 +974,9 @@ export function renderDocument(document: ParsedDocument): string {
     `- Unresolved from prior review: ${document.summary.unresolved}`,
     `- Resolved by latest commits: ${document.summary.resolved}`,
   );
+  if (document.summary.uncertain !== undefined) {
+    lines.push(`- Uncertain (not confirmed): ${document.summary.uncertain}`);
+  }
   if (document.findings.length > 0) {
     lines.push('');
     lines.push('## Findings');
@@ -886,6 +985,14 @@ export function renderDocument(document: ParsedDocument): string {
       lines.push(renderFinding(finding));
       lines.push('');
     }
+  }
+  if (document.uncertain && document.uncertain.length > 0) {
+    lines.push('', '## Uncertain', '', `<details><summary>${document.uncertain.length} finding${document.uncertain.length === 1 ? '' : 's'} the judge could not confirm</summary>`, '');
+    for (const finding of document.uncertain) {
+      lines.push(renderFinding(finding));
+      lines.push('');
+    }
+    lines.push('</details>');
   }
   while (lines.length > 0 && lines[lines.length - 1] === '') {
     lines.pop();
@@ -971,3 +1078,5 @@ export function mergeReviewDocuments(documents: string[], titleOrRef: string): s
 export function normalizeTitleForHeading(titleOrRef: string): string {
   return titleOrRef.trim();
 }
+export * from './diff';
+export * from './proposer';
