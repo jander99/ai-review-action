@@ -1,0 +1,11 @@
+{
+  "answers": {
+    "severity": {
+      "type": "choice",
+      "choice": "minor",
+      "confidence": 0.62,
+      "probabilities": { "blocker": 0.03, "major": 0.15, "minor": 0.62, "nit": 0.2 }
+    }
+  },
+  "usage": { "total_input_tokens": 480 }
+}

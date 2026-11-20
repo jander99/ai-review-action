@@ -13,6 +13,12 @@ function installFakeFetch(script) {
   globalThis.fetch = async (url, init = {}) => {
     const entry = script[Math.min(i, script.length - 1)];
     i++;
+    // Some SDKs call fetch(request) with a single Request object.
+    let target = url;
+    if (typeof Request !== 'undefined' && url instanceof Request) {
+      target = url.url;
+      init = { method: url.method, headers: url.headers, body: url.body ? await url.text() : undefined, signal: url.signal ?? init.signal };
+    }
     const headers = {};
     const raw = init.headers;
     if (typeof Headers !== 'undefined' && raw instanceof Headers) {
@@ -23,7 +29,7 @@ function installFakeFetch(script) {
       for (const [k, v] of Object.entries(raw)) headers[k.toLowerCase()] = String(v);
     }
     calls.push({
-      url: String(url),
+      url: String(target),
       method: init.method ?? 'GET',
       headers,
       body: typeof init.body === 'string' ? init.body : String(init.body ?? ''),

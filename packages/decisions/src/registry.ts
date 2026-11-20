@@ -9,9 +9,11 @@ import type { ProviderConfig } from '@jander99/ai-review-review-contract';
 import type { DecisionClient, DecisionClientFactory } from './types';
 import { DecisionError } from './errors';
 import { createSystemOneClient } from './adapters/systemone';
+import { createGoogleDecisionClient } from './adapters/google';
 
 const factories: Record<string, DecisionClientFactory> = {
   systemone: createSystemOneClient,
+  google: createGoogleDecisionClient,
 };
 
 export function registerDecisionProvider(provider: string, factory: DecisionClientFactory): void {
