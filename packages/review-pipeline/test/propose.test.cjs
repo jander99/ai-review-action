@@ -55,7 +55,8 @@ test('retries once on invalid_output and sums usage', async () => {
   const result = await proposeFindings(llm, 'PROMPT', diffFiles(), 'detailed', () => {});
   assert.equal(result.status, 'ok');
   assert.match(llm.calls[1].prompt, /\/findings\/0 must have endLine/);
-  assert.deepEqual(result.usage, { inputTokens: 20, outputTokens: 10 });
+  // The failed call produced no result, so only the successful call's usage is known.
+  assert.deepEqual(result.usage, { inputTokens: 10, outputTokens: 5 });
 });
 
 test('two invalid_output errors give invalid', async () => {
