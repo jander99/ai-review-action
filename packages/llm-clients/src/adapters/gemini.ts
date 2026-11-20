@@ -15,6 +15,17 @@ import type { LlmClient, LlmRequest, LlmResult } from '../types';
 
 const DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com';
 
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    // Keep the timer referenced: an unref'd timer never fires when the raced
+    // promise is the only other pending work, so the event loop drains first
+    // and node --test reports 'Promise resolution is still pending'.
+    timer = setTimeout(() => reject(new Error(`Request timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([p, timeout]).finally(() => clearTimeout(timer));
+}
+
 function mapError(error: unknown, apiKey: string): LlmError {
   if (error instanceof LlmError) {
     return error;
@@ -37,7 +48,7 @@ function mapError(error: unknown, apiKey: string): LlmError {
     }
     return new LlmError('other', message, provider, status);
   }
-  if (/fetch failed|network|ECONN|timeout|aborted/i.test(message)) {
+  if (/fetch failed|network|ECONN|timeout|timed out|aborted/i.test(message)) {
     return new LlmError('transient', message, provider);
   }
   return new LlmError('other', message, provider);
@@ -61,7 +72,11 @@ export function createGeminiClient(config: ProviderConfig): LlmClient {
     capabilities: { supportsSeed: true, maxInputTokens },
     async complete<T = unknown>(req: LlmRequest): Promise<LlmResult<T>> {
       try {
-        const response = await ai.models.generateContent({
+        const timeoutMs = config.timeoutMs ?? 120_000;
+        // httpOptions.timeout does not abort a hanging fetch on its own, so the
+        // timeout is enforced here by racing the call, as the google decision
+        // adapter does.
+        const response = await withTimeout(ai.models.generateContent({
           model: config.model,
           contents: req.prompt,
           config: {
@@ -72,7 +87,7 @@ export function createGeminiClient(config: ProviderConfig): LlmClient {
             temperature: 0,
             ...(req.seed === undefined ? {} : { seed: req.seed }),
           },
-        });
+        }), timeoutMs);
         if (response.promptFeedback?.blockReason) {
           throw new LlmError('refusal', 'gemini blocked the prompt', 'gemini', undefined, response.promptFeedback.blockReason);
         }
