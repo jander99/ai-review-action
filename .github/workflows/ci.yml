@@ -125,7 +125,7 @@ jobs:
               process.exit(1);
             }
             const exports = require('./' + dist);
-            const required = ['runReviews', 'validateReview', 'postComment', 'postCheckRun', 'postErrorComment'];
+            const required = ['runReviews', 'postReview', 'postCheckRun', 'postErrorComment'];
             for (const name of required) {
               if (typeof exports[name] !== 'function') {
                 console.error('root-action dist must export ' + name + ' as a function');
@@ -151,7 +151,7 @@ jobs:
               process.exit(1);
             }
             const exports = require('./' + dist);
-            const required = ['runReviews', 'validateReview', 'postComment', 'postCheckRun', 'postErrorComment'];
+            const required = ['runReviews', 'postReview', 'postCheckRun', 'postErrorComment'];
             for (const name of required) {
               if (typeof exports[name] !== 'function') {
                 console.error('repo-root dist must export ' + name + ' as a function');
