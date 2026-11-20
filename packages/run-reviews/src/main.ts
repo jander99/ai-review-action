@@ -27,7 +27,7 @@ import {
   type PipelineStatus,
   type ReviewPipelineResult,
 } from '@jander99/ai-review-review-pipeline';
-import { getEventContext, titleOrRefForHeading } from './agent-definition';
+import { getEventContext, titleOrRefForHeading } from './event-context';
 import { parsePrompts } from './prompt-composer';
 import type { EventContext } from './types';
 

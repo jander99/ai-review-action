@@ -254,3 +254,29 @@ test('bundle loads successfully from a fresh directory', () => {
     fs.rmSync(scratch, { recursive: true, force: true });
   }
 });
+test('neither bundle carries the removed harness runtimes', () => {
+  // v2 removed the OpenCode and Claude Code runtimes, the validator, and
+  // the plain-comment poster. Their identifiers must not survive in
+  // either shipped bundle.
+  const forbidden = ['opencode', '--allowedTools'];
+  const forbiddenIdentifiers = ['validateReview'];
+  const bundles = {
+    'root-action/dist/main.cjs': BUNDLE,
+    'dist/main.cjs': fs.readFileSync(path.join(__dirname, '..', '..', '..', 'dist', 'main.cjs'), 'utf8'),
+  };
+  for (const [label, source] of Object.entries(bundles)) {
+    for (const name of forbidden) {
+      assert.ok(
+        !source.includes(name),
+        `${label} must not reference ${name} (removed in v2)`,
+      );
+    }
+    for (const name of forbiddenIdentifiers) {
+      // Whole-identifier match: `validateReviewDocument` is still exported.
+      assert.ok(
+        !new RegExp(`\\b${name}\\b`).test(source),
+        `${label} must not reference ${name} (removed in v2)`,
+      );
+    }
+  }
+});

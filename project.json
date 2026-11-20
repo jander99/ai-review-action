@@ -24,7 +24,7 @@
     "build-tests": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "esbuild packages/run-reviews/src/index.ts --bundle --platform=node --target=node22 --format=cjs --outfile=packages/run-reviews/dist-test/index.cjs && esbuild packages/validate-review/src/index.ts --bundle --platform=node --target=node22 --format=cjs --outfile=packages/validate-review/dist-test/index.cjs && esbuild packages/post-comment/src/index.ts --bundle --platform=node --target=node22 --format=cjs --outfile=packages/post-comment/dist-test/index.cjs && esbuild packages/post-check-run/src/index.ts --bundle --platform=node --target=node22 --format=cjs --outfile=packages/post-check-run/dist-test/index.cjs && esbuild packages/post-error-comment/src/index.ts --bundle --platform=node --target=node22 --format=cjs --outfile=packages/post-error-comment/dist-test/index.cjs"
+        "command": "esbuild packages/run-reviews/src/index.ts --bundle --platform=node --target=node22 --format=cjs --outfile=packages/run-reviews/dist-test/index.cjs && esbuild packages/post-comment/src/index.ts --bundle --platform=node --target=node22 --format=cjs --outfile=packages/post-comment/dist-test/index.cjs && esbuild packages/post-check-run/src/index.ts --bundle --platform=node --target=node22 --format=cjs --outfile=packages/post-check-run/dist-test/index.cjs && esbuild packages/post-error-comment/src/index.ts --bundle --platform=node --target=node22 --format=cjs --outfile=packages/post-error-comment/dist-test/index.cjs"
       }
     }
   }
