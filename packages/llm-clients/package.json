@@ -1,0 +1,12 @@
+{
+  "name": "@jander99/ai-review-llm-clients",
+  "version": "1.0.0",
+  "main": "dist/index.cjs",
+  "private": true,
+  "dependencies": {
+    "@anthropic-ai/sdk": "1.11.0",
+    "@google/genai": "3.6.1",
+    "ajv": "8.20.0",
+    "openai": "7.62.0"
+  }
+}
