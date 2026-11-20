@@ -95,14 +95,14 @@ Every run needs one credential for the proposing LLM and one for the decision AP
 
 | Provider | Input value | Conventional secret | Default base URL | Notes |
 |---|---|---|---|---|
-| OpenAI | `llm-provider: openai` | `OPENAI_API_KEY` | `https://api.openai.com/v1` | Any OpenAI-compatible gateway works via `llm-base-url`. |
-| Anthropic | `llm-provider: anthropic` | `ANTHROPIC_API_KEY` | `https://api.anthropic.com` | |
+| OpenAI | `llm-provider: openai` | `OPENAI_API_KEY` | `https://api.openai.com/v1` | OpenAI-shaped. Any compatible gateway (OpenRouter, vLLM, LiteLLM, Azure-style proxies) works via `llm-base-url`. |
+| Anthropic | `llm-provider: anthropic` | `ANTHROPIC_API_KEY` | `https://api.anthropic.com` | Anthropic-shaped. Works against any Messages-API-compatible endpoint via `llm-base-url` (e.g. MiniMax's `/anthropic`). |
 | Gemini | `llm-provider: gemini` | `GEMINI_API_KEY` | `https://generativelanguage.googleapis.com` | Same endpoint as the `google` decision provider. |
 | TypeSafe | `decision-provider: systemone` | `TYPESAFE_API_KEY` | `https://api.typesafe.ai` | |
 | SubQ | `decision-provider: systemone` | `SUBQ_API_KEY` | `https://api.subq.ai` | Same adapter as TypeSafe; pass `decision-base-url: https://api.subq.ai`. Verified wire-compatible. |
 | Google | `decision-provider: google` | `GEMINI_API_KEY` | `https://generativelanguage.googleapis.com` | |
 
-Both roles are required and independent — you can pair any LLM with any decision provider. The `provider` value selects the adapter and the base URL is only overridden when you pass `llm-base-url` / `decision-base-url`. The adapters do not read keys from the environment themselves: pass the key as `llm-api-key` / `decision-api-key` (the env var names above are the conventional secret names, which is what `ai-review.yml` uses via `LLM_API_KEY` and `DECISION_API_KEY`).
+Most LLM endpoints are OpenAI-shaped or Anthropic-shaped, so those two adapters cover almost everything: if a provider speaks the OpenAI API, use `llm-provider: openai` with its `llm-base-url`; if it speaks the Anthropic Messages API, use `llm-provider: anthropic` with its `llm-base-url`. `gemini` is for Google's native generateContent API. Both roles are required and independent — you can pair any LLM with any decision provider. The adapters do not read keys from the environment themselves: pass the key as `llm-api-key` / `decision-api-key` (the names above are the conventional secret names, which is what `ai-review.yml` uses via `LLM_API_KEY` and `DECISION_API_KEY`).
 
 ### GitHub token
 
