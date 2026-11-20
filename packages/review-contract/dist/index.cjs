@@ -32,7 +32,7 @@ __export(index_exports, {
   REVIEW_DONE_SENTINEL: () => REVIEW_DONE_SENTINEL,
   SCHEMA_VERSION: () => SCHEMA_VERSION,
   SEVERITIES: () => SEVERITIES,
-  SEVERITY_EMOJI: () => SEVERITY_EMOJI,
+  SEVERITY_EMOJI: () => SEVERITY_EMOJI2,
   STATUSES: () => STATUSES,
   STATUS_COUNTS_AS_NEW: () => STATUS_COUNTS_AS_NEW,
   STATUS_VALUES_SET: () => STATUS_VALUES_SET,
@@ -47,13 +47,16 @@ __export(index_exports, {
   mergeReviewDocuments: () => mergeReviewDocuments,
   normalizeForKey: () => normalizeForKey,
   normalizeTitleForHeading: () => normalizeTitleForHeading,
+  parsePriorFindings: () => parsePriorFindings,
   parseUnifiedDiff: () => parseUnifiedDiff,
   redactSecret: () => redactSecret,
   renderDocument: () => renderDocument,
   renderFinding: () => renderFinding,
+  renderFindingComment: () => renderFindingComment,
   resolveSeverity: () => resolveSeverity,
   selectTerminalText: () => selectTerminalText,
   stripSentinelBoundary: () => stripSentinelBoundary,
+  suggestionFence: () => suggestionFence,
   validateReviewDocument: () => validateReviewDocument,
   validateThresholds: () => validateThresholds
 });
@@ -121,6 +124,57 @@ function findingId(file, title) {
   const hash = (0, import_node_crypto.createHash)("sha256").update(`${file}
 ${normalizeKey(title)}`).digest("hex");
   return `F${hash.slice(0, 10)}`;
+}
+var SEVERITY_EMOJI = { Critical: "\u{1F534}", Warning: "\u{1F7E1}", Suggestion: "\u{1F7E2}" };
+function longestBacktickRun(text) {
+  let longest = 0;
+  for (const run of text.match(/`+/g) ?? []) longest = Math.max(longest, run.length);
+  return longest;
+}
+function suggestionFence(fix) {
+  return "`".repeat(Math.max(3, longestBacktickRun(fix) + 1));
+}
+function renderFindingComment(p, opts) {
+  const { finding } = p;
+  const emoji = SEVERITY_EMOJI[p.severity] ?? "\u{1F7E1}";
+  const parts = [
+    `**${emoji} ${p.severity} (${p.judgeSeverity}) \u2014 ${finding.title}**`,
+    finding.claim,
+    `<details><summary>Evidence</summary>`,
+    finding.evidence,
+    `</details>`
+  ];
+  if (opts.suggestion && finding.suggestedFix !== null) {
+    const fence = suggestionFence(finding.suggestedFix);
+    parts.push(`${fence}suggestion
+${finding.suggestedFix}
+${fence}`);
+  }
+  parts.push(`<!-- ai-review-finding id=${finding.id} file=${finding.file} line=${finding.startLine} -->`);
+  return parts.join("\n\n");
+}
+var MARKER_RE = /<!--\s*ai-review-finding\s+id=(\S+?)(?:\s+file=(\S+))?(?:\s+line=(\d+))?\s*-->/;
+var TITLE_RE = /\*\*.*?\s—\s(.+?)\*\*/;
+function parsePriorFindings(body, fallback) {
+  const out = [];
+  const seen = /* @__PURE__ */ new Set();
+  let title = null;
+  for (const text of body.split("\n")) {
+    const heading = TITLE_RE.exec(text.trim());
+    if (heading) title = heading[1];
+    const marker = MARKER_RE.exec(text);
+    if (!marker) continue;
+    const [, id, file, line] = marker;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push({
+      id,
+      file: file ?? fallback?.path ?? null,
+      line: line !== void 0 ? Number(line) : fallback?.line ?? null,
+      title: title ?? id
+    });
+  }
+  return out;
 }
 
 // packages/review-contract/src/diff.ts
@@ -292,7 +346,7 @@ Rules:
 var SCHEMA_VERSION = "1";
 var MAX_CHARS = 256e3;
 var SEVERITIES = ["Critical", "Warning", "Suggestion"];
-var SEVERITY_EMOJI = {
+var SEVERITY_EMOJI2 = {
   Critical: "\u{1F534}",
   Warning: "\u{1F7E1}",
   Suggestion: "\u{1F7E2}"
@@ -1118,13 +1172,16 @@ function normalizeTitleForHeading(titleOrRef) {
   mergeReviewDocuments,
   normalizeForKey,
   normalizeTitleForHeading,
+  parsePriorFindings,
   parseUnifiedDiff,
   redactSecret,
   renderDocument,
   renderFinding,
+  renderFindingComment,
   resolveSeverity,
   selectTerminalText,
   stripSentinelBoundary,
+  suggestionFence,
   validateReviewDocument,
   validateThresholds
 });

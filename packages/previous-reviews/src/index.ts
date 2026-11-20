@@ -13,8 +13,10 @@
  */
 
 import type { Octokit } from '@octokit/rest';
+import { parsePriorFindings, type PriorFinding } from '@jander99/ai-review-review-contract';
 
 export const PRIOR_REVIEW_BOT_LOGIN = 'github-actions[bot]';
+export const MAX_PRIOR_FINDINGS = 50;
 export const PRIOR_REVIEW_LIMIT = 5;
 export const PRIOR_REVIEW_PER_COMMENT_CHARS = 4 * 1024;
 export const PRIOR_REVIEW_TOTAL_CHARS = 16 * 1024;
@@ -40,13 +42,22 @@ export interface PriorReviewsOptions {
   readonly owner: string;
   readonly repo: string;
   readonly issueNumber: number;
-  readonly octokit?: Pick<Octokit, 'rest'>;
+  readonly octokit?: Pick<Octokit, 'rest' | 'paginate'>;
   readonly now?: () => Date;
 }
 
 export interface PriorReviewsResult {
   readonly comments: ReadonlyArray<PriorReviewComment>;
   readonly combined: string;
+  readonly findings: ReadonlyArray<PriorFinding>;
+}
+
+interface RawComment {
+  readonly id: number;
+  readonly createdAt: string;
+  readonly body: string;
+  readonly path?: string | null;
+  readonly line?: number | null;
 }
 
 /**
@@ -221,13 +232,14 @@ function formatHeader(comment: PriorReviewComment): string {
 }
 
 /**
- * Fetch and format prior AI review comments.
+ * Fetch and format prior AI review comments and the findings they recorded.
  *
- * Returns `null` when:
- *   - the token is missing,
- *   - the issue has no bot-authored comments,
- *   - every bot comment is empty after sanitization,
- *   - the GitHub API request fails.
+ * Pages through issue comments, review comments and reviews, keeping only
+ * bot-authored ones. Findings are deduped by id and the newest
+ * MAX_PRIOR_FINDINGS are kept.
+ *
+ * Returns `null` when the token is missing, when there is nothing from the
+ * bot, or when the GitHub API request fails.
  */
 export async function fetchPriorReviews(
   options: PriorReviewsOptions,
@@ -236,31 +248,78 @@ export async function fetchPriorReviews(
     return null;
   }
   const octokit = options.octokit ?? new (await import('@octokit/rest')).Octokit({ auth: options.token });
+  const base = { owner: options.owner, repo: options.repo };
+  const perPage = { ...base, per_page: 100 };
+  const paginateAll = async (fn: unknown, params: object): Promise<any[]> => {
+    if (!fn) return [];
+    const request = fn as (p: object) => Promise<{ data: any[] }>;
+    if (octokit.paginate) return octokit.paginate(fn as never, params as never);
+    return (await request(params)).data;
+  };
   try {
-    const response = await octokit.rest.issues.listComments({
-      owner: options.owner,
-      repo: options.repo,
+    const raw: RawComment[] = [];
+
+    const issueComments = await paginateAll(octokit.rest.issues.listComments, {
+      ...perPage,
       issue_number: options.issueNumber,
-      per_page: PRIOR_REVIEW_PAGE_SIZE,
-      sort: 'created',
-      direction: 'desc',
     });
-    const comments = response.data
-      .filter((comment) => comment.user?.login === PRIOR_REVIEW_BOT_LOGIN)
-      .map((comment) => ({
+    for (const comment of issueComments) {
+      if (comment.user?.login !== PRIOR_REVIEW_BOT_LOGIN) continue;
+      raw.push({ id: comment.id, createdAt: comment.created_at, body: comment.body ?? '' });
+    }
+
+    const reviewComments = await paginateAll(octokit.rest.pulls?.listReviewComments, {
+      ...perPage,
+      pull_number: options.issueNumber,
+    });
+    for (const comment of reviewComments) {
+      if (comment.user?.login !== PRIOR_REVIEW_BOT_LOGIN) continue;
+      raw.push({
         id: comment.id,
-        author: comment.user?.login ?? null,
         createdAt: comment.created_at,
         body: comment.body ?? '',
-      }));
+        path: comment.path ?? null,
+        line: comment.line ?? comment.original_line ?? null,
+      });
+    }
+
+    const reviews = await paginateAll(octokit.rest.pulls?.listReviews, {
+      ...perPage,
+      pull_number: options.issueNumber,
+    });
+    for (const review of reviews) {
+      if (review.user?.login !== PRIOR_REVIEW_BOT_LOGIN) continue;
+      raw.push({ id: review.id, createdAt: review.submitted_at ?? '', body: review.body ?? '' });
+    }
+
+    const comments: PriorReviewComment[] = raw.map((c) => ({
+      id: c.id,
+      author: PRIOR_REVIEW_BOT_LOGIN,
+      createdAt: c.createdAt,
+      body: c.body,
+    }));
     const combined = formatPriorReviews(comments);
-    if (!combined) {
+
+    const byId = new Map<string, PriorFinding & { createdAt: string }>();
+    for (const c of raw) {
+      const fallback = c.path !== undefined ? { path: c.path, line: c.line ?? null } : undefined;
+      for (const finding of parsePriorFindings(c.body, fallback)) {
+        const existing = byId.get(finding.id);
+        if (!existing || existing.createdAt < c.createdAt) byId.set(finding.id, { ...finding, createdAt: c.createdAt });
+      }
+    }
+    const findings = [...byId.values()]
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, MAX_PRIOR_FINDINGS)
+      .map(({ createdAt, ...finding }) => {
+        void createdAt;
+        return finding;
+      });
+
+    if (!combined && findings.length === 0) {
       return null;
     }
-    return {
-      comments,
-      combined,
-    };
+    return { comments, combined, findings };
   } catch {
     return null;
   }
