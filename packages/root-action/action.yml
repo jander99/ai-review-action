@@ -1,11 +1,9 @@
 name: 'AI Review'
 description: >-
-  AI-powered repository reviews. Selects between the OpenCode CLI
-  (`tool: opencode`, default) and the Claude Code CLI (`tool: claude`)
-  at the action boundary; the rest of the pipeline is shared. The
-  chosen runtime CLI must be installed before this action runs.
-  This action requires `pull-requests: write` for pull_request events
-  and `checks: write` for non-PR events (push, workflow_dispatch).
+  AI-powered repository reviews. An LLM proposes findings from the diff and a
+  decision-API judge scores each one, so only supported findings are kept.
+  Requires `pull-requests: write` for pull_request events and `checks: write`
+  for non-PR events (push, workflow_dispatch).
 author: 'jander99'
 
 branding:
@@ -13,90 +11,75 @@ branding:
   color: blue
 
 inputs:
-  tool:
-    description: >-
-      Review runtime CLI. `opencode` (default) invokes the OpenCode CLI;
-      `claude` invokes the Claude Code CLI. The `model` input must be in
-      `provider/model` format; for `claude`, the provider portion is stripped
-      before being passed as `--model`.
-    required: false
-    default: 'opencode'
-  opencode-version:
-    description: >-
-      OpenCode version expected to already be installed on PATH. Only
-      consulted when `tool: opencode`.
-    required: false
-    default: '1.18.4'
-  claude-version:
-    description: >-
-      Expected Claude Code CLI version. Only consulted when `tool: claude`.
-      When empty, the action only verifies the `claude` binary is on PATH
-      without pinning a specific version.
-    required: false
-    default: ''
-  debug:
-    description: 'Capture redacted, gzipped CLI stdout and stderr as an artifact.'
-    required: false
-    default: 'false'
   github-token:
     description: >-
       GITHUB_TOKEN or fine-grained PAT for posting results (falls back to
-      github.token when omitted). Install the chosen runtime CLI as a
-      separate workflow step before this action. Requires
-      `pull-requests: write` for pull_request events and `checks: write`
-      for non-PR events.
+      github.token when omitted). Requires `pull-requests: write` for
+      pull_request events and `checks: write` for non-PR events.
     required: false
-  model:
-    description: >-
-      Model in `provider/model` format. For `tool: opencode`, the full
-      string is passed to OpenCode as `--model`. For `tool: claude`, the
-      provider portion is stripped (e.g., `anthropic/claude-sonnet-4.6`
-      becomes `claude-sonnet-4.6`).
-    required: false
-    default: 'anthropic/claude-sonnet-4.6'
-  models:
-    description: >-
-      Comma-separated models; overrides `model` when set. The same
-      `provider/model` formatting rules apply per `tool`.
-    required: false
-    default: ''
   prompts:
     description: 'Comma-separated prompt sources using file: or text: prefixes.'
     required: true
-  opencode-config:
+  llm-provider:
+    description: 'LLM provider (see the README for the supported providers).'
+    required: true
+  llm-base-url:
+    description: 'Override the provider base URL (e.g. for a compatible gateway).'
+    required: false
+    default: ''
+  llm-model:
+    description: 'Model id for the proposing LLM.'
+    required: true
+  llm-api-key:
+    description: 'API key for the proposing LLM.'
+    required: true
+  decision-provider:
+    description: 'Decision provider used to judge findings (see the README).'
+    required: true
+  decision-base-url:
+    description: 'Override the decision provider base URL.'
+    required: false
+    default: ''
+  decision-model:
+    description: 'Model id for the judging decision API.'
+    required: true
+  decision-api-key:
+    description: 'API key for the decision provider.'
+    required: true
+  keep-threshold:
+    description: 'Minimum support probability for a finding to be kept (0 < keep <= 1).'
+    required: false
+    default: '0.7'
+  drop-threshold:
+    description: 'Maximum support probability for a finding to be dropped; between the two it is uncertain (0 <= drop < keep).'
+    required: false
+    default: '0.3'
+  severity-threshold:
+    description: 'Judge severity below this is treated as a suggestion rather than a warning.'
+    required: false
+    default: '0.5'
+  review-event:
     description: >-
-      Path to a user-provided OpenCode config. Only consulted when
-      `tool: opencode`; ignored for `tool: claude`.
+      Review event for PR events: COMMENT, REQUEST_CHANGES or APPROVE. Only
+      COMMENT is used by default; REQUEST_CHANGES/APPROVE need the matching
+      token permissions.
     required: false
-  permission:
-    description: >-
-      JSON object defining OpenCode tool permissions. Only consulted when
-      `tool: opencode`; ignored for `tool: claude` (Claude Code uses
-      hardcoded `--allowedTools`).
-    required: false
-  timeout-minutes:
-    description: 'Timeout for each CLI invocation.'
-    required: false
-    default: '30'
-  fail-on-error:
-    description: 'Exit non-zero when any review fails.'
-    required: false
-    default: 'false'
+    default: 'COMMENT'
   post-comment:
     description: >-
-      Post the review as a PR comment (pull_request events only). Set to
-      false to only expose outputs without commenting.
+      Post the review to the PR (pull_request events only). Set to false to
+      only expose outputs.
     required: false
     default: 'true'
   post-check-run:
     description: >-
       Post the review as a check run (non-PR events only). Set to false to
-      only expose outputs without publishing.
+      only expose outputs.
     required: false
     default: 'true'
   max-comment-chars:
     description: >-
-      Truncate the PR comment at this many characters. GitHub hard-limits
+      Truncate the PR review body at this many characters. GitHub hard-limits
       comments to 65536 characters.
     required: false
     default: '65000'
@@ -108,8 +91,7 @@ inputs:
     description: >-
       Conclusion of the check run created on non-PR events. One of:
       action_required, cancelled, failure, neutral, success, skipped,
-      stale, timed_out. Default neutral. Future iterations may derive
-      this from the review severity (deferred).
+      stale, timed_out.
     required: false
     default: 'neutral'
   check-details-url:
@@ -120,73 +102,32 @@ inputs:
 outputs:
   review:
     description: >-
-      Canonical review document. When a single review invocation produces
-      a valid document, that document is returned. When multiple
-      invocations succeed, the documents are deterministically merged
-      into one canonical document. Empty when no invocation produced a
-      valid document, or when valid invocations merged past the
-      contract maximum (see `failure-reason`).
+      The rendered review document (markdown). Empty when the run produced
+      nothing to review; see `failure-reason` on failure.
+  triage:
+    description: 'The one-line triage of the pull request (empty when triage was skipped).'
   comment-url:
     description: >-
-      URL of the posted PR comment (pull_request events). Empty when
-      post-comment is false, when permissions were insufficient, on
-      non-PR events, or when the normal post was skipped in favour of
-      the error post. The error publication path also exposes
-      `comment-url`; this output mirrors whichever one fired.
+      URL of the posted PR review (pull_request events). Empty when
+      post-comment is false, on non-PR events, or when publication failed.
   check-run-url:
     description: >-
-      URL of the created check run (push, workflow_dispatch, and other
-      non-pull_request events). Empty on pull_request events, when
-      post-check-run is false, or when the normal check run was skipped
-      in favour of the error check run. The error publication path
-      also exposes `check-run-url`; this output mirrors whichever one
-      fired.
-  models-used:
-    description: 'Comma-separated list of models that completed successfully.'
-  effective-model:
-    description: 'The effective first model (provider/model format) selected from the inputs.model or inputs.models list.'
-  cost:
-    description: >-
-      Reviewer-only cost in USD. The validator cost is reported
-      separately under `validate-cost`; the sum is exposed as
-      `total-cost`.
-  validate-cost:
-    description: 'Validator cost in USD.'
-  total-cost:
-    description: 'Reviewer + validator cost in USD.'
-  cost-by-model:
-    description: 'JSON object containing cost by model (reviewer only).'
+      URL of the created check run (non-PR events). Empty on pull_request
+      events or when post-check-run is false.
+  review-output-path:
+    description: 'Runner-local path to the review document written by the action.'
+  findings-kept:
+    description: 'Number of findings kept after judging and policy.'
+  findings-uncertain:
+    description: 'Number of findings in the uncertain band (not posted inline).'
+  findings-dropped:
+    description: 'Number of findings dropped (unsupported, duplicates or below threshold).'
   tokens:
-    description: 'JSON object containing total input and output tokens (reviewer only).'
-  validate-tokens:
-    description: 'JSON object with input/output tokens for the validator call.'
-  tokens-by-model:
-    description: 'JSON object containing token usage by model (reviewer only).'
-  debug-artifact-path:
-    description: 'Directory containing redacted, gzipped debug output when debug is enabled.'
-  validate-status:
-    description: 'Status from the structural validator: "valid" or "invalid". Empty when validation was skipped.'
-  validate-reason:
-    description: 'Human-readable reason when the validator rejects the review. Empty when validation was skipped (e.g. all review invocations failed before producing a document); see `failure-reason` for the canonical fallback message covering both reviewer and validator failures.'
+    description: 'JSON object of token usage: { llmInput, llmOutput, decisionInput }.'
   failure-reason:
     description: >-
-      Canonical failure message (empty on success). Covers BOTH
-      reviewer failures (reviewer could not produce a valid document)
-      AND validator failures (reviewer succeeded but the document
-      failed structural + model validation). When both fail, the
-      reviewer message wins because the validator typically was
-      skipped. Note: when `tool: claude`, the validator dispatches
-      through the Claude Code CLI (the validator is tool-aware and
-      mirrors the reviewer's runtime); `passedConfigJson` is left
-      empty in that case.
-  review-output-path:
-    description: 'Runner-local path to the authoritative review markdown file written by the action from a validated model response.'
-  config-json:
-    description: >-
-      OpenCode config JSON for the validator invocation (no agent
-      review prompts, no path leakage, no user-supplied secrets).
-      Empty when `tool: claude` (the validator dispatches through
-      the Claude Code CLI in that case).
+      Canonical failure message (empty on success). Single source of truth for
+      every failure the pipeline reports.
 
 runs:
   using: node24

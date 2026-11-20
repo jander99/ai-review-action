@@ -42,16 +42,20 @@ const BUNDLE = fs.readFileSync(
 );
 
 const REQUIRED_INPUTS = [
-  'opencode-version',
-  'debug',
   'github-token',
-  'model',
-  'models',
   'prompts',
-  'opencode-config',
-  'permission',
-  'timeout-minutes',
-  'fail-on-error',
+  'llm-provider',
+  'llm-base-url',
+  'llm-model',
+  'llm-api-key',
+  'decision-provider',
+  'decision-base-url',
+  'decision-model',
+  'decision-api-key',
+  'keep-threshold',
+  'drop-threshold',
+  'severity-threshold',
+  'review-event',
   'post-comment',
   'post-check-run',
   'max-comment-chars',
@@ -62,32 +66,18 @@ const REQUIRED_INPUTS = [
 
 const REQUIRED_OUTPUTS = [
   'review',
-  'review-output-path',
-  'config-json',
+  'triage',
   'comment-url',
   'check-run-url',
-  'models-used',
-  'effective-model',
-  'cost',
-  'validate-cost',
-  'total-cost',
-  'cost-by-model',
+  'review-output-path',
+  'findings-kept',
+  'findings-uncertain',
+  'findings-dropped',
   'tokens',
-  'validate-tokens',
-  'tokens-by-model',
-  'debug-artifact-path',
-  'validate-status',
-  'validate-reason',
   'failure-reason',
 ];
 
-const WIRED_APIS = [
-  'runReviews',
-  'validateReview',
-  'postComment',
-  'postCheckRun',
-  'postErrorComment',
-];
+const WIRED_APIS = ['runReviews', 'postReview', 'postCheckRun', 'postErrorComment'];
 
 test('action.yml declares using: node24', () => {
   assert.ok(

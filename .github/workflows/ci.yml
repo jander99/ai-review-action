@@ -67,7 +67,6 @@ jobs:
             "dist/main.cjs"
             "packages/root-action/dist/main.cjs"
             "packages/run-reviews/dist/main.cjs"
-            "packages/validate-review/dist/main.cjs"
             "packages/setup-opencode/dist/main.cjs"
             "packages/post-comment/dist/main.cjs"
             "packages/post-check-run/dist/main.cjs"

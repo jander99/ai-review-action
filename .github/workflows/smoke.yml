@@ -71,14 +71,14 @@ jobs:
               console.error('action.yml must declare using: node24');
               process.exit(1);
             }
-            const inputs = ['opencode-version', 'debug', 'github-token', 'model', 'models', 'prompts', 'opencode-config', 'permission', 'timeout-minutes', 'fail-on-error', 'post-comment', 'post-check-run', 'max-comment-chars', 'check-name', 'check-conclusion', 'check-details-url'];
+            const inputs = ['github-token', 'prompts', 'llm-provider', 'llm-base-url', 'llm-model', 'llm-api-key', 'decision-provider', 'decision-base-url', 'decision-model', 'decision-api-key', 'keep-threshold', 'drop-threshold', 'severity-threshold', 'review-event', 'post-comment', 'post-check-run', 'max-comment-chars', 'check-name', 'check-conclusion', 'check-details-url'];
             for (const name of inputs) {
               if (!action.includes(name + ':')) {
                 console.error('action.yml must declare input: ' + name);
                 process.exit(1);
               }
             }
-            const outputs = ['review', 'review-output-path', 'config-json', 'comment-url', 'check-run-url', 'models-used', 'effective-model', 'cost', 'total-cost', 'validate-cost', 'tokens', 'cost-by-model', 'tokens-by-model', 'validate-tokens', 'debug-artifact-path', 'validate-status', 'validate-reason', 'failure-reason'];
+            const outputs = ['review', 'triage', 'comment-url', 'check-run-url', 'review-output-path', 'findings-kept', 'findings-uncertain', 'findings-dropped', 'tokens', 'failure-reason'];
             for (const name of outputs) {
               if (!action.includes(name + ':')) {
                 console.error('action.yml must declare output: ' + name);

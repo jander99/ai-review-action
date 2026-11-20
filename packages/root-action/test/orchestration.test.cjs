@@ -1,27 +1,13 @@
 'use strict';
 
 /**
- * Orchestration tests for packages/root-action/src/main.ts.
+ * Orchestration tests for the root action's `runWithDeps`.
  *
- * Verifies the Phase-4 bounded fix: every failure path (reviewer
- * throw, reviewer failed, validator throw, validator invalid, all
- * invalid) routes through `publishError` so an error comment is
- * posted on PR events. Previously the reviewer-throw path bypassed
- * the publication helper entirely - the throw escaped `run()` and
- * only `core.setFailed` ran, leaving the PR with a red step but no
- * error comment.
- *
- * Test strategy:
- *
- *   - `runDeps` is exported as a mutable object so individual methods
- *     can be stubbed via `mock.method` from `node:test` without
- *     re-requiring the bundle.
- *   - The bundled `@actions/core` is left in place; we point
- *     `GITHUB_OUTPUT` at a temp file so `core.setOutput` writes the
- *     `comment-url` line into a file we can inspect.
- *   - The bundled `@actions/github` `Context` reads from
- *     `GITHUB_REPOSITORY` and `GITHUB_EVENT_PATH`; we set both so
- *     `context.repo.owner/repo` and `context.issue.number` resolve.
+ * The orchestration lives in `packages/root-action/src/orchestrate.ts` and is
+ * bundled into `dist/main.cjs`. `runDeps` is exported as a mutable object so
+ * individual methods can be stubbed with `mock.method` without re-requiring
+ * the bundle, and `GITHUB_OUTPUT` is pointed at a temp file so `core.setOutput`
+ * calls can be inspected.
  */
 
 const { test, mock, afterEach } = require('node:test');
@@ -34,47 +20,42 @@ const BUNDLE_PATH = path.join(__dirname, '..', 'dist', 'main.cjs');
 const REPO = 'owner/repo';
 const PR_NUMBER = 42;
 
-// Snapshot of process.env and process.exitCode so each test can
-// mutate INPUT_* / GITHUB_* without leaking into sibling tests.
 const SAVED_ENV = { ...process.env };
 const SAVED_EXIT_CODE = process.exitCode;
 
 let scratchDir = null;
 let outputPath = null;
-let eventPath = null;
 
 function setUp() {
-  // Restore env to the snapshot, then layer on test-specific values.
   for (const key of Object.keys(process.env)) {
     if (!(key in SAVED_ENV)) {
       delete process.env[key];
     }
   }
-  for (const [key, value] of Object.entries(SAVED_ENV)) {
-    process.env[key] = value;
-  }
-  // Reset exit code so a stray `setFailed` from a prior test does
-  // not mark this test run red.
+  Object.assign(process.env, SAVED_ENV);
   process.exitCode = 0;
 
-  // Required inputs.
-  process.env.INPUT_PROMPTS = 'text:test prompt';
-  // @actions/core maps input names by replacing only SPACES with underscores,
-  // so 'github-token' reads INPUT_GITHUB-TOKEN (dash kept). Relying on an
-  // ambient GITHUB_TOKEN hid this locally but failed in CI.
+  // @actions/core maps input names by uppercasing and replacing only SPACES
+  // with underscores — hyphens are kept — so 'llm-provider' reads
+  // INPUT_LLM-PROVIDER and 'github-token' reads INPUT_GITHUB-TOKEN.
+  process.env['INPUT_PROMPTS'] = 'text:test prompt';
+  process.env['INPUT_LLM-PROVIDER'] = 'openai';
+  process.env['INPUT_LLM-MODEL'] = 'm';
+  process.env['INPUT_LLM-API-KEY'] = 'llm-key';
+  process.env['INPUT_DECISION-PROVIDER'] = 'google';
+  process.env['INPUT_DECISION-MODEL'] = 'm';
+  process.env['INPUT_DECISION-API-KEY'] = 'decision-key';
   process.env['INPUT_GITHUB-TOKEN'] = 'fake-token';
-  // Event context for the bundled @actions/github Context.
+
   process.env.GITHUB_EVENT_NAME = 'pull_request';
   process.env.GITHUB_REPOSITORY = REPO;
   process.env.GITHUB_SHA = 'abc123def456abc123def456abc123def456abcd';
 
-  // PR number comes from the event payload; write a minimal one.
   scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-review-orch-'));
   outputPath = path.join(scratchDir, 'github-output');
-  eventPath = path.join(scratchDir, 'event.json');
-  // GITHUB_OUTPUT file must exist before `core.setOutput` is called.
   fs.writeFileSync(outputPath, '');
   process.env.GITHUB_OUTPUT = outputPath;
+  const eventPath = path.join(scratchDir, 'event.json');
   process.env.GITHUB_EVENT_PATH = eventPath;
   fs.writeFileSync(
     eventPath,
@@ -92,375 +73,198 @@ function tearDown() {
   }
   scratchDir = null;
   outputPath = null;
-  eventPath = null;
   process.exitCode = SAVED_EXIT_CODE;
 }
 
-afterEach(() => {
-  tearDown();
-});
+afterEach(() => tearDown());
 
 function loadBundle() {
-  // Clear from require.cache so the bundled @actions/github Context
-  // picks up the GITHUB_EVENT_PATH / GITHUB_REPOSITORY we set in
-  // setUp(). Context is constructed once at bundle load.
+  // Clear the cache so the bundled @actions/github Context picks up the
+  // GITHUB_EVENT_PATH / GITHUB_REPOSITORY set in setUp().
   delete require.cache[BUNDLE_PATH];
   return require(BUNDLE_PATH);
 }
 
-function emptyReviewResult(overrides = {}) {
+const EMPTY_COUNTS = { kept: 0, uncertain: 0, dropped: 0, duplicates: 0, unjudged: 0 };
+const EMPTY_USAGE = { llmInputTokens: 0, llmOutputTokens: 0, decisionInputTokens: 0 };
+
+function reviewResult(overrides = {}) {
   return {
-    review: '',
+    status: 'ok',
+    review: '# Review — Test PR\n\n## Summary\n- ok\n',
     reviewOutputPath: '',
-    modelsUsed: '',
-    cost: 0,
-    costByModel: {},
-    tokens: { input: 0, output: 0 },
-    tokensByModel: {},
-    configJson: '{}',
-    effectiveModel: 'anthropic/claude-sonnet-4.6',
-    debugArtifactPath: '',
+    triage: '',
+    kept: [],
+    uncertain: [],
+    counts: EMPTY_COUNTS,
+    usage: EMPTY_USAGE,
+    diff: 'diff --git a/a.ts b/a.ts\n',
+    headSha: '',
     failureReason: '',
-    rejectedDocuments: [],
     ...overrides,
   };
 }
 
-function readGithubOutput(filePath) {
-  return fs.readFileSync(filePath, 'utf8');
-}
-
-// -----------------------------------------------------------------------------
-// Test 1: reviewer throw -> publishError -> postErrorComment called.
-// -----------------------------------------------------------------------------
-
-test('runReviews throws -> postErrorComment is called with the wrapped throw message', async () => {
+test('failed -> postErrorComment called once and process.exitCode is 1', async () => {
   setUp();
   const bundle = loadBundle();
-
   const errorCommentCalls = [];
-  const checkRunCalls = [];
-
-  mock.method(bundle.runDeps, 'runReviews', async () => {
-    throw new Error('synthetic reviewer boom');
-  });
-  mock.method(bundle.runDeps, 'validateReview', async () => {
-    throw new Error('validateReview must NOT be called when reviewResult.review is empty');
-  });
+  mock.method(bundle.runDeps, 'runReviews', async () =>
+    reviewResult({ status: 'failed', review: '', failureReason: 'provider exploded' }),
+  );
   mock.method(bundle.runDeps, 'postErrorComment', async (opts, ctx) => {
     errorCommentCalls.push({ opts, ctx });
-    return { commentUrl: 'http://example.test/comment-throw' };
+    return { commentUrl: 'http://example.test/comment' };
   });
+  const checks = [];
   mock.method(bundle.runDeps, 'postCheckRun', async (opts) => {
-    checkRunCalls.push(opts);
+    checks.push(opts);
     return { checkRunUrl: '' };
   });
-  mock.method(bundle.runDeps, 'postComment', async () => {
-    throw new Error('postComment must NOT be called on the error path');
+  mock.method(bundle.runDeps, 'postReview', async () => {
+    throw new Error('postReview must NOT be called on the error path');
   });
 
   await bundle.runWithDeps(bundle.runDeps);
 
-  assert.equal(errorCommentCalls.length, 1, 'postErrorComment must be called when runReviews throws');
-  assert.equal(checkRunCalls.length, 0, 'postCheckRun must NOT be called on PR events');
-  assert.match(
-    errorCommentCalls[0].opts.reason,
-    /Review invocation threw: synthetic reviewer boom/,
-    'error reason must wrap the thrown error message',
-  );
+  assert.equal(errorCommentCalls.length, 1);
+  assert.equal(checks.length, 0, 'postCheckRun must NOT be called on PR events');
+  assert.match(errorCommentCalls[0].opts.reason, /provider exploded/);
   assert.equal(errorCommentCalls[0].ctx.owner, 'owner');
   assert.equal(errorCommentCalls[0].ctx.repo, 'repo');
   assert.equal(errorCommentCalls[0].ctx.issueNumber, PR_NUMBER);
-  assert.equal(
-    errorCommentCalls[0].opts.title,
-    'AI Review validator rejected the generated review.',
-    'postErrorComment must receive the canonical validator title',
-  );
+  assert.equal(process.exitCode, 1);
 });
 
-// -----------------------------------------------------------------------------
-// Test 2: reviewer returned with failureReason + empty review -> error comment.
-// -----------------------------------------------------------------------------
-
-test('runReviews returns failureReason + empty review -> postErrorComment is called', async () => {
+test('ok on a PR -> postReview is called with event COMMENT and findings === kept', async () => {
   setUp();
   const bundle = loadBundle();
-
-  const errorCommentCalls = [];
-
-  mock.method(bundle.runDeps, 'runReviews', async () =>
-    emptyReviewResult({
-      failureReason: 'all 1 review invocation(s) produced invalid documents',
-    }),
-  );
-  mock.method(bundle.runDeps, 'validateReview', async () => {
-    throw new Error('validateReview must NOT be called when reviewResult.review is empty');
+  const kept = [
+    {
+      finding: {
+        id: 'F1',
+        file: 'a.ts',
+        relatedFiles: [],
+        startLine: 1,
+        endLine: 1,
+        title: 't',
+        claim: 'c',
+        evidence: 'a.ts:1',
+        suggestedFix: null,
+      },
+      severity: 'Warning',
+      judgeSeverity: 'major',
+      pSupported: 0.9,
+      note: '',
+    },
+  ];
+  const reviewCalls = [];
+  mock.method(bundle.runDeps, 'runReviews', async () => reviewResult({ kept, counts: { ...EMPTY_COUNTS, kept: 1 } }));
+  mock.method(bundle.runDeps, 'postReview', async (opts) => {
+    reviewCalls.push(opts);
+    return { reviewUrl: 'http://example.test/review', inlineCount: 1, bodyOnlyCount: 0 };
   });
-  mock.method(bundle.runDeps, 'postErrorComment', async (opts, ctx) => {
-    errorCommentCalls.push({ opts, ctx });
-    return { commentUrl: 'http://example.test/comment-returned' };
-  });
-  mock.method(bundle.runDeps, 'postCheckRun', async () => ({ checkRunUrl: '' }));
-  mock.method(bundle.runDeps, 'postComment', async () => ({ commentUrl: '' }));
 
   await bundle.runWithDeps(bundle.runDeps);
 
-  assert.equal(errorCommentCalls.length, 1, 'postErrorComment must be called when runFailed');
-  assert.match(
-    errorCommentCalls[0].opts.reason,
-    /review failed before producing a document: all 1 review invocation\(s\) produced invalid documents/,
-    'error reason must wrap the reviewer failure reason',
-  );
-  assert.equal(errorCommentCalls[0].ctx.issueNumber, PR_NUMBER);
+  assert.equal(reviewCalls.length, 1);
+  assert.equal(reviewCalls[0].event, 'COMMENT');
+  assert.deepEqual(reviewCalls[0].findings, kept);
 });
 
-// -----------------------------------------------------------------------------
-// Test 3: runFailed path -> postErrorComment called AND comment-url output set.
-// -----------------------------------------------------------------------------
-
-test('runFailed path -> postErrorComment called and comment-url output is set on GITHUB_OUTPUT', async () => {
+test('llm-provider: nope -> postErrorComment reason matches /llm-provider must be one of/', async () => {
   setUp();
+  process.env['INPUT_LLM-PROVIDER'] = 'nope';
   const bundle = loadBundle();
-
-  const COMMENT_URL = 'http://example.test/comment-runfailed';
-
-  mock.method(bundle.runDeps, 'runReviews', async () =>
-    emptyReviewResult({
-      failureReason: 'OpenCode version assertion failed: mismatch',
-    }),
-  );
-  mock.method(bundle.runDeps, 'validateReview', async () => {
-    throw new Error('validateReview must NOT be called when review is empty');
+  const reasons = [];
+  mock.method(bundle.runDeps, 'runReviews', async () => {
+    throw new Error('runReviews must NOT be called when inputs are invalid');
   });
   mock.method(bundle.runDeps, 'postErrorComment', async (opts) => {
-    // The reason sent to the PR comment must reflect the reviewer
-    // failure (not the synthetic empty-validation path).
-    assert.match(opts.reason, /OpenCode version assertion failed: mismatch/);
-    return { commentUrl: COMMENT_URL };
-  });
-  mock.method(bundle.runDeps, 'postCheckRun', async () => ({ checkRunUrl: '' }));
-  mock.method(bundle.runDeps, 'postComment', async () => ({ commentUrl: '' }));
-
-  await bundle.runWithDeps(bundle.runDeps);
-
-  // The bundled `core.setOutput('comment-url', result.commentUrl)`
-  // must have written the returned URL into GITHUB_OUTPUT.
-  assert.ok(fs.existsSync(outputPath), 'GITHUB_OUTPUT file must exist after runWithDeps');
-  const output = readGithubOutput(outputPath);
-  assert.match(
-    output,
-    new RegExp(`comment-url<<[^\\n]+\\n${COMMENT_URL.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}`),
-    `GITHUB_OUTPUT must contain comment-url pointing at ${COMMENT_URL}; got: ${output}`,
-  );
-});
-
-// -----------------------------------------------------------------------------
-// Bonus: non-PR event -> publishError posts a failure check run, not a comment.
-// -----------------------------------------------------------------------------
-
-test('non-PR event + runFailed -> postCheckRun is called with conclusion "failure"', async () => {
-  setUp();
-  // Override the event for this scenario only.
-  process.env.GITHUB_EVENT_NAME = 'push';
-
-  const bundle = loadBundle();
-
-  const errorCommentCalls = [];
-  const checkRunCalls = [];
-
-  mock.method(bundle.runDeps, 'runReviews', async () =>
-    emptyReviewResult({
-      failureReason: 'OpenCode version assertion failed: mismatch',
-    }),
-  );
-  mock.method(bundle.runDeps, 'validateReview', async () => {
-    throw new Error('validateReview must NOT be called when review is empty');
-  });
-  mock.method(bundle.runDeps, 'postErrorComment', async (opts, ctx) => {
-    errorCommentCalls.push({ opts, ctx });
+    reasons.push(opts.reason);
     return { commentUrl: '' };
   });
-  mock.method(bundle.runDeps, 'postCheckRun', async (opts) => {
-    checkRunCalls.push(opts);
-    return { checkRunUrl: 'http://example.test/check-push' };
-  });
-  mock.method(bundle.runDeps, 'postComment', async () => ({ commentUrl: '' }));
 
   await bundle.runWithDeps(bundle.runDeps);
 
-  assert.equal(errorCommentCalls.length, 0, 'postErrorComment must NOT be called on non-PR events');
-  assert.equal(checkRunCalls.length, 1, 'postCheckRun must be called once with conclusion "failure"');
-  assert.equal(checkRunCalls[0].conclusion, 'failure');
-  assert.equal(checkRunCalls[0].name, 'ai-review');
-  assert.match(checkRunCalls[0].review, /OpenCode version assertion failed: mismatch/);
+  assert.equal(reasons.length, 1);
+  assert.match(reasons[0], /llm-provider must be one of/);
 });
 
-// -----------------------------------------------------------------------------
-// Phase-5 bounded fix Part 1: missing github-token.
-// -----------------------------------------------------------------------------
+test('keep-threshold: 2 -> postErrorComment reason matches /keep-threshold must be between 0 and 1/', async () => {
+  setUp();
+  process.env['INPUT_KEEP-THRESHOLD'] = '2';
+  const bundle = loadBundle();
+  const reasons = [];
+  mock.method(bundle.runDeps, 'runReviews', async () => {
+    throw new Error('runReviews must NOT be called when inputs are invalid');
+  });
+  mock.method(bundle.runDeps, 'postErrorComment', async (opts) => {
+    reasons.push(opts.reason);
+    return { commentUrl: '' };
+  });
 
-/**
- * Spy on `process.stdout.write` so we can assert the bundled
- * `@actions/core` emitted a warning with the expected substring.
- *
- * `core.warning` ultimately calls
- * `issueCommand('warning', ...)` which writes the GitHub Actions
- * `::warning ...` command stream to `process.stdout.write`.
- */
-function captureStdoutWrites() {
+  await bundle.runWithDeps(bundle.runDeps);
+
+  assert.equal(reasons.length, 1);
+  assert.match(reasons[0], /keep-threshold must be between 0 and 1/);
+});
+
+test('non-PR event + ok -> postCheckRun with check-conclusion', async () => {
+  setUp();
+  process.env.GITHUB_EVENT_NAME = 'push';
+  process.env['INPUT_CHECK-CONCLUSION'] = 'success';
+  const bundle = loadBundle();
+  const checks = [];
+  mock.method(bundle.runDeps, 'runReviews', async () => reviewResult());
+  mock.method(bundle.runDeps, 'postCheckRun', async (opts) => {
+    checks.push(opts);
+    return { checkRunUrl: 'http://example.test/check' };
+  });
+
+  await bundle.runWithDeps(bundle.runDeps);
+
+  assert.equal(checks.length, 1);
+  assert.equal(checks[0].conclusion, 'success');
+});
+
+test('no_findings_produced on a non-PR event -> neutral check conclusion', async () => {
+  setUp();
+  process.env.GITHUB_EVENT_NAME = 'push';
+  process.env['INPUT_CHECK-CONCLUSION'] = 'success';
+  const bundle = loadBundle();
+  const checks = [];
+  mock.method(bundle.runDeps, 'runReviews', async () => reviewResult({ status: 'no_findings_produced' }));
+  mock.method(bundle.runDeps, 'postCheckRun', async (opts) => {
+    checks.push(opts);
+    return { checkRunUrl: '' };
+  });
+
+  await bundle.runWithDeps(bundle.runDeps);
+
+  assert.equal(checks.length, 1);
+  assert.equal(checks[0].conclusion, 'neutral');
+});
+
+test('missing github-token -> warning is emitted and no review is published', async () => {
+  setUp();
+  delete process.env['INPUT_GITHUB-TOKEN'];
+  delete process.env.GITHUB_TOKEN;
   const captured = [];
   const originalWrite = process.stdout.write.bind(process.stdout);
-  // @ts-expect-error - tests deliberately replace stdout.write.
-  process.stdout.write = (chunk, ...rest) => {
+  process.stdout.write = (chunk) => {
     captured.push(typeof chunk === 'string' ? chunk : chunk.toString('utf8'));
     return true;
   };
-  return {
-    captured,
-    restore() {
-      process.stdout.write = originalWrite;
-    },
-  };
-}
-
-test('missing github-token -> warning is emitted, no throw, publishError skips the API call', async () => {
-  setUp();
-  // Remove every source of a token so `resolveGithubToken()` returns ''.
-  delete process.env['INPUT_GITHUB-TOKEN'];
-  delete process.env.GITHUB_TOKEN;
-
-  const stdoutSpy = captureStdoutWrites();
-  let didThrow = false;
   try {
     const bundle = loadBundle();
-
-    const errorCommentCalls = [];
-    mock.method(bundle.runDeps, 'runReviews', async () =>
-      emptyReviewResult({ failureReason: 'synthetic token-missing failure' }),
-    );
-    mock.method(bundle.runDeps, 'validateReview', async () => ({ status: 'valid', reason: '', cost: 0, tokens: { input: 0, output: 0 }, failureReason: '' }));
-    mock.method(bundle.runDeps, 'postErrorComment', async (opts, ctx) => {
-      errorCommentCalls.push({ opts, ctx });
-      // If the orchestration actually calls us on the missing-token
-      // path the test will fail loudly via the assert below; we
-      // still return a sane result so the orchestration doesn't
-      // crash before the assertion fires.
-      return { commentUrl: 'http://example.test/should-not-fire' };
+    mock.method(bundle.runDeps, 'runReviews', async () => reviewResult());
+    mock.method(bundle.runDeps, 'postReview', async () => {
+      throw new Error('postReview must NOT be called without a token');
     });
-    mock.method(bundle.runDeps, 'postCheckRun', async () => ({ checkRunUrl: '' }));
-    mock.method(bundle.runDeps, 'postComment', async () => ({ commentUrl: '' }));
-
-    try {
-      await bundle.runWithDeps(bundle.runDeps);
-    } catch (error) {
-      didThrow = true;
-      throw error;
-    }
-
-    assert.equal(didThrow, false, 'orchestration must not throw when the token is missing');
-    assert.equal(
-      errorCommentCalls.length,
-      0,
-      'postErrorComment must NOT be called when the github-token is missing',
-    );
-
-    // The missing-token warning must have been emitted at least once
-    // (upfront in runWithDeps + again inside publishError).
-    const allOutput = stdoutSpy.captured.join('');
-    const occurrences = (allOutput.match(/github-token is not available/g) ?? []).length;
-    assert.ok(
-      occurrences >= 1,
-      `core.warning must include the missing-token message; got: ${allOutput.slice(0, 400)}`,
-    );
-
-    // Outputs are still cleared (so consumers don't see stale URLs).
-    assert.ok(fs.existsSync(outputPath), 'GITHUB_OUTPUT file must exist after runWithDeps');
-    const output = fs.readFileSync(outputPath, 'utf8');
-    assert.doesNotMatch(
-      output,
-      /comment-url<<[^\n]+\nhttp:\/\/example\.test\/should-not-fire/,
-      'comment-url must NOT contain the URL that postErrorComment would have returned',
-    );
-  } finally {
-    stdoutSpy.restore();
-    tearDown();
-  }
-});
-
-// -----------------------------------------------------------------------------
-// Phase-5 bounded fix Part 3: rejectedDocuments previews surface as warnings.
-// -----------------------------------------------------------------------------
-
-test('document with Scope but missing Summary still rejects with missing Summary section', async () => {
-  setUp();
-  const stdoutSpy = captureStdoutWrites();
-  try {
-    const bundle = loadBundle();
-    const preview = '# Review — Test PR\n\n## Scope\n- Reviewed X';
-    mock.method(bundle.runDeps, 'runReviews', async () =>
-      emptyReviewResult({
-        failureReason: 'all 1 review invocation(s) produced invalid documents',
-        rejectedDocuments: [
-          { model: 'minimax/minimax-m3', reason: 'missing ## Summary section', preview },
-        ],
-      }),
-    );
-    mock.method(bundle.runDeps, 'validateReview', async () => ({ status: 'valid', reason: '', cost: 0, tokens: { input: 0, output: 0 }, failureReason: '' }));
-    mock.method(bundle.runDeps, 'postErrorComment', async () => ({ commentUrl: '' }));
-    mock.method(bundle.runDeps, 'postCheckRun', async () => ({ checkRunUrl: '' }));
-    mock.method(bundle.runDeps, 'postComment', async () => ({ commentUrl: '' }));
-
     await bundle.runWithDeps(bundle.runDeps);
-
-    assert.match(
-      stdoutSpy.captured.join(''),
-      /reason=missing ## Summary section\):%0A# Review — Test PR%0A%0A## Scope%0A- Reviewed X/,
-    );
+    assert.match(captured.join(''), /github-token is not available/);
   } finally {
-    stdoutSpy.restore();
-    tearDown();
-  }
-});
-test('runFailed with rejectedDocuments -> core.warning emitted per entry with the preview', async () => {
-  setUp();
-  const stdoutSpy = captureStdoutWrites();
-  try {
-    const bundle = loadBundle();
-
-    const SAMPLE_PREVIEW = '# Review — Fake Heading\nbody content that fails validation';
-    mock.method(bundle.runDeps, 'runReviews', async () =>
-      emptyReviewResult({
-        failureReason: 'all 1 review invocation(s) produced invalid documents',
-        rejectedDocuments: [
-          { model: 'minimax/minimax-m3', reason: 'missing ## Summary section', preview: SAMPLE_PREVIEW },
-          { model: 'minimax/minimax-m3', reason: 'finding 1 missing Status field', preview: 'partial second preview' },
-        ],
-      }),
-    );
-    mock.method(bundle.runDeps, 'validateReview', async () => ({ status: 'valid', reason: '', cost: 0, tokens: { input: 0, output: 0 }, failureReason: '' }));
-    mock.method(bundle.runDeps, 'postErrorComment', async () => ({ commentUrl: '' }));
-    mock.method(bundle.runDeps, 'postCheckRun', async () => ({ checkRunUrl: '' }));
-    mock.method(bundle.runDeps, 'postComment', async () => ({ commentUrl: '' }));
-
-    await bundle.runWithDeps(bundle.runDeps);
-
-    const allOutput = stdoutSpy.captured.join('');
-    // @actions/core escapes newlines as %0A in the command stream
-    // (see `escapeData` in @actions/core/lib/command.js). Match
-    // against the encoded form so the assertion reflects what the
-    // runner actually writes to stdout.
-    assert.match(
-      allOutput,
-      /Rejected document preview \(model=minimax\/minimax-m3, reason=missing ## Summary section\):%0A# Review — Fake Heading%0Abody content that fails validation/,
-      'core.warning must carry the first rejected-document preview',
-    );
-    assert.match(
-      allOutput,
-      /Rejected document preview \(model=minimax\/minimax-m3, reason=finding 1 missing Status field\)/,
-      'core.warning must carry the second rejected-document preview',
-    );
-  } finally {
-    stdoutSpy.restore();
-    tearDown();
+    process.stdout.write = originalWrite;
   }
 });
