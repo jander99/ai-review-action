@@ -1075,3 +1075,26 @@ test('a document without the new sections still validates', () => {
 `;
   assert.equal(validateReviewDocument(plain).valid, true);
 });
+
+test('validates a review whose findings are all uncertain', () => {
+  const { renderDocument, validateReviewDocument } = require('../dist/index.cjs');
+  const finding = { severity: 'Warning', emoji: '🟡', title: 't', status: 'new', location: 'a.ts:2', description: 'd' };
+  const doc = renderDocument({
+    title: 'x', scope: ['s'], summary: { new: 0, unresolved: 0, resolved: 0, uncertain: 1 }, findings: [], uncertain: [finding],
+  });
+  const result = validateReviewDocument(doc);
+  assert.equal(result.valid, true, result.reason);
+  assert.equal(result.document.uncertain.length, 1);
+});
+
+test('validates a review that counts duplicates of prior findings without rendering them', () => {
+  const { renderDocument, validateReviewDocument } = require('../dist/index.cjs');
+  const finding = { severity: 'Warning', emoji: '🟡', title: 't', status: 'new', location: 'a.ts:2', description: 'd' };
+  const kept = renderDocument({ title: 'x', scope: ['s'], summary: { new: 1, unresolved: 2, resolved: 0 }, findings: [finding] });
+  assert.equal(validateReviewDocument(kept).valid, true);
+  const none = renderDocument({ title: 'x', scope: ['s'], summary: { new: 0, unresolved: 2, resolved: 0 }, findings: [] });
+  assert.equal(validateReviewDocument(none).valid, true);
+  // blocks still cannot outnumber the summary
+  const bad = renderDocument({ title: 'x', scope: ['s'], summary: { new: 0, unresolved: 0, resolved: 0 }, findings: [{ ...finding, status: 'unresolved' }] });
+  assert.equal(validateReviewDocument(bad).valid, false);
+});

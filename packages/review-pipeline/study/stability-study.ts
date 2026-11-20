@@ -28,7 +28,9 @@ interface Fixture {
   findings: Array<ProposedFinding & { expected: StudyFindingStats['expected'] }>;
 }
 
-const POOL = 3;
+const POOL = Number(process.env.STUDY_POOL ?? 3);
+// A study sends far more requests than a review; ride out rate limits.
+const MAX_RETRIES = Number(process.env.STUDY_MAX_RETRIES ?? 10);
 
 function parseArgs(argv: ReadonlyArray<string>): { runs: number; out: string | null; e2e: boolean } {
   let runs = 20;
@@ -64,6 +66,8 @@ interface EndToEndResult {
   fixture: string;
   overlap: number;
   keptCounts: number[];
+  /** Runs that failed (provider error, rejected document) and are excluded from `overlap`. */
+  failures: string[];
 }
 
 async function runEndToEnd(decisions: DecisionClient, fixtures: ReadonlyArray<Fixture>, runs: number): Promise<EndToEndResult[]> {
@@ -71,12 +75,16 @@ async function runEndToEnd(decisions: DecisionClient, fixtures: ReadonlyArray<Fi
     apiKey: process.env.LLM_API_KEY ?? '',
     model: process.env.LLM_MODEL ?? '',
     baseUrl: process.env.LLM_BASE_URL,
+    options: { maxRetries: MAX_RETRIES },
   });
   const out: EndToEndResult[] = [];
   for (const fixture of fixtures) {
     const kept: Array<Array<{ file: string; startLine: number; endLine: number }>> = [];
+    const failures: string[] = [];
     for (let i = 0; i < runs; i++) {
-      const result = await runReviewPipeline(
+      let result;
+      try {
+        result = await runReviewPipeline(
         {
           title: fixture.sha,
           diff: fixture.diff,
@@ -86,12 +94,20 @@ async function runEndToEnd(decisions: DecisionClient, fixtures: ReadonlyArray<Fi
           taskPrompt: 'Review this change for correctness bugs.',
           priorFindings: [],
         },
-        { llm, decisions, thresholds: DEFAULT_THRESHOLDS, log: () => {} },
-      );
-      if (result.status === 'failed') throw new Error(`e2e run failed on ${fixture.sha}: ${result.failureReason}`);
+        { llm, decisions, thresholds: DEFAULT_THRESHOLDS, log: (m) => { if (process.env.STUDY_VERBOSE) console.error(m); } },
+        );
+      } catch (err) {
+        failures.push(err instanceof Error ? err.message : String(err));
+        continue;
+      }
+      if (result.status === 'failed') {
+        failures.push(result.failureReason);
+        continue;
+      }
       kept.push(result.kept.map((p) => p.finding));
+      console.error(`e2e ${fixture.sha} run ${i + 1}/${runs}: ${result.kept.length} kept`);
     }
-    out.push({ fixture: fixture.sha, overlap: pairwiseOverlap(kept), keptCounts: kept.map((k) => k.length) });
+    out.push({ fixture: fixture.sha, overlap: pairwiseOverlap(kept), keptCounts: kept.map((k) => k.length), failures });
   }
   return out;
 }
@@ -102,9 +118,11 @@ async function main(): Promise<void> {
     apiKey: process.env.DECISION_API_KEY ?? '',
     model: process.env.DECISION_MODEL ?? '',
     baseUrl: process.env.DECISION_BASE_URL,
+    options: { maxRetries: MAX_RETRIES },
   });
 
-  const fixtures = loadFixtures(join(__dirname, '..', 'study', 'fixtures'));
+  const only = process.env.STUDY_FIXTURE;
+  const fixtures = loadFixtures(join(__dirname, '..', 'study', 'fixtures')).filter((f) => !only || f.sha === only);
   const jobs: Array<{ fixture: Fixture; finding: Fixture['findings'][number] }> = [];
   for (const fixture of fixtures) for (const finding of fixture.findings) jobs.push({ fixture, finding });
 

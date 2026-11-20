@@ -386,7 +386,7 @@ function parseSummary(lines: string[], summaryStart: number): {
 
   for (let i = summaryStart + 1; i < lines.length; i++) {
     const line = lines[i];
-    if (FINDINGS_HEADING_PATTERN.test(line) || FINDING_HEADING_PATTERN.test(line)) {
+    if (FINDINGS_HEADING_PATTERN.test(line) || FINDING_HEADING_PATTERN.test(line) || UNCERTAIN_HEADING_PATTERN.test(line)) {
       break;
     }
     if (line.trim() === '') {
@@ -653,6 +653,7 @@ export function validateReviewDocument(content: string): ValidationResult {
 
   let summaryIdx = -1;
   let findingsIdx = -1;
+  let uncertainIdx = -1;
   let scope: string[] | undefined;
   let i = cursor;
   while (i < lines.length && lines[i].trim() === '') {
@@ -741,12 +742,24 @@ if (i < lines.length && SCOPE_HEADING_PATTERN.test(lines[i])) {
       findingsIdx = i;
       break;
     }
+    if (UNCERTAIN_HEADING_PATTERN.test(line)) {
+      // A review whose findings are all uncertain has no ## Findings section.
+      uncertainIdx = i;
+      break;
+    }
     return { valid: false, reason: `unexpected content between ## Summary and ## Findings: ${line.slice(0, 80)}` };
   }
 
   const actualCounts = { new: 0, unresolved: 0, resolved: 0 };
   let findings: ParsedFinding[] = [];
   let uncertain: ParsedFinding[] | undefined;
+  if (uncertainIdx !== -1) {
+    const tail = parseUncertainTail(lines, uncertainIdx);
+    if (tail.error) {
+      return { valid: false, reason: tail.error };
+    }
+    uncertain = tail.uncertain;
+  }
   if (findingsIdx !== -1) {
     const parsed = parseFindings(lines, findingsIdx);
     if (parsed.error) {
@@ -793,7 +806,8 @@ if (i < lines.length && SCOPE_HEADING_PATTERN.test(lines[i])) {
 
   if (
     actualCounts.new !== summary.document.new ||
-    actualCounts.unresolved !== summary.document.unresolved ||
+    // Duplicates of prior findings are counted as unresolved without a block.
+    actualCounts.unresolved > summary.document.unresolved ||
     actualCounts.resolved !== summary.document.resolved
   ) {
     return {

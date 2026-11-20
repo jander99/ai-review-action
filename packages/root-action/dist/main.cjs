@@ -89109,7 +89109,7 @@ function parseSummary(lines, summaryStart) {
   let endLine = summaryStart + 1;
   for (let i2 = summaryStart + 1; i2 < lines.length; i2++) {
     const line = lines[i2];
-    if (FINDINGS_HEADING_PATTERN.test(line) || FINDING_HEADING_PATTERN.test(line)) {
+    if (FINDINGS_HEADING_PATTERN.test(line) || FINDING_HEADING_PATTERN.test(line) || UNCERTAIN_HEADING_PATTERN.test(line)) {
       break;
     }
     if (line.trim() === "") {
@@ -89338,6 +89338,7 @@ function validateReviewDocument(content) {
   }
   let summaryIdx = -1;
   let findingsIdx = -1;
+  let uncertainIdx = -1;
   let scope;
   let i2 = cursor;
   while (i2 < lines.length && lines[i2].trim() === "") {
@@ -89419,11 +89420,22 @@ function validateReviewDocument(content) {
       findingsIdx = i3;
       break;
     }
+    if (UNCERTAIN_HEADING_PATTERN.test(line)) {
+      uncertainIdx = i3;
+      break;
+    }
     return { valid: false, reason: `unexpected content between ## Summary and ## Findings: ${line.slice(0, 80)}` };
   }
   const actualCounts = { new: 0, unresolved: 0, resolved: 0 };
   let findings = [];
   let uncertain;
+  if (uncertainIdx !== -1) {
+    const tail = parseUncertainTail(lines, uncertainIdx);
+    if (tail.error) {
+      return { valid: false, reason: tail.error };
+    }
+    uncertain = tail.uncertain;
+  }
   if (findingsIdx !== -1) {
     const parsed = parseFindings(lines, findingsIdx);
     if (parsed.error) {
@@ -89463,7 +89475,8 @@ function validateReviewDocument(content) {
   if (findings.length > 0 && actualCounts.new === 0 && actualCounts.unresolved === 0 && actualCounts.resolved === 0) {
     return { valid: false, reason: "findings blocks present but summary counts are all zero" };
   }
-  if (actualCounts.new !== summary.document.new || actualCounts.unresolved !== summary.document.unresolved || actualCounts.resolved !== summary.document.resolved) {
+  if (actualCounts.new !== summary.document.new || // Duplicates of prior findings are counted as unresolved without a block.
+  actualCounts.unresolved > summary.document.unresolved || actualCounts.resolved !== summary.document.resolved) {
     return {
       valid: false,
       reason: `count mismatch: summary says New=${summary.document.new}, Unresolved=${summary.document.unresolved}, Resolved=${summary.document.resolved}; blocks yield New=${actualCounts.new}, Unresolved=${actualCounts.unresolved}, Resolved=${actualCounts.resolved}`
@@ -146563,6 +146576,8 @@ async function runReviewPipeline(input, deps) {
   });
   const validated = validateReviewDocument(document2);
   if (!validated.valid) {
+    deps.log(`rendered review rejected by validation:
+${document2}`);
     return failure(`internal: rendered review failed validation: ${validated.reason}`, triage.line, usage);
   }
   if (document2.length > MAX_CHARS) {
