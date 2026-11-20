@@ -1,0 +1,13 @@
+{
+  "model": "subq-snap-1.2",
+  "answers": {
+    "supported": { "type": "noul", "noul": 0.82 },
+    "severity": {
+      "type": "choice",
+      "choice": "major",
+      "confidence": 0.71,
+      "probabilities": { "blocker": 0.05, "major": 0.71, "minor": 0.18, "nit": 0.06 }
+    }
+  },
+  "usage": { "input_tokens": 512, "output_tokens": 24 }
+}
