@@ -19,6 +19,13 @@
       "options": {
         "cwd": "packages/review-pipeline",
         "command": "node --test test/*.test.cjs"
+      },
+      "study": {
+        "executor": "nx:run-commands",
+        "options": {
+          "cwd": "packages/review-pipeline",
+          "command": "esbuild study/stability-study.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist-test/study.cjs && node dist-test/study.cjs"
+        }
       }
     }
   }
