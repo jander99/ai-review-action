@@ -9,9 +9,11 @@ import type { ProviderConfig } from '@jander99/ai-review-review-contract';
 import type { LlmClient, LlmClientFactory } from './types';
 import { LlmError } from './errors';
 import { createOpenAiClient } from './adapters/openai';
+import { createAnthropicClient } from './adapters/anthropic';
 
 const factories: Record<string, LlmClientFactory> = {
   openai: createOpenAiClient,
+  anthropic: createAnthropicClient,
 };
 
 export function registerLlmProvider(provider: string, factory: LlmClientFactory): void {
