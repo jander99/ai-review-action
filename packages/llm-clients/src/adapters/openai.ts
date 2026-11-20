@@ -51,6 +51,7 @@ export function createOpenAiClient(config: ProviderConfig): LlmClient {
     timeout: config.timeoutMs ?? 120_000,
   });
   const maxInputTokens = Number(config.options?.maxInputTokens ?? 128_000);
+  const effort = config.options?.reasoningEffort as 'minimal' | 'low' | 'medium' | 'high' | undefined;
 
   return {
     provider: 'openai',
@@ -63,6 +64,7 @@ export function createOpenAiClient(config: ProviderConfig): LlmClient {
           input: req.prompt,
           max_output_tokens: req.maxTokens ?? DEFAULT_MAX_TOKENS,
           store: false,
+          ...(effort ? { reasoning: { effort } } : {}),
           text: {
             format: {
               type: 'json_schema',

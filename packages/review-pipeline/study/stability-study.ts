@@ -75,7 +75,10 @@ async function runEndToEnd(decisions: DecisionClient, fixtures: ReadonlyArray<Fi
     apiKey: process.env.LLM_API_KEY ?? '',
     model: process.env.LLM_MODEL ?? '',
     baseUrl: process.env.LLM_BASE_URL,
-    options: { maxRetries: MAX_RETRIES },
+    options: {
+      maxRetries: MAX_RETRIES,
+      ...(process.env.STUDY_REASONING_EFFORT ? { reasoningEffort: process.env.STUDY_REASONING_EFFORT } : {}),
+    },
   });
   const out: EndToEndResult[] = [];
   for (const fixture of fixtures) {

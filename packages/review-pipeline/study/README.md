@@ -20,7 +20,10 @@ overlapping line range); the proposer is still non-deterministic, so expect
 it below 1.
 
 Optional: `DECISION_BASE_URL` (for SubQ, `https://api.subq.ai`), `--runs` (default
-20), `--out` (default: print the report).
+20), `--out` (default: print the report). E2E tuning: `STUDY_POOL` (concurrency,
+default 3), `STUDY_MAX_RETRIES`, `STUDY_FIXTURE` (one fixture), `STUDY_VERBOSE`,
+`STUDY_REASONING_EFFORT` (`minimal|low|medium|high`, `openai` provider only).
+Don't run two e2e studies at once against one key; they trip rate limits.
 
 ## Fixtures
 

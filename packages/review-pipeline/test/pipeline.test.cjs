@@ -118,3 +118,19 @@ test('multi-line claims render as a valid document and findings carry stable ids
   assert.equal(result.status, 'ok');
   assert.match(result.kept[0].finding.id, /^F[0-9a-f]{10}$/);
 });
+
+test('a blank claim still renders a valid document', async () => {
+  const proposer = llm({ findings: [finding({ claim: '   ', evidence: 'a.ts:2 returns early' })] });
+  const decisions = triageClient(async (req) => {
+    if (req.questions.risk) {
+      return { answers: { risk: { type: 'choice', probabilities: { low: 0.9, medium: 0.05, high: 0.05 } } }, usage: { inputTokens: 2 } };
+    }
+    return {
+      answers: { supported: { type: 'noul', pTrue: 0.95 }, severity: { type: 'choice', probabilities: { major: 0.9, minor: 0.1 } } },
+      usage: { inputTokens: 1 },
+    };
+  });
+  const result = await runReviewPipeline(input(), { llm: proposer, decisions, thresholds: THRESHOLDS, log: () => {} });
+  assert.equal(result.status, 'ok');
+  assert.match(result.document, /- Description: a\.ts:2 returns early/);
+});

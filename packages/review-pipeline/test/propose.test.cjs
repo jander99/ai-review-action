@@ -95,3 +95,11 @@ test('repo instructions are fenced as untrusted', () => {
   const prompt = buildProposerPrompt(ctx(), { taskPrompt: 'T', repoInstructions: [{ path: 'AGENTS.md', text: 'do x' }], triage: triage() });
   assert.match(prompt, /<untrusted_repo_instructions>[\s\S]*do x[\s\S]*<\/untrusted_repo_instructions>/);
 });
+
+test('truncation keeps the model-ordered findings, then sorts by path', async () => {
+  const items = ['z.ts', 'a.ts', 'b.ts', 'c.ts', 'd.ts', 'e.ts'].map((f, i) => finding({ file: f, title: `t${i}` }));
+  const files = ['z.ts', 'a.ts', 'b.ts', 'c.ts', 'd.ts', 'e.ts'].map((path) => ({ path, status: 'modified', text: DIFF, hunks: [] }));
+  const llm = fake([{ value: { findings: items }, usage: { inputTokens: 1, outputTokens: 1 } }]);
+  const out = await proposeFindings(llm, 'p', files, 'light', () => {});
+  assert.deepEqual(out.findings.map((f) => f.file), ['a.ts', 'b.ts', 'c.ts', 'd.ts', 'z.ts']);
+});

@@ -1,0 +1,669 @@
+{
+  "runsPerFinding": 5,
+  "findings": [
+    {
+      "fixture": "06b3c7e",
+      "findingId": "F0f33347e1a",
+      "expected": "borderline",
+      "pSupported": {
+        "mean": 0.4465312361717224,
+        "sd": 0,
+        "min": 0.4465312361717224,
+        "max": 0.4465312361717224
+      },
+      "verdicts": {
+        "keep": 0,
+        "drop": 0,
+        "uncertain": 5,
+        "duplicate": 0
+      },
+      "keepDropFlip": false
+    },
+    {
+      "fixture": "06b3c7e",
+      "findingId": "F9afba330fc",
+      "expected": "borderline",
+      "pSupported": {
+        "mean": 0.08746308833360672,
+        "sd": 0,
+        "min": 0.08746308833360672,
+        "max": 0.08746308833360672
+      },
+      "verdicts": {
+        "keep": 0,
+        "drop": 5,
+        "uncertain": 0,
+        "duplicate": 0
+      },
+      "keepDropFlip": false
+    },
+    {
+      "fixture": "06b3c7e",
+      "findingId": "F72de598a8b",
+      "expected": "borderline",
+      "pSupported": {
+        "mean": 0.9947314262390137,
+        "sd": 0,
+        "min": 0.9947314262390137,
+        "max": 0.9947314262390137
+      },
+      "verdicts": {
+        "keep": 5,
+        "drop": 0,
+        "uncertain": 0,
+        "duplicate": 0
+      },
+      "keepDropFlip": false
+    },
+    {
+      "fixture": "08ce3f1",
+      "findingId": "F72de598a8b",
+      "expected": "borderline",
+      "pSupported": {
+        "mean": 0.9941313862800598,
+        "sd": 0,
+        "min": 0.9941313862800598,
+        "max": 0.9941313862800598
+      },
+      "verdicts": {
+        "keep": 5,
+        "drop": 0,
+        "uncertain": 0,
+        "duplicate": 0
+      },
+      "keepDropFlip": false
+    },
+    {
+      "fixture": "08ce3f1",
+      "findingId": "F0f33347e1a",
+      "expected": "borderline",
+      "pSupported": {
+        "mean": 0.803531289100647,
+        "sd": 0,
+        "min": 0.803531289100647,
+        "max": 0.803531289100647
+      },
+      "verdicts": {
+        "keep": 5,
+        "drop": 0,
+        "uncertain": 0,
+        "duplicate": 0
+      },
+      "keepDropFlip": false
+    },
+    {
+      "fixture": "08ce3f1",
+      "findingId": "F9afba330fc",
+      "expected": "borderline",
+      "pSupported": {
+        "mean": 0.5327829122543335,
+        "sd": 0,
+        "min": 0.5327829122543335,
+        "max": 0.5327829122543335
+      },
+      "verdicts": {
+        "keep": 0,
+        "drop": 0,
+        "uncertain": 5,
+        "duplicate": 0
+      },
+      "keepDropFlip": false
+    },
+    {
+      "fixture": "1fac215",
+      "findingId": "F766b9ef9ff",
+      "expected": "borderline",
+      "pSupported": {
+        "mean": 0.9515972137451172,
+        "sd": 0,
+        "min": 0.9515972137451172,
+        "max": 0.9515972137451172
+      },
+      "verdicts": {
+        "keep": 5,
+        "drop": 0,
+        "uncertain": 0,
+        "duplicate": 0
+      },
+      "keepDropFlip": false
+    },
+    {
+      "fixture": "1fac215",
+      "findingId": "F01aad4352d",
+      "expected": "borderline",
+      "pSupported": {
+        "mean": 0.04592189937829971,
+        "sd": 0,
+        "min": 0.04592189937829971,
+        "max": 0.04592189937829971
+      },
+      "verdicts": {
+        "keep": 0,
+        "drop": 5,
+        "uncertain": 0,
+        "duplicate": 0
+      },
+      "keepDropFlip": false
+    },
+    {
+      "fixture": "1fac215",
+      "findingId": "F6325ad421c",
+      "expected": "borderline",
+      "pSupported": {
+        "mean": 0.035134207457304,
+        "sd": 0,
+        "min": 0.035134207457304,
+        "max": 0.035134207457304
+      },
+      "verdicts": {
+        "keep": 0,
+        "drop": 5,
+        "uncertain": 0,
+        "duplicate": 0
+      },
+      "keepDropFlip": false
+    },
+    {
+      "fixture": "5f297fc",
+      "findingId": "F72de598a8b",
+      "expected": "borderline",
+      "pSupported": {
+        "mean": 0.9916409254074097,
+        "sd": 0,
+        "min": 0.9916409254074097,
+        "max": 0.9916409254074097
+      },
+      "verdicts": {
+        "keep": 5,
+        "drop": 0,
+        "uncertain": 0,
+        "duplicate": 0
+      },
+      "keepDropFlip": false
+    },
+    {
+      "fixture": "5f297fc",
+      "findingId": "F0f33347e1a",
+      "expected": "borderline",
+      "pSupported": {
+        "mean": 0.6877480149269104,
+        "sd": 0,
+        "min": 0.6877480149269104,
+        "max": 0.6877480149269104
+      },
+      "verdicts": {
+        "keep": 0,
+        "drop": 0,
+        "uncertain": 5,
+        "duplicate": 0
+      },
+      "keepDropFlip": false
+    },
+    {
+      "fixture": "5f297fc",
+      "findingId": "F9afba330fc",
+      "expected": "borderline",
+      "pSupported": {
+        "mean": 0.7530279755592346,
+        "sd": 0,
+        "min": 0.7530279755592346,
+        "max": 0.7530279755592346
+      },
+      "verdicts": {
+        "keep": 5,
+        "drop": 0,
+        "uncertain": 0,
+        "duplicate": 0
+      },
+      "keepDropFlip": false
+    },
+    {
+      "fixture": "6b6a416",
+      "findingId": "F5e3f120034",
+      "expected": "borderline",
+      "pSupported": {
+        "mean": 0.9945235252380371,
+        "sd": 0,
+        "min": 0.9945235252380371,
+        "max": 0.9945235252380371
+      },
+      "verdicts": {
+        "keep": 5,
+        "drop": 0,
+        "uncertain": 0,
+        "duplicate": 0
+      },
+      "keepDropFlip": false
+    },
+    {
+      "fixture": "6b6a416",
+      "findingId": "Fd78be8fc8a",
+      "expected": "borderline",
+      "pSupported": {
+        "mean": 0.14597555994987488,
+        "sd": 0,
+        "min": 0.14597555994987488,
+        "max": 0.14597555994987488
+      },
+      "verdicts": {
+        "keep": 0,
+        "drop": 5,
+        "uncertain": 0,
+        "duplicate": 0
+      },
+      "keepDropFlip": false
+    },
+    {
+      "fixture": "6b6a416",
+      "findingId": "F29dad7de9a",
+      "expected": "borderline",
+      "pSupported": {
+        "mean": 0.13095740973949432,
+        "sd": 0,
+        "min": 0.13095740973949432,
+        "max": 0.13095740973949432
+      },
+      "verdicts": {
+        "keep": 0,
+        "drop": 5,
+        "uncertain": 0,
+        "duplicate": 0
+      },
+      "keepDropFlip": false
+    },
+    {
+      "fixture": "9587bc5",
+      "findingId": "F36a1ac8d2c",
+      "expected": "borderline",
+      "pSupported": {
+        "mean": 0.9985060691833496,
+        "sd": 0,
+        "min": 0.9985060691833496,
+        "max": 0.9985060691833496
+      },
+      "verdicts": {
+        "keep": 5,
+        "drop": 0,
+        "uncertain": 0,
+        "duplicate": 0
+      },
+      "keepDropFlip": false
+    },
+    {
+      "fixture": "9587bc5",
+      "findingId": "Fbf37b550fc",
+      "expected": "borderline",
+      "pSupported": {
+        "mean": 0.0802900493144989,
+        "sd": 0,
+        "min": 0.0802900493144989,
+        "max": 0.0802900493144989
+      },
+      "verdicts": {
+        "keep": 0,
+        "drop": 5,
+        "uncertain": 0,
+        "duplicate": 0
+      },
+      "keepDropFlip": false
+    },
+    {
+      "fixture": "9587bc5",
+      "findingId": "Fb395719f3a",
+      "expected": "borderline",
+      "pSupported": {
+        "mean": 0.048715781420469284,
+        "sd": 0,
+        "min": 0.048715781420469284,
+        "max": 0.048715781420469284
+      },
+      "verdicts": {
+        "keep": 0,
+        "drop": 5,
+        "uncertain": 0,
+        "duplicate": 0
+      },
+      "keepDropFlip": false
+    },
+    {
+      "fixture": "9b2a47f",
+      "findingId": "F73fbc7dd0a",
+      "expected": "borderline",
+      "pSupported": {
+        "mean": 0.8527264595031738,
+        "sd": 0,
+        "min": 0.8527264595031738,
+        "max": 0.8527264595031738
+      },
+      "verdicts": {
+        "keep": 5,
+        "drop": 0,
+        "uncertain": 0,
+        "duplicate": 0
+      },
+      "keepDropFlip": false
+    },
+    {
+      "fixture": "9b2a47f",
+      "findingId": "Ff22fdf02c1",
+      "expected": "borderline",
+      "pSupported": {
+        "mean": 0.03805865719914436,
+        "sd": 0,
+        "min": 0.03805865719914436,
+        "max": 0.03805865719914436
+      },
+      "verdicts": {
+        "keep": 0,
+        "drop": 5,
+        "uncertain": 0,
+        "duplicate": 0
+      },
+      "keepDropFlip": false
+    },
+    {
+      "fixture": "9b2a47f",
+      "findingId": "Faa9a2b7ec0",
+      "expected": "borderline",
+      "pSupported": {
+        "mean": 0.013322013430297375,
+        "sd": 0,
+        "min": 0.013322013430297375,
+        "max": 0.013322013430297375
+      },
+      "verdicts": {
+        "keep": 0,
+        "drop": 5,
+        "uncertain": 0,
+        "duplicate": 0
+      },
+      "keepDropFlip": false
+    },
+    {
+      "fixture": "9b3cbf4",
+      "findingId": "F72de598a8b",
+      "expected": "borderline",
+      "pSupported": {
+        "mean": 0.9888641834259033,
+        "sd": 0,
+        "min": 0.9888641834259033,
+        "max": 0.9888641834259033
+      },
+      "verdicts": {
+        "keep": 5,
+        "drop": 0,
+        "uncertain": 0,
+        "duplicate": 0
+      },
+      "keepDropFlip": false
+    },
+    {
+      "fixture": "9b3cbf4",
+      "findingId": "F0f33347e1a",
+      "expected": "borderline",
+      "pSupported": {
+        "mean": 0.14114055037498474,
+        "sd": 0,
+        "min": 0.14114055037498474,
+        "max": 0.14114055037498474
+      },
+      "verdicts": {
+        "keep": 0,
+        "drop": 5,
+        "uncertain": 0,
+        "duplicate": 0
+      },
+      "keepDropFlip": false
+    },
+    {
+      "fixture": "9b3cbf4",
+      "findingId": "F9afba330fc",
+      "expected": "borderline",
+      "pSupported": {
+        "mean": 0.2096753567457199,
+        "sd": 0,
+        "min": 0.2096753567457199,
+        "max": 0.2096753567457199
+      },
+      "verdicts": {
+        "keep": 0,
+        "drop": 5,
+        "uncertain": 0,
+        "duplicate": 0
+      },
+      "keepDropFlip": false
+    },
+    {
+      "fixture": "baccc98",
+      "findingId": "F73fbc7dd0a",
+      "expected": "borderline",
+      "pSupported": {
+        "mean": 0.9858330488204956,
+        "sd": 0,
+        "min": 0.9858330488204956,
+        "max": 0.9858330488204956
+      },
+      "verdicts": {
+        "keep": 5,
+        "drop": 0,
+        "uncertain": 0,
+        "duplicate": 0
+      },
+      "keepDropFlip": false
+    },
+    {
+      "fixture": "baccc98",
+      "findingId": "Ff22fdf02c1",
+      "expected": "borderline",
+      "pSupported": {
+        "mean": 0.19266155362129211,
+        "sd": 0,
+        "min": 0.19266155362129211,
+        "max": 0.19266155362129211
+      },
+      "verdicts": {
+        "keep": 0,
+        "drop": 5,
+        "uncertain": 0,
+        "duplicate": 0
+      },
+      "keepDropFlip": false
+    },
+    {
+      "fixture": "baccc98",
+      "findingId": "Faa9a2b7ec0",
+      "expected": "borderline",
+      "pSupported": {
+        "mean": 0.04386157914996147,
+        "sd": 0,
+        "min": 0.04386157914996147,
+        "max": 0.04386157914996147
+      },
+      "verdicts": {
+        "keep": 0,
+        "drop": 5,
+        "uncertain": 0,
+        "duplicate": 0
+      },
+      "keepDropFlip": false
+    },
+    {
+      "fixture": "da63f0b",
+      "findingId": "F482760e9c5",
+      "expected": "borderline",
+      "pSupported": {
+        "mean": 0.21714664995670319,
+        "sd": 0,
+        "min": 0.21714664995670319,
+        "max": 0.21714664995670319
+      },
+      "verdicts": {
+        "keep": 0,
+        "drop": 5,
+        "uncertain": 0,
+        "duplicate": 0
+      },
+      "keepDropFlip": false
+    },
+    {
+      "fixture": "da63f0b",
+      "findingId": "F2c3281a185",
+      "expected": "borderline",
+      "pSupported": {
+        "mean": 0.26010817289352417,
+        "sd": 0,
+        "min": 0.26010817289352417,
+        "max": 0.26010817289352417
+      },
+      "verdicts": {
+        "keep": 0,
+        "drop": 5,
+        "uncertain": 0,
+        "duplicate": 0
+      },
+      "keepDropFlip": false
+    },
+    {
+      "fixture": "da63f0b",
+      "findingId": "F4934fc3ff8",
+      "expected": "borderline",
+      "pSupported": {
+        "mean": 0.11885974556207657,
+        "sd": 0,
+        "min": 0.11885974556207657,
+        "max": 0.11885974556207657
+      },
+      "verdicts": {
+        "keep": 0,
+        "drop": 5,
+        "uncertain": 0,
+        "duplicate": 0
+      },
+      "keepDropFlip": false
+    }
+  ],
+  "keepDropFlipRate": 0,
+  "uncertainRate": 0.1,
+  "endToEnd": [
+    {
+      "fixture": "06b3c7e",
+      "overlap": 0.3,
+      "keptCounts": [
+        1,
+        0,
+        0,
+        0,
+        1
+      ],
+      "failures": []
+    },
+    {
+      "fixture": "08ce3f1",
+      "overlap": 0.13999999999999999,
+      "keptCounts": [
+        0,
+        2,
+        3,
+        0,
+        4
+      ],
+      "failures": []
+    },
+    {
+      "fixture": "1fac215",
+      "overlap": 1,
+      "keptCounts": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "failures": []
+    },
+    {
+      "fixture": "5f297fc",
+      "overlap": 0.6,
+      "keptCounts": [
+        0,
+        0,
+        0,
+        5,
+        0
+      ],
+      "failures": []
+    },
+    {
+      "fixture": "6b6a416",
+      "overlap": 0.225,
+      "keptCounts": [
+        1,
+        0,
+        0,
+        5,
+        4
+      ],
+      "failures": []
+    },
+    {
+      "fixture": "9587bc5",
+      "overlap": 0.3,
+      "keptCounts": [
+        0,
+        4,
+        0,
+        2,
+        2
+      ],
+      "failures": []
+    },
+    {
+      "fixture": "9b2a47f",
+      "overlap": 0.33333333333333337,
+      "keptCounts": [
+        0,
+        3,
+        0,
+        0,
+        1
+      ],
+      "failures": []
+    },
+    {
+      "fixture": "9b3cbf4",
+      "overlap": 0.2883333333333333,
+      "keptCounts": [
+        2,
+        2,
+        3,
+        2,
+        4
+      ],
+      "failures": []
+    },
+    {
+      "fixture": "baccc98",
+      "overlap": 0.6,
+      "keptCounts": [
+        0,
+        0,
+        0,
+        0,
+        1
+      ],
+      "failures": []
+    },
+    {
+      "fixture": "da63f0b",
+      "overlap": 0.35833333333333334,
+      "keptCounts": [
+        3,
+        2,
+        2,
+        1,
+        2
+      ],
+      "failures": []
+    }
+  ]
+}
