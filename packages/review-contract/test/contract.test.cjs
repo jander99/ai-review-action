@@ -1428,3 +1428,69 @@ test('Scope without Summary remains invalid with the missing Summary reason', ()
   assert.equal(result.valid, false);
   assert.match(result.reason, /missing ## Summary section/);
 });
+const TRIAGE_DOC = `# Review — triage
+
+> Triage: Scrutinize: high risk.
+
+## Scope
+
+- a.ts
+
+## Summary
+
+- New findings: 1
+- Unresolved from prior review: 0
+- Resolved by latest commits: 0
+- Uncertain (not confirmed): 1
+
+## Findings
+
+### 🔴 Critical — boom
+- Status: new
+- Location: a.ts:1-1
+- Description: it breaks
+
+## Uncertain
+
+<details><summary>1 finding the judge could not confirm</summary>
+
+### 🟢 Suggestion — maybe
+- Status: new
+- Location: a.ts:3-4
+- Description: unclear (P(supported)=0.52)
+
+</details>
+`;
+
+test('triage line, fourth summary bullet and uncertain section round-trip', () => {
+  const parsed = validateReviewDocument(TRIAGE_DOC);
+  assert.equal(parsed.valid, true);
+  assert.equal(parsed.document.triage, 'Scrutinize: high risk.');
+  assert.equal(parsed.document.summary.uncertain, 1);
+  assert.equal(parsed.document.uncertain.length, 1);
+  const rendered = renderDocument(parsed.document);
+  const validated = validateReviewDocument(rendered);
+  assert.equal(validated.valid, true);
+  assert.equal(validated.document.uncertain.length, 1);
+});
+
+test('uncertain section before findings is invalid', () => {
+  const bad = TRIAGE_DOC.replace('## Findings', '## X').replace('## Uncertain', '## Findings').replace('## X', '## Uncertain');
+  assert.equal(validateReviewDocument(bad).valid, false);
+});
+
+test('a document without the new sections still validates', () => {
+  const plain = `# Review — plain
+
+## Scope
+
+- a.ts
+
+## Summary
+
+- New findings: 0
+- Unresolved from prior review: 0
+- Resolved by latest commits: 0
+`;
+  assert.equal(validateReviewDocument(plain).valid, true);
+});

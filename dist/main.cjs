@@ -27313,6 +27313,7 @@ function parseSummary(lines, summaryStart) {
   let newCount = null;
   let unresolvedCount = null;
   let resolvedCount = null;
+  let uncertainCount = null;
   let endLine = summaryStart + 1;
   for (let i = summaryStart + 1; i < lines.length; i++) {
     const line = lines[i];
@@ -27352,6 +27353,15 @@ function parseSummary(lines, summaryStart) {
       endLine = i;
       continue;
     }
+    const uncertainMatch = line.match(/^\s*-\s*Uncertain \(not confirmed\):\s*(\d+)\s*$/);
+    if (uncertainMatch) {
+      if (uncertainCount !== null) {
+        return { document: result, endLine: i, error: "duplicate Uncertain (not confirmed) line in ## Summary" };
+      }
+      uncertainCount = Number.parseInt(uncertainMatch[1], 10);
+      endLine = i;
+      continue;
+    }
     return { document: result, endLine: i, error: `unexpected content in ## Summary: ${line.slice(0, 80)}` };
   }
   if (newCount === null) {
@@ -27366,6 +27376,9 @@ function parseSummary(lines, summaryStart) {
   result.new = newCount;
   result.unresolved = unresolvedCount;
   result.resolved = resolvedCount;
+  if (uncertainCount !== null) {
+    result.uncertain = uncertainCount;
+  }
   return { document: result, endLine, error: null };
 }
 function parseFindings(lines, findingsStart) {
@@ -27382,6 +27395,9 @@ function parseFindings(lines, findingsStart) {
     }
     const headingMatch = line.match(FINDING_HEADING_PATTERN);
     if (!headingMatch) {
+      if (UNCERTAIN_HEADING_PATTERN.test(line)) {
+        return { findings, endLine: i, error: null };
+      }
       return { findings, endLine: i, error: `unexpected content under ## Findings: ${line.slice(0, 80)}` };
     }
     const emoji = headingMatch[1].split(" ")[0];
@@ -27399,7 +27415,7 @@ function parseFindings(lines, findingsStart) {
     let j = i + 1;
     while (j < lines.length) {
       const innerLine = lines[j];
-      if (FINDING_HEADING_PATTERN.test(innerLine)) {
+      if (FINDING_HEADING_PATTERN.test(innerLine) || UNCERTAIN_HEADING_PATTERN.test(innerLine)) {
         break;
       }
       if (innerLine.trim() === "") {
@@ -27464,6 +27480,48 @@ function parseFindings(lines, findingsStart) {
   }
   return { findings, endLine: i, error: null };
 }
+var UNCERTAIN_HEADING_PATTERN = /^## Uncertain\s*$/;
+function parseUncertainTail(lines, start) {
+  let i = start;
+  while (i < lines.length && lines[i].trim() === "") {
+    i += 1;
+  }
+  if (i >= lines.length) {
+    return { error: null };
+  }
+  if (!UNCERTAIN_HEADING_PATTERN.test(lines[i])) {
+    return { error: `unexpected content after final finding: ${lines[i].slice(0, 80)}` };
+  }
+  i += 1;
+  while (i < lines.length && lines[i].trim() === "") {
+    i += 1;
+  }
+  if (i >= lines.length || !lines[i].trim().startsWith("<details>")) {
+    return { error: "## Uncertain must contain a <details> block" };
+  }
+  const innerStart = i + 1;
+  let innerEnd = -1;
+  for (let j = innerStart; j < lines.length; j++) {
+    if (lines[j].trim() === "</details>") {
+      innerEnd = j;
+      break;
+    }
+  }
+  if (innerEnd === -1) {
+    return { error: "## Uncertain <details> block is not closed" };
+  }
+  for (let j = innerEnd + 1; j < lines.length; j++) {
+    if (lines[j].trim() !== "") {
+      return { error: `unexpected content after ## Uncertain: ${lines[j].slice(0, 80)}` };
+    }
+  }
+  const inner = lines.slice(innerStart, innerEnd).filter((line) => !line.trim().startsWith("<summary>"));
+  const parsed = parseFindings(["## Findings", ...inner], 0);
+  if (parsed.error) {
+    return { error: `## Uncertain: ${parsed.error}` };
+  }
+  return { uncertain: parsed.findings, error: null };
+}
 function validateReviewDocument(content) {
   if (content.length > MAX_CHARS) {
     return { valid: false, reason: `review document exceeds ${MAX_CHARS} chars` };
@@ -27476,10 +27534,20 @@ function validateReviewDocument(content) {
   if (!title) {
     return { valid: false, reason: "# Review \u2014 heading must have a non-empty title-or-ref" };
   }
+  let triage;
+  let cursor = 1;
+  while (cursor < lines.length && lines[cursor].trim() === "") {
+    cursor += 1;
+  }
+  const triageMatch = lines[cursor]?.match(/^>\s*Triage:\s*(\S.*)$/);
+  if (triageMatch) {
+    triage = triageMatch[1].trim();
+    cursor += 1;
+  }
   let summaryIdx = -1;
   let findingsIdx = -1;
   let scope;
-  let i = 1;
+  let i = cursor;
   while (i < lines.length && lines[i].trim() === "") {
     i += 1;
   }
@@ -27563,6 +27631,7 @@ function validateReviewDocument(content) {
   }
   const actualCounts = { new: 0, unresolved: 0, resolved: 0 };
   let findings = [];
+  let uncertain;
   if (findingsIdx !== -1) {
     const parsed = parseFindings(lines, findingsIdx);
     if (parsed.error) {
@@ -27581,16 +27650,20 @@ function validateReviewDocument(content) {
         actualCounts.resolved += 1;
       }
     }
-    for (let i2 = parsed.endLine; i2 < lines.length; i2++) {
-      const line = lines[i2];
-      if (line.trim() === "") {
-        continue;
-      }
-      if (isFenceOpenAt(lines, i2)) {
-        continue;
-      }
-      return { valid: false, reason: `unexpected content after final finding: ${line.slice(0, 80)}` };
+    const tail = parseUncertainTail(lines, parsed.endLine);
+    if (tail.error) {
+      return { valid: false, reason: tail.error };
     }
+    uncertain = tail.uncertain;
+  }
+  if (uncertain && summary.document.uncertain !== uncertain.length) {
+    return {
+      valid: false,
+      reason: `uncertain count mismatch: summary says ${summary.document.uncertain}; ## Uncertain yields ${uncertain.length}`
+    };
+  }
+  if (uncertain && summary.document.uncertain === void 0) {
+    return { valid: false, reason: "## Uncertain section is present but ## Summary has no Uncertain (not confirmed) line" };
   }
   if (findings.length === 0 && (actualCounts.new > 0 || actualCounts.unresolved > 0 || actualCounts.resolved > 0)) {
     return { valid: false, reason: "summary counts are non-zero but no findings blocks were found" };
@@ -27609,9 +27682,11 @@ function validateReviewDocument(content) {
     reason: "",
     document: {
       title,
+      triage,
       scope,
       summary: summary.document,
-      findings
+      findings,
+      uncertain
     }
   };
 }
@@ -27639,6 +27714,9 @@ function renderDocument(document) {
   const lines = [
     `# Review \u2014 ${document.title}`
   ];
+  if (document.triage) {
+    lines.push("", `> Triage: ${document.triage}`);
+  }
   if (document.scope && document.scope.length > 0) {
     lines.push("");
     lines.push("## Scope");
@@ -27654,6 +27732,9 @@ function renderDocument(document) {
     `- Unresolved from prior review: ${document.summary.unresolved}`,
     `- Resolved by latest commits: ${document.summary.resolved}`
   );
+  if (document.summary.uncertain !== void 0) {
+    lines.push(`- Uncertain (not confirmed): ${document.summary.uncertain}`);
+  }
   if (document.findings.length > 0) {
     lines.push("");
     lines.push("## Findings");
@@ -27662,6 +27743,14 @@ function renderDocument(document) {
       lines.push(renderFinding(finding));
       lines.push("");
     }
+  }
+  if (document.uncertain && document.uncertain.length > 0) {
+    lines.push("", "## Uncertain", "", `<details><summary>${document.uncertain.length} finding${document.uncertain.length === 1 ? "" : "s"} the judge could not confirm</summary>`, "");
+    for (const finding of document.uncertain) {
+      lines.push(renderFinding(finding));
+      lines.push("");
+    }
+    lines.push("</details>");
   }
   while (lines.length > 0 && lines[lines.length - 1] === "") {
     lines.pop();
