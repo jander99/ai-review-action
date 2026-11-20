@@ -33,8 +33,9 @@ function mapError(err: unknown, config: ProviderConfig): DecisionError {
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
+    // Keep the timer referenced: an unref'd timer never fires when the raced
+    // promise is the only other pending work, so the event loop drains first.
     timer = setTimeout(() => reject(new Error(`Request timed out after ${ms}ms`)), ms);
-    timer.unref?.();
   });
   return Promise.race([p, timeout]).finally(() => clearTimeout(timer));
 }
@@ -46,7 +47,6 @@ export function createGoogleDecisionClient(config: ProviderConfig): DecisionClie
     httpOptions: {
       baseUrl: config.baseUrl ?? DEFAULT_BASE_URL,
       timeout: config.timeoutMs ?? 60_000,
-      retryOptions: { attempts: Number(config.options?.maxRetries ?? 3) + 1, initialDelay: 0.05 },
     },
   });
 
@@ -69,7 +69,14 @@ export function createGoogleDecisionClient(config: ProviderConfig): DecisionClie
 
       const model = config.model.startsWith('models/') ? config.model : `models/${config.model}`;
       try {
-        const res = await withTimeout(ai.decisions.create({ model, input: req.state, questions: questions as never }), config.timeoutMs ?? 60_000);
+        const res = await withTimeout(
+          ai.decisions.create({ model, input: req.state, questions: questions as never }, undefined, {
+            // Per-call retry policy: httpOptions.retryOptions is ignored, and the
+            // SDK default (5 attempts, 1s initial backoff) is too slow for tests.
+            retries: { strategy: 'attempt-count-backoff', maxRetries: Number(config.options?.maxRetries ?? 3), backoff: { initialDelay: 0.05 } },
+          }),
+          config.timeoutMs ?? 60_000,
+        );
         const answers: Record<string, DecisionAnswer> = {};
         for (const [id, raw] of Object.entries(res.answers ?? {}) as Array<[string, unknown]>) {
           const a = raw as { type: string; noul?: number; probabilities?: Record<string, number>; score?: number };
