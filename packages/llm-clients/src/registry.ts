@@ -8,8 +8,11 @@
 import type { ProviderConfig } from '@jander99/ai-review-review-contract';
 import type { LlmClient, LlmClientFactory } from './types';
 import { LlmError } from './errors';
+import { createOpenAiClient } from './adapters/openai';
 
-const factories: Record<string, LlmClientFactory> = {};
+const factories: Record<string, LlmClientFactory> = {
+  openai: createOpenAiClient,
+};
 
 export function registerLlmProvider(provider: string, factory: LlmClientFactory): void {
   factories[provider] = factory;
