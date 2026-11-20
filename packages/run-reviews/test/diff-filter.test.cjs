@@ -233,17 +233,12 @@ test('computeReviewDiff probes HEAD~1 for workflow_dispatch when working dir has
   }
 });
 
-test('computeReviewDiff returns an empty diff when the working dir is not a git repo', () => {
+test('computeReviewDiff throws when git diff fails (e.g. not a git repo)', () => {
   const nonRepo = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-review-diff-nonrepo-'));
   try {
-    const { diff } = computeReviewDiff(
-      { eventName: 'pull_request', baseSha: 'deadbeef', headSha: 'feedface' },
-      nonRepo,
-    );
-    assert.equal(
-      diff,
-      '',
-      'non-repo working dir must fall back to an empty diff, not throw',
+    assert.throws(
+      () => computeReviewDiff({ eventName: 'pull_request', baseSha: 'deadbeef', headSha: 'feedface' }, nonRepo),
+      /git diff .* failed/,
     );
   } finally {
     rmFixture(nonRepo);

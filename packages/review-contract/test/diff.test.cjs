@@ -45,3 +45,20 @@ test('files come back sorted by path', () => {
 test('countChangedLines excludes headers and context', () => {
   assert.equal(countChangedLines(parseUnifiedDiff(TWO_HUNKS)), 4);
 });
+
+test('parseUnifiedDiff ignores +++/--- content lines inside hunks', () => {
+  const diff = [
+    'diff --git a/a.md b/a.md',
+    'index 1..2 100644',
+    '--- a/a.md',
+    '+++ b/a.md',
+    '@@ -1,2 +1,3 @@',
+    ' keep',
+    '+++',
+    '+x',
+    '',
+  ].join('\n');
+  const [file] = parseUnifiedDiff(diff);
+  assert.equal(file.status, 'modified');
+  assert.deepEqual([...file.hunks[0].rightLines], [1, 2, 3]);
+});

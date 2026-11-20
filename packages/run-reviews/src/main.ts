@@ -49,8 +49,9 @@ export const REPO_INSTRUCTION_MAX_CHARS = 32_000;
 export const CONTEXT_FILE_MAX_BYTES = 1_000_000;
 
 /**
- * The filtered diff for this event, or `''` when none is available. An empty
- * diff is a real state (nothing to review), so no placeholder is invented.
+ * The filtered diff for this event. An empty diff is a real state (nothing to
+ * review), so no placeholder is invented; a failing `git diff` throws instead
+ * of masquerading as one.
  */
 export function computeReviewDiff(ctx: EventContext, workingDir: string): { diff: string; truncated: boolean } {
   const range = resolveDiffRange(ctx, workingDir);
@@ -63,10 +64,16 @@ export function computeReviewDiff(ctx: EventContext, workingDir: string): { diff
     stdio: ['ignore', 'pipe', 'pipe'],
     timeout: 15_000,
   });
-  if (result.error || result.status !== 0) {
-    return { diff: '', truncated: false };
-  }
   const stdout = typeof result.stdout === 'string' ? result.stdout : '';
+  const overflowed = (result.error as NodeJS.ErrnoException | undefined)?.code === 'ENOBUFS';
+  if (overflowed) {
+    // Too large to buffer: review the leading part rather than nothing.
+    return { diff: stdout.slice(0, REVIEW_DIFF_MAX_BYTES), truncated: true };
+  }
+  if (result.error || result.status !== 0) {
+    const detail = result.error?.message ?? String(result.stderr ?? '').trim();
+    throw new Error(`git diff ${range} failed${detail ? `: ${detail}` : ''}. Is the base commit fetched (fetch-depth: 0)?`);
+  }
   if (!stdout.trim()) {
     return { diff: '', truncated: false };
   }

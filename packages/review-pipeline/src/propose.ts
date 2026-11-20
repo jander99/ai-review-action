@@ -118,6 +118,7 @@ export async function proposeFindings(
     }
     kept.push({
       ...finding,
+      id: findingId(finding.file, finding.title),
       relatedFiles: finding.relatedFiles.filter((p) => byPath.has(p)),
     });
   }
@@ -126,11 +127,10 @@ export async function proposeFindings(
 
   const seen = new Set<string>();
   const unique = kept.filter((f) => {
-    const id = findingId(f.file, f.title);
-    if (seen.has(id)) {
+    if (seen.has(f.id)) {
       return false;
     }
-    seen.add(id);
+    seen.add(f.id);
     return true;
   });
 

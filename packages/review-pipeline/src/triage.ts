@@ -102,7 +102,7 @@ export function decideTriage(
     return {
       depth: 'light',
       reasons: [],
-      line: `Safe to skim: low risk, ${changedLines} changed lines, matches the stated intent.`,
+      line: `Safe to skim: low risk, ${changedLines} changed lines${hasIntent ? ', matches the stated intent' : ''}.`,
     };
   }
 

@@ -102,3 +102,19 @@ test('triage auth failure fails before any proposer call', async () => {
   assert.equal(complete, 0);
   assert.match(result.failureReason, /Decision API failed during triage: auth: denied/);
 });
+
+test('multi-line claims render as a valid document and findings carry stable ids', async () => {
+  const proposer = llm({ findings: [finding({ title: 'multi\nline', claim: 'Foo is wrong.\n- see bar()\n### x' })] });
+  const decisions = triageClient(async (req) => {
+    if (req.questions.risk) {
+      return { answers: { risk: { type: 'choice', probabilities: { low: 0.9, medium: 0.05, high: 0.05 } } }, usage: { inputTokens: 2 } };
+    }
+    return {
+      answers: { supported: { type: 'noul', pTrue: 0.95 }, severity: { type: 'choice', probabilities: { major: 0.9, minor: 0.1 } } },
+      usage: { inputTokens: 1 },
+    };
+  });
+  const result = await runReviewPipeline(input(), { llm: proposer, decisions, thresholds: THRESHOLDS, log: () => {} });
+  assert.equal(result.status, 'ok');
+  assert.match(result.kept[0].finding.id, /^F[0-9a-f]{10}$/);
+});

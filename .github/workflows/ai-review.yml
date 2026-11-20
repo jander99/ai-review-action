@@ -46,6 +46,5 @@ jobs:
           prompts: file:examples/prompts/code-review.md,file:examples/prompts/security-review.md
           post-comment: true
           github-token: ${{ github.token }}
-        env:
-          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
-          DECISION_API_KEY: ${{ secrets.DECISION_API_KEY }}
+          llm-api-key: ${{ secrets.LLM_API_KEY }}
+          decision-api-key: ${{ secrets.DECISION_API_KEY }}
