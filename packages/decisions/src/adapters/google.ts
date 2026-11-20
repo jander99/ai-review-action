@@ -47,6 +47,9 @@ export function createGoogleDecisionClient(config: ProviderConfig): DecisionClie
     httpOptions: {
       baseUrl: config.baseUrl ?? DEFAULT_BASE_URL,
       timeout: config.timeoutMs ?? 60_000,
+      // The SDK has no per-call retry argument on decisions.create; retry
+      // policy lives here. Small initial delay keeps tests fast.
+      retryOptions: { attempts: Number(config.options?.maxRetries ?? 3) + 1, initialDelay: 0.05 },
     },
   });
 
@@ -70,11 +73,7 @@ export function createGoogleDecisionClient(config: ProviderConfig): DecisionClie
       const model = config.model.startsWith('models/') ? config.model : `models/${config.model}`;
       try {
         const res = await withTimeout(
-          ai.decisions.create({ model, input: req.state, questions: questions as never }, undefined, {
-            // Per-call retry policy: httpOptions.retryOptions is ignored, and the
-            // SDK default (5 attempts, 1s initial backoff) is too slow for tests.
-            retries: { strategy: 'attempt-count-backoff', maxRetries: Number(config.options?.maxRetries ?? 3), backoff: { initialDelay: 0.05 } },
-          }),
+          ai.decisions.create({ model, input: req.state, questions: questions as never }),
           config.timeoutMs ?? 60_000,
         );
         const answers: Record<string, DecisionAnswer> = {};
