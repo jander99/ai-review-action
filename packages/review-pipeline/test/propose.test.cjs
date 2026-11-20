@@ -5,10 +5,12 @@ const { proposeFindings, buildProposerPrompt } = require('../dist-test/index.cjs
 // Same shape as llm-clients' LlmError, built locally so this test does not
 // depend on that package's runtime bundle.
 const LlmError = class extends Error {
-  constructor(kind, message, details) {
+  constructor(kind, message, provider, status, details) {
     super(message);
     this.name = 'LlmError';
     this.kind = kind;
+    this.provider = provider;
+    this.status = status;
     this.details = details;
   }
 };
