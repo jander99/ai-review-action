@@ -12,6 +12,13 @@ DECISION_MODEL=subq-snap-1.2 \
   yarn nx run review-pipeline:study -- --runs 20 --out study-report.json
 ```
 
+`--e2e` also runs the whole pipeline `--runs` times per fixture and adds an
+`endToEnd` list (`fixture`, `overlap`, `keptCounts`). It needs `LLM_PROVIDER`,
+`LLM_API_KEY`, `LLM_MODEL` and optionally `LLM_BASE_URL`. `overlap` is the mean
+pairwise Jaccard of the kept finding sets (1 = identical, matched by file and
+overlapping line range); the proposer is still non-deterministic, so expect
+it below 1.
+
 Optional: `DECISION_BASE_URL` (for SubQ, `https://api.subq.ai`), `--runs` (default
 20), `--out` (default: print the report).
 
