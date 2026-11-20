@@ -13,6 +13,10 @@
 
 export const SCHEMA_VERSION = '1';
 
+export * from './policy';
+export * from './providers';
+export * from './findings';
+
 export const MAX_CHARS = 256_000;
 
 export const SEVERITIES = ['Critical', 'Warning', 'Suggestion'] as const;
@@ -832,7 +836,7 @@ if (i < lines.length && SCOPE_HEADING_PATTERN.test(lines[i])) {
 // Merge
 // -----------------------------------------------------------------------------
 
-function normalizeForKey(value: string): string {
+export function normalizeForKey(value: string): string {
   return value.trim().replace(/\s+/g, ' ');
 }
 
