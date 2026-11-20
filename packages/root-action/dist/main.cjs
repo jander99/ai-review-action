@@ -27013,6 +27013,31 @@ var os3 = __toESM(require("os"));
 var path5 = __toESM(require("path"));
 var import_zlib = require("zlib");
 
+// packages/review-contract/src/findings.ts
+var MARKER_RE = /<!--\s*ai-review-finding\s+id=(\S+?)(?:\s+file=(\S+))?(?:\s+line=(\d+))?\s*-->/;
+var TITLE_RE = /\*\*.*?\s—\s(.+?)\*\*/;
+function parsePriorFindings(body, fallback) {
+  const out = [];
+  const seen = /* @__PURE__ */ new Set();
+  let title = null;
+  for (const text of body.split("\n")) {
+    const heading = TITLE_RE.exec(text.trim());
+    if (heading) title = heading[1];
+    const marker = MARKER_RE.exec(text);
+    if (!marker) continue;
+    const [, id, file, line] = marker;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push({
+      id,
+      file: file ?? fallback?.path ?? null,
+      line: line !== void 0 ? Number(line) : fallback?.line ?? null,
+      title: title ?? id
+    });
+  }
+  return out;
+}
+
 // packages/review-contract/src/index.ts
 var MAX_CHARS = 256e3;
 var EMOJI_TO_SEVERITY = {
@@ -27807,10 +27832,10 @@ function mergeReviewDocuments(documents, titleOrRef) {
 
 // packages/previous-reviews/src/index.ts
 var PRIOR_REVIEW_BOT_LOGIN = "github-actions[bot]";
+var MAX_PRIOR_FINDINGS = 50;
 var PRIOR_REVIEW_LIMIT = 5;
 var PRIOR_REVIEW_PER_COMMENT_CHARS = 4 * 1024;
 var PRIOR_REVIEW_TOTAL_CHARS = 16 * 1024;
-var PRIOR_REVIEW_PAGE_SIZE = 50;
 var COMMENT_SEPARATOR = "\n\n---\n\n";
 var HEADER_BODY_SEPARATOR = "\n\n";
 function truncateOnLineBoundary(text, maxChars) {
@@ -27922,29 +27947,69 @@ async function fetchPriorReviews(options) {
     return null;
   }
   const octokit = options.octokit ?? new (await Promise.resolve().then(() => __toESM(require_dist_node14()))).Octokit({ auth: options.token });
+  const base = { owner: options.owner, repo: options.repo };
+  const perPage = { ...base, per_page: 100 };
+  const paginateAll = async (fn, params) => {
+    if (!fn) return [];
+    const request2 = fn;
+    if (octokit.paginate) return octokit.paginate(fn, params);
+    return (await request2(params)).data;
+  };
   try {
-    const response = await octokit.rest.issues.listComments({
-      owner: options.owner,
-      repo: options.repo,
-      issue_number: options.issueNumber,
-      per_page: PRIOR_REVIEW_PAGE_SIZE,
-      sort: "created",
-      direction: "desc"
+    const raw = [];
+    const issueComments = await paginateAll(octokit.rest.issues.listComments, {
+      ...perPage,
+      issue_number: options.issueNumber
     });
-    const comments = response.data.filter((comment) => comment.user?.login === PRIOR_REVIEW_BOT_LOGIN).map((comment) => ({
-      id: comment.id,
-      author: comment.user?.login ?? null,
-      createdAt: comment.created_at,
-      body: comment.body ?? ""
+    for (const comment of issueComments) {
+      if (comment.user?.login !== PRIOR_REVIEW_BOT_LOGIN) continue;
+      raw.push({ id: comment.id, createdAt: comment.created_at, body: comment.body ?? "" });
+    }
+    const reviewComments = await paginateAll(octokit.rest.pulls?.listReviewComments, {
+      ...perPage,
+      pull_number: options.issueNumber
+    });
+    for (const comment of reviewComments) {
+      if (comment.user?.login !== PRIOR_REVIEW_BOT_LOGIN) continue;
+      raw.push({
+        id: comment.id,
+        createdAt: comment.created_at,
+        body: comment.body ?? "",
+        path: comment.path ?? null,
+        line: comment.line ?? comment.original_line ?? null
+      });
+    }
+    const reviews = await paginateAll(octokit.rest.pulls?.listReviews, {
+      ...perPage,
+      pull_number: options.issueNumber
+    });
+    for (const review of reviews) {
+      if (review.user?.login !== PRIOR_REVIEW_BOT_LOGIN) continue;
+      raw.push({ id: review.id, createdAt: review.submitted_at ?? "", body: review.body ?? "" });
+    }
+    const comments = raw.map((c) => ({
+      id: c.id,
+      author: PRIOR_REVIEW_BOT_LOGIN,
+      createdAt: c.createdAt,
+      body: c.body
     }));
     const combined = formatPriorReviews(comments);
-    if (!combined) {
+    const byId = /* @__PURE__ */ new Map();
+    for (const c of raw) {
+      const fallback = c.path !== void 0 ? { path: c.path, line: c.line ?? null } : void 0;
+      for (const finding of parsePriorFindings(c.body, fallback)) {
+        const existing = byId.get(finding.id);
+        if (!existing || existing.createdAt < c.createdAt) byId.set(finding.id, { ...finding, createdAt: c.createdAt });
+      }
+    }
+    const findings = [...byId.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, MAX_PRIOR_FINDINGS).map(({ createdAt, ...finding }) => {
+      void createdAt;
+      return finding;
+    });
+    if (!combined && findings.length === 0) {
       return null;
     }
-    return {
-      comments,
-      combined
-    };
+    return { comments, combined, findings };
   } catch {
     return null;
   }

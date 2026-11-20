@@ -419,3 +419,55 @@ test('formatPriorReviews preserves a single emoji as a complete pair', () => {
     `result must preserve the single emoji; got: ${JSON.stringify(result)}`,
   );
 });
+test('finds bot discoveries across pages, review comments and reviews', async () => {
+  const { fetchPriorReviews } = require('../dist/index.cjs');
+  const page = (prefix, n) => Array.from({ length: n }, (_, i) => ({
+    id: `${prefix}-${i}`,
+    user: { login: 'github-actions[bot]' },
+    created_at: `2026-11-19T00:0${i}:00Z`,
+    body: `**🟡 Warning (major) — ${prefix} ${i}**\n\nclaim\n\n<!-- ai-review-finding id=${prefix}${i} -->`,
+  }));
+  const issuePage1 = [...page('i', 2), { id: 'human', user: { login: 'jander99' }, created_at: '2026-11-19T01:00:00Z', body: 'not a bot' }];
+  const issuePages = [issuePage1, [], page('i', 1)]; // the bot finding is only on page 3
+  const octokit = {
+    rest: {
+      issues: {
+        listComments: async () => ({ data: issuePages[0] }),
+      },
+      pulls: {
+        listReviewComments: async () => ({
+          data: [{ id: 'rc', user: { login: 'github-actions[bot]' }, created_at: '2026-11-19T02:00:00Z', path: 'src/b.ts', line: 4, body: '**🟢 Suggestion (nit) — rc**\n\n<!-- ai-review-finding id=rc -->' }],
+        }),
+        listReviews: async () => ({
+          data: [
+            { id: 'r1', user: { login: 'github-actions[bot]' }, submitted_at: '2026-11-19T03:00:00Z', body: '**🟡 Warning (major) — dup**\n\n<!-- ai-review-finding id=i0 -->' },
+          ],
+        }),
+      },
+    },
+    paginate: async (fn, params) => {
+      // Concatenate three pages for listComments; a single page otherwise.
+      if (fn === octokit.rest.issues.listComments) {
+        return issuePages.flat();
+      }
+      return (await fn(params)).data;
+    },
+  };
+  const result = await fetchPriorReviews({ token: 't', owner: 'o', repo: 'r', issueNumber: 1, octokit });
+  const ids = result.findings.map((f) => f.id);
+  assert.ok(ids.includes('i1'), 'bot finding from page 3 is returned');
+  assert.ok(ids.includes('rc'));
+  assert.equal(ids.filter((id) => id === 'i0').length, 1, 'duplicates across sources collapse');
+  const rc = result.findings.find((f) => f.id === 'rc');
+  assert.deepEqual([rc.file, rc.line], ['src/b.ts', 4], 'review comment supplies path/line when the marker has none');
+  assert.equal(result.findings.length <= 50, true);
+});
+
+test('returns null only when there are no comments and no findings', async () => {
+  const { fetchPriorReviews } = require('../dist/index.cjs');
+  const octokit = {
+    rest: { issues: { listComments: async () => ({ data: [] }) }, pulls: { listReviewComments: async () => ({ data: [] }), listReviews: async () => ({ data: [] }) } },
+    paginate: async (fn, params) => (await fn(params)).data,
+  };
+  assert.equal(await fetchPriorReviews({ token: 't', owner: 'o', repo: 'r', issueNumber: 1, octokit }), null);
+});

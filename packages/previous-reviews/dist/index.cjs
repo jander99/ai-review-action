@@ -4037,6 +4037,7 @@ var require_dist_node12 = __commonJS({
 // packages/previous-reviews/src/index.ts
 var index_exports = {};
 __export(index_exports, {
+  MAX_PRIOR_FINDINGS: () => MAX_PRIOR_FINDINGS,
   PRIOR_REVIEW_BOT_LOGIN: () => PRIOR_REVIEW_BOT_LOGIN,
   PRIOR_REVIEW_LIMIT: () => PRIOR_REVIEW_LIMIT,
   PRIOR_REVIEW_PAGE_SIZE: () => PRIOR_REVIEW_PAGE_SIZE,
@@ -4046,7 +4047,68 @@ __export(index_exports, {
   formatPriorReviews: () => formatPriorReviews
 });
 module.exports = __toCommonJS(index_exports);
+
+// packages/review-contract/src/findings.ts
+var MARKER_RE = /<!--\s*ai-review-finding\s+id=(\S+?)(?:\s+file=(\S+))?(?:\s+line=(\d+))?\s*-->/;
+var TITLE_RE = /\*\*.*?\s—\s(.+?)\*\*/;
+function parsePriorFindings(body, fallback) {
+  const out = [];
+  const seen = /* @__PURE__ */ new Set();
+  let title = null;
+  for (const text of body.split("\n")) {
+    const heading = TITLE_RE.exec(text.trim());
+    if (heading) title = heading[1];
+    const marker = MARKER_RE.exec(text);
+    if (!marker) continue;
+    const [, id, file, line] = marker;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push({
+      id,
+      file: file ?? fallback?.path ?? null,
+      line: line !== void 0 ? Number(line) : fallback?.line ?? null,
+      title: title ?? id
+    });
+  }
+  return out;
+}
+
+// packages/review-contract/src/index.ts
+var STATUSES = ["new", "unresolved", "resolved", "new variant"];
+var STATUS_VALUES_SET = new Set(STATUSES);
+var CANONICAL_FIELD_ORDER_TEXT = "mandatory Status/Location/Description fields, in that order";
+var VALIDATOR_AGENT_PROMPT_TEMPLATE = `You are a structural validator. The file contents are appended below the contract \u2014 you do not need to read any file from disk. Do not inspect the repository, do not call any tools, do not spawn sub-agents, and do not propose fixes.
+
+The file must contain a single canonical document that follows the strict review contract:
+
+1. First line: '# Review \u2014 <title-or-ref>' with a non-empty title-or-ref after the em dash. The literal characters '# Review \u2014 ' (hash, space, "Review", space, em dash, space) are required \u2014 the validator rejects anything else, including a bare em dash followed by the title. No other form is accepted.
+2. Immediately after the heading (blank lines allowed), a REQUIRED '## Scope' section. It must contain one or more bullet lines, each non-empty, that name the files, areas, or aspects of the change you actually examined. This section documents your work \u2014 emit it on every review. Do not omit it. Boilerplate is acceptable when there is nothing specific to say ("Reviewed the change."), but specific references to files and areas are preferred. Only one '## Scope' section is permitted.
+3. Immediately after '## Scope', a '## Summary' section containing exactly three bullet lines:
+    - New findings: <integer>
+    - Unresolved from prior review: <integer>
+    - Resolved by latest commits: <integer>
+   The counts must match the finding blocks below.
+4. Optional '## Findings' section AFTER Summary. Omit the section only when all three counts are zero. When present it must contain one or more blocks. Each block:
+    ### <emoji> <severity> \u2014 <short title>
+    - Status: <new | unresolved | resolved | new variant>
+    - Location: <path>:<line or line-range>
+    - Description: <single-line text>
+   Each finding block lists the ${CANONICAL_FIELD_ORDER_TEXT}. Surrounding blank lines are allowed. The 'Status:' line must come first, then 'Location:', then 'Description:'; no other field lines may appear in any other order.
+   The severity column must be one of: Critical, Warning, Suggestion, with the matching emoji (\u{1F534} / \u{1F7E1} / \u{1F7E2}).
+   'Location:' must be '<path>:<line>' or '<path>:<line>-<line>' with positive line numbers, OR a comma-separated list of such items on a single line (e.g. 'a.ts:12, b.ts:34-36'). Multi-location fields MUST use comma separators; natural-language connectors such as 'and' / 'or' / '&', semicolons, markdown links, bullets, and empty items are all invalid.
+   'Description:' must be a single non-empty line.
+5. Counts: 'new' + 'new variant' count toward New; 'unresolved' toward Unresolved; 'resolved' toward Resolved.
+6. No arbitrary prose outside this shape (no content after the final finding other than blank lines; no extra subsections; no unterminated fenced code block).
+
+If the file matches the structure, reply with exactly one line: VALID
+If the file is missing or malformed, reply with exactly one line: INVALID <reason>
+where <reason> is a short human-readable cause (e.g. "missing ## Summary section", "finding 2 missing Status field"). Do not include any other text in your reply.
+
+Path to validate: __REVIEW_PATH__`;
+
+// packages/previous-reviews/src/index.ts
 var PRIOR_REVIEW_BOT_LOGIN = "github-actions[bot]";
+var MAX_PRIOR_FINDINGS = 50;
 var PRIOR_REVIEW_LIMIT = 5;
 var PRIOR_REVIEW_PER_COMMENT_CHARS = 4 * 1024;
 var PRIOR_REVIEW_TOTAL_CHARS = 16 * 1024;
@@ -4162,35 +4224,76 @@ async function fetchPriorReviews(options) {
     return null;
   }
   const octokit = options.octokit ?? new (await Promise.resolve().then(() => __toESM(require_dist_node12()))).Octokit({ auth: options.token });
+  const base = { owner: options.owner, repo: options.repo };
+  const perPage = { ...base, per_page: 100 };
+  const paginateAll = async (fn, params) => {
+    if (!fn) return [];
+    const request = fn;
+    if (octokit.paginate) return octokit.paginate(fn, params);
+    return (await request(params)).data;
+  };
   try {
-    const response = await octokit.rest.issues.listComments({
-      owner: options.owner,
-      repo: options.repo,
-      issue_number: options.issueNumber,
-      per_page: PRIOR_REVIEW_PAGE_SIZE,
-      sort: "created",
-      direction: "desc"
+    const raw = [];
+    const issueComments = await paginateAll(octokit.rest.issues.listComments, {
+      ...perPage,
+      issue_number: options.issueNumber
     });
-    const comments = response.data.filter((comment) => comment.user?.login === PRIOR_REVIEW_BOT_LOGIN).map((comment) => ({
-      id: comment.id,
-      author: comment.user?.login ?? null,
-      createdAt: comment.created_at,
-      body: comment.body ?? ""
+    for (const comment of issueComments) {
+      if (comment.user?.login !== PRIOR_REVIEW_BOT_LOGIN) continue;
+      raw.push({ id: comment.id, createdAt: comment.created_at, body: comment.body ?? "" });
+    }
+    const reviewComments = await paginateAll(octokit.rest.pulls?.listReviewComments, {
+      ...perPage,
+      pull_number: options.issueNumber
+    });
+    for (const comment of reviewComments) {
+      if (comment.user?.login !== PRIOR_REVIEW_BOT_LOGIN) continue;
+      raw.push({
+        id: comment.id,
+        createdAt: comment.created_at,
+        body: comment.body ?? "",
+        path: comment.path ?? null,
+        line: comment.line ?? comment.original_line ?? null
+      });
+    }
+    const reviews = await paginateAll(octokit.rest.pulls?.listReviews, {
+      ...perPage,
+      pull_number: options.issueNumber
+    });
+    for (const review of reviews) {
+      if (review.user?.login !== PRIOR_REVIEW_BOT_LOGIN) continue;
+      raw.push({ id: review.id, createdAt: review.submitted_at ?? "", body: review.body ?? "" });
+    }
+    const comments = raw.map((c) => ({
+      id: c.id,
+      author: PRIOR_REVIEW_BOT_LOGIN,
+      createdAt: c.createdAt,
+      body: c.body
     }));
     const combined = formatPriorReviews(comments);
-    if (!combined) {
+    const byId = /* @__PURE__ */ new Map();
+    for (const c of raw) {
+      const fallback = c.path !== void 0 ? { path: c.path, line: c.line ?? null } : void 0;
+      for (const finding of parsePriorFindings(c.body, fallback)) {
+        const existing = byId.get(finding.id);
+        if (!existing || existing.createdAt < c.createdAt) byId.set(finding.id, { ...finding, createdAt: c.createdAt });
+      }
+    }
+    const findings = [...byId.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, MAX_PRIOR_FINDINGS).map(({ createdAt, ...finding }) => {
+      void createdAt;
+      return finding;
+    });
+    if (!combined && findings.length === 0) {
       return null;
     }
-    return {
-      comments,
-      combined
-    };
+    return { comments, combined, findings };
   } catch {
     return null;
   }
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
+  MAX_PRIOR_FINDINGS,
   PRIOR_REVIEW_BOT_LOGIN,
   PRIOR_REVIEW_LIMIT,
   PRIOR_REVIEW_PAGE_SIZE,
