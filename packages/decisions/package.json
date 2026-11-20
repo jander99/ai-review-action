@@ -1,0 +1,10 @@
+{
+  "name": "@jander99/ai-review-decisions",
+  "version": "1.0.0",
+  "main": "dist/index.cjs",
+  "private": true,
+  "dependencies": {
+    "@google/genai": "3.6.1",
+    "@typesafe-ai/sdk": "0.7.0"
+  }
+}

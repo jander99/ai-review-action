@@ -15,7 +15,7 @@
         "tsConfig": "packages/post-comment/tsconfig.json",
         "bundle": true,
         "platform": "node",
-        "target": "node20",
+        "target": "node22",
         "format": ["cjs"],
         "thirdParty": true
       }
@@ -25,7 +25,7 @@
       "executor": "nx:run-commands",
       "options": {
         "cwd": "packages/post-comment",
-        "command": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist-test/index.cjs"
+        "command": "esbuild src/index.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist-test/index.cjs"
       }
     },
     "test": {
