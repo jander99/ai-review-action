@@ -5,3 +5,5 @@ export * from './triage';
 export * from './propose';
 export * from './pool';
 export * from './judge-all';
+export * from './render';
+export * from './pipeline';
