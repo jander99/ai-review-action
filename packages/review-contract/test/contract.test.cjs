@@ -1432,6 +1432,10 @@ const TRIAGE_DOC = `# Review — triage
 
 > Triage: Scrutinize: high risk.
 
+## Scope
+
+- a.ts
+
 ## Summary
 
 - New findings: 1
@@ -1477,6 +1481,10 @@ test('uncertain section before findings is invalid', () => {
 
 test('a document without the new sections still validates', () => {
   const plain = `# Review — plain
+
+## Scope
+
+- a.ts
 
 ## Summary
 
