@@ -1,83 +1,71 @@
 import * as core from '@actions/core';
-import { runReviews, type RunReviewsOptions, type RunReviewsResult } from './main';
-import type { ReviewTool } from './opencode';
-import { DEFAULT_PERMISSION } from './permissions';
-import type { Permission } from './types';
+import { DEFAULT_THRESHOLDS, runReviews, type RunReviewsOptions, type RunReviewsResult } from './main';
 
-const DEFAULT_OPENCODE_VERSION = '1.18.4';
-const DEFAULT_MODEL = 'anthropic/claude-sonnet-4.6';
-const DEFAULT_TIMEOUT_MINUTES = 30;
-
-function readPermissionInput(input: string): Permission {
-  if (!input) {
-    return { ...DEFAULT_PERMISSION };
+function optional(input: string, fallback: number): number {
+  const raw = core.getInput(input) || `${fallback}`;
+  const value = Number.parseFloat(raw);
+  if (!Number.isFinite(value)) {
+    throw new Error(`${input} must be a number (received '${raw}')`);
   }
-  const parsed = JSON.parse(input) as unknown;
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('permission must be a JSON object');
-  }
-  return parsed as Permission;
-}
-
-/**
- * Resolve the `tool` input to a known runtime identifier. The
- * `tool` input defaults to `'opencode'` for back-compat; any other
- * value is rejected up-front so a typo surfaces as a clear error
- * rather than silently dispatching to the wrong CLI.
- */
-function readToolInput(input: string): ReviewTool {
-  const raw = (input || 'opencode').trim().toLowerCase();
-  if (raw === 'opencode' || raw === 'claude') {
-    return raw;
-  }
-  throw new Error(
-    `tool input must be 'opencode' or 'claude'; received '${input || '<empty>'}'`,
-  );
+  return value;
 }
 
 function buildOptionsFromCore(): RunReviewsOptions {
   return {
-    tool: readToolInput(core.getInput('tool')),
-    opencodeVersion: core.getInput('opencode-version') || DEFAULT_OPENCODE_VERSION,
-    claudeVersion: core.getInput('claude-version') || undefined,
-    debug: core.getBooleanInput('debug'),
-    model: core.getInput('model') || DEFAULT_MODEL,
-    modelsInput: core.getInput('models'),
-    failOnError: core.getBooleanInput('fail-on-error'),
-    timeoutMinutes: Number.parseInt(core.getInput('timeout-minutes') || `${DEFAULT_TIMEOUT_MINUTES}`, 10),
-    prompts: core.getInput('prompts'),
-    permission: readPermissionInput(core.getInput('permission')),
-    userConfig: core.getInput('opencode-config') || undefined,
+    prompts: core.getInput('prompts', { required: true }),
+    llm: {
+      provider: core.getInput('llm-provider', { required: true }),
+      config: {
+        apiKey: core.getInput('llm-api-key', { required: true }),
+        baseUrl: core.getInput('llm-base-url') || undefined,
+        model: core.getInput('llm-model', { required: true }),
+      },
+    },
+    decision: {
+      provider: core.getInput('decision-provider', { required: true }),
+      config: {
+        apiKey: core.getInput('decision-api-key', { required: true }),
+        baseUrl: core.getInput('decision-base-url') || undefined,
+        model: core.getInput('decision-model', { required: true }),
+      },
+    },
+    thresholds: {
+      keep: optional('keep-threshold', DEFAULT_THRESHOLDS.keep),
+      drop: optional('drop-threshold', DEFAULT_THRESHOLDS.drop),
+      severity: optional('severity-threshold', DEFAULT_THRESHOLDS.severity),
+    },
     githubToken: core.getInput('github-token') || process.env.GITHUB_TOKEN,
   };
 }
 
 function writeOutputs(result: RunReviewsResult): void {
   core.setOutput('review', result.review);
+  core.setOutput('triage', result.triage);
   core.setOutput('review-output-path', result.reviewOutputPath);
-  core.setOutput('models-used', result.modelsUsed);
-  core.setOutput('cost', result.cost);
-  core.setOutput('cost-by-model', JSON.stringify(result.costByModel));
-  core.setOutput('tokens', JSON.stringify(result.tokens));
-  core.setOutput('tokens-by-model', JSON.stringify(result.tokensByModel));
-  core.setOutput('effective-model', result.effectiveModel);
-  core.setOutput('config-json', result.configJson);
-  if (result.debugArtifactPath) {
-    core.setOutput('debug-artifact-path', result.debugArtifactPath);
-  }
-  // `failure-reason` is the single canonical failure-reason output
-  // (Phase-3 reduced naming to one). Reviewers downstream read this
-  // output regardless of which step produced the failure.
-  if (result.failureReason) {
-    core.setOutput('failure-reason', result.failureReason);
-    core.setFailed(result.failureReason);
-  } else {
-    core.setOutput('failure-reason', '');
+  core.setOutput('findings-kept', result.counts.kept);
+  core.setOutput('findings-uncertain', result.counts.uncertain);
+  core.setOutput('findings-dropped', result.counts.dropped);
+  core.setOutput(
+    'tokens',
+    JSON.stringify({
+      llmInput: result.usage.llmInputTokens,
+      llmOutput: result.usage.llmOutputTokens,
+      decisionInput: result.usage.decisionInputTokens,
+    }),
+  );
+  // `failure-reason` is the single canonical failure output, regardless of
+  // which stage produced the failure.
+  core.setOutput('failure-reason', result.failureReason);
+  if (result.status === 'failed') {
+    core.setFailed(result.failureReason || 'Review failed');
   }
 }
 
 async function run(): Promise<void> {
   const options = buildOptionsFromCore();
+  // Never let keys reach the log, even if they appear in an error message.
+  core.setSecret(options.llm.config.apiKey);
+  core.setSecret(options.decision.config.apiKey);
   const result = await runReviews(options);
   writeOutputs(result);
 }
@@ -89,6 +77,8 @@ async function run(): Promise<void> {
 if (require.main === module) {
   run().catch((error) => {
     const message = error instanceof Error ? error.message : String(error);
+    // Emit the canonical failure output before failing the step.
+    core.setOutput('failure-reason', `run-reviews failed: ${message}`);
     core.setFailed(`run-reviews failed: ${message}`);
   });
 }

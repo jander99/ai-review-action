@@ -29,7 +29,6 @@ const {
   computeReviewDiff,
   REVIEW_DIFF_EXCLUDE_PATHSPECS,
   REVIEW_DIFF_MAX_BYTES,
-  REVIEW_DIFF_EMPTY_PLACEHOLDER,
 } = bundle;
 
 function runGit(cwd, args, opts = {}) {
@@ -110,20 +109,19 @@ test('REVIEW_DIFF_MAX_BYTES is a positive integer cap', () => {
   assert.equal(REVIEW_DIFF_MAX_BYTES, 200_000, 'cap is pinned at 200 KB for predictable token use');
 });
 
-test('REVIEW_DIFF_EMPTY_PLACEHOLDER mentions dist/** so the model still has context', () => {
-  assert.match(REVIEW_DIFF_EMPTY_PLACEHOLDER, /dist\/\*\*/);
-  assert.ok(REVIEW_DIFF_EMPTY_PLACEHOLDER.length > 0);
+test('REVIEW_DIFF_EMPTY_PLACEHOLDER is gone: an empty diff is a real state', () => {
+  assert.equal(bundle.REVIEW_DIFF_EMPTY_PLACEHOLDER, undefined);
 });
 
 test('computeReviewDiff filters out dist/** paths from a pull_request diff', () => {
   const { repo, baseSha, headSha } = buildFixtureRepo();
   try {
-    const result = computeReviewDiff(
+    const { diff: result } = computeReviewDiff(
       { eventName: 'pull_request', baseSha, headSha },
       repo,
     );
 
-    assert.notEqual(result, REVIEW_DIFF_EMPTY_PLACEHOLDER, 'diff must not be empty');
+    assert.notEqual(result, '', 'diff must not be empty');
     assert.ok(result.includes('README.md'), 'source README change must be present');
     assert.ok(result.includes('src/foo.ts'), 'source change under src/ must be present');
     assert.ok(!result.includes('dist/main.cjs'), 'root dist bundle must be excluded');
@@ -153,7 +151,7 @@ test('computeReviewDiff filters out packages/*/dist*/** paths', () => {
     runGit(repo, ['commit', '-q', '-m', 'add per-package dist + dist-test']);
     const newHeadSha = runGit(repo, ['rev-parse', 'HEAD']).stdout.trim();
 
-    const result = computeReviewDiff(
+    const { diff: result } = computeReviewDiff(
       { eventName: 'pull_request', baseSha, headSha: newHeadSha },
       repo,
     );
@@ -169,7 +167,7 @@ test('computeReviewDiff filters out packages/*/dist*/** paths', () => {
   }
 });
 
-test('computeReviewDiff returns the placeholder when the filtered diff is empty', () => {
+test('computeReviewDiff returns an empty diff when the filtered diff is empty', () => {
   const { repo, headSha } = buildFixtureRepo();
   try {
     // Make a commit that ONLY touches a dist file; the filter strips
@@ -182,31 +180,31 @@ test('computeReviewDiff returns the placeholder when the filtered diff is empty'
     runGit(repo, ['commit', '-q', '-m', 'dist-only change']);
     const newHeadSha = runGit(repo, ['rev-parse', 'HEAD']).stdout.trim();
 
-    const result = computeReviewDiff(
+    const { diff: result } = computeReviewDiff(
       { eventName: 'pull_request', baseSha: headSha, headSha: newHeadSha },
       repo,
     );
 
     assert.equal(
       result,
-      REVIEW_DIFF_EMPTY_PLACEHOLDER,
-      'placeholder must surface when every changed path is in the exclude list',
+      '',
+      'an empty diff must surface when every changed path is in the exclude list',
     );
   } finally {
     rmFixture(repo);
   }
 });
 
-test('computeReviewDiff returns the placeholder when refs are missing', () => {
+test('computeReviewDiff returns an empty diff when refs are missing', () => {
   const { repo } = buildFixtureRepo();
   try {
     // No baseSha/headSha for this pull_request event.
-    const result = computeReviewDiff({ eventName: 'pull_request' }, repo);
-    assert.equal(result, REVIEW_DIFF_EMPTY_PLACEHOLDER);
+    const { diff } = computeReviewDiff({ eventName: 'pull_request' }, repo);
+    assert.equal(diff, '');
 
     // Same for push without before/after.
     const pushResult = computeReviewDiff({ eventName: 'push' }, repo);
-    assert.equal(pushResult, REVIEW_DIFF_EMPTY_PLACEHOLDER);
+    assert.equal(pushResult.diff, '');
   } finally {
     rmFixture(repo);
   }
@@ -221,11 +219,11 @@ test('computeReviewDiff probes HEAD~1 for workflow_dispatch when working dir has
     // (always a slug like "owner/repo") and always picked `/dev/null`, so
     // this path returned the placeholder for every workflow_dispatch run.
     // The AI reviewer caught it on PR #36; this test pins the fix.
-    const result = computeReviewDiff({ eventName: 'workflow_dispatch' }, repo);
+    const { diff: result } = computeReviewDiff({ eventName: 'workflow_dispatch' }, repo);
     assert.notEqual(
       result,
-      REVIEW_DIFF_EMPTY_PLACEHOLDER,
-      'workflow_dispatch with HEAD~1 in the working dir must produce a real diff, not the placeholder',
+      '',
+      'workflow_dispatch with HEAD~1 in the working dir must produce a real diff, not an empty one',
     );
     assert.ok(/src\/foo\.ts/.test(result), 'filtered diff must contain the source change');
     assert.ok(!/dist\/main\.cjs/.test(result), 'dist bundles must remain filtered out');
@@ -235,17 +233,17 @@ test('computeReviewDiff probes HEAD~1 for workflow_dispatch when working dir has
   }
 });
 
-test('computeReviewDiff returns the placeholder when the working dir is not a git repo', () => {
+test('computeReviewDiff returns an empty diff when the working dir is not a git repo', () => {
   const nonRepo = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-review-diff-nonrepo-'));
   try {
-    const result = computeReviewDiff(
+    const { diff } = computeReviewDiff(
       { eventName: 'pull_request', baseSha: 'deadbeef', headSha: 'feedface' },
       nonRepo,
     );
     assert.equal(
-      result,
-      REVIEW_DIFF_EMPTY_PLACEHOLDER,
-      'non-repo working dir must fall back to the placeholder, not throw',
+      diff,
+      '',
+      'non-repo working dir must fall back to an empty diff, not throw',
     );
   } finally {
     rmFixture(nonRepo);
@@ -255,12 +253,12 @@ test('computeReviewDiff returns the placeholder when the working dir is not a gi
 test('computeReviewDiff handles a push event with before..after', () => {
   const { repo, baseSha, headSha } = buildFixtureRepo();
   try {
-    const result = computeReviewDiff(
+    const { diff: result } = computeReviewDiff(
       { eventName: 'push', before: baseSha, after: headSha },
       repo,
     );
 
-    assert.notEqual(result, REVIEW_DIFF_EMPTY_PLACEHOLDER);
+    assert.notEqual(result, '');
     assert.ok(result.includes('src/foo.ts'));
     assert.ok(!result.includes('dist/main.cjs'));
   } finally {
@@ -268,7 +266,7 @@ test('computeReviewDiff handles a push event with before..after', () => {
   }
 });
 
-test('computeReviewDiff truncates diffs larger than REVIEW_DIFF_MAX_BYTES and appends a marker', () => {
+test('computeReviewDiff truncates diffs larger than REVIEW_DIFF_MAX_BYTES and flags truncated', () => {
   // Build a controlled fixture whose diff is reliably larger than
   // REVIEW_DIFF_MAX_BYTES but stays below the runtime's spawnSync
   // maxBuffer cap so we exercise the truncation path (not the
@@ -298,24 +296,13 @@ test('computeReviewDiff truncates diffs larger than REVIEW_DIFF_MAX_BYTES and ap
     runGit(repo, ['commit', '-q', '-m', 'add huge file']);
     const headSha = runGit(repo, ['rev-parse', 'HEAD']).stdout.trim();
 
-    const result = computeReviewDiff(
+    const { diff: result, truncated } = computeReviewDiff(
       { eventName: 'pull_request', baseSha, headSha },
       repo,
     );
 
-    assert.ok(result.length > REVIEW_DIFF_MAX_BYTES, 'truncated output must exceed the cap (cap + marker)');
-    assert.ok(
-      result.includes(`[diff truncated to ${REVIEW_DIFF_MAX_BYTES / 1000} KB]`),
-      'truncation must append a marker so the model knows the section is incomplete',
-    );
-    // The marker is appended AFTER the cap-length prefix; the first
-    // REVIEW_DIFF_MAX_BYTES of the result must be the unaltered
-    // prefix of the original git output.
-    assert.equal(
-      result.slice(0, REVIEW_DIFF_MAX_BYTES),
-      result.slice(0, REVIEW_DIFF_MAX_BYTES),
-      'first REVIEW_DIFF_MAX_BYTES bytes of the truncated output must be a stable prefix',
-    );
+    assert.equal(result.length, REVIEW_DIFF_MAX_BYTES, 'truncated output is exactly the cap');
+    assert.equal(truncated, true, 'truncation must be reported so the caller can tell the model');
   } finally {
     rmFixture(repo);
   }

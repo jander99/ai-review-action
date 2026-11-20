@@ -19,20 +19,25 @@ export type {
 } from './config-builder';
 
 export {
-  buildRejectedDocumentPreview,
   runReviews,
   computeReviewDiff,
+  readBaseInstructions,
   REVIEW_DIFF_EXCLUDE_PATHSPECS,
   REVIEW_DIFF_MAX_BYTES,
-  REVIEW_DIFF_EMPTY_PLACEHOLDER,
+  REPO_INSTRUCTION_FILES,
+  REPO_INSTRUCTION_MAX_CHARS,
+  DEFAULT_THRESHOLDS,
+} from './main';
+export type { RunReviewsOptions, RunReviewsResult } from './main';
+
+// Diagnostics for rejected documents. Still used by the orchestration layer
+// (Task 22 removes it together with the runtime modules).
+export {
+  buildRejectedDocumentPreview,
   REJECTED_DOCUMENT_CAP,
   REJECTED_DOCUMENT_PREVIEW_MAX_CHARS,
-} from './main';
-export type {
-  RejectedDocument,
-  RunReviewsOptions,
-  RunReviewsResult,
-} from './main';
+} from './rejected-document';
+export type { RejectedDocument } from './rejected-document';
 
 // Agent definition builder. Re-exported so tests can exercise the
 // `__DIFF__` placeholder substitution without going through the full

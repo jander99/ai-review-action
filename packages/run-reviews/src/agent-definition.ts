@@ -12,6 +12,7 @@ interface GitHubEvent {
   pull_request?: {
     number?: number;
     title?: string;
+    body?: string | null;
     base?: { ref?: string; sha?: string };
     head?: { ref?: string; sha?: string };
   };
@@ -63,6 +64,7 @@ export function getEventContext(): EventContext {
   if (eventName === 'pull_request') {
     context.prNumber = event.pull_request?.number ?? event.number;
     context.prTitle = event.pull_request?.title;
+    context.prBody = event.pull_request?.body ?? undefined;
     context.baseRef = event.pull_request?.base?.ref || process.env.GITHUB_BASE_REF;
     context.headRef = event.pull_request?.head?.ref || process.env.GITHUB_HEAD_REF;
     context.baseSha = event.pull_request?.base?.sha;
@@ -82,7 +84,7 @@ export function getEventContext(): EventContext {
   return context;
 }
 
-function titleOrRefForHeading(eventContext: EventContext): string {
+export function titleOrRefForHeading(eventContext: EventContext): string {
   if (eventContext.eventName === 'pull_request') {
     return eventContext.prTitle ?? eventContext.headRef ?? `PR #${eventContext.prNumber ?? ''}`.trim();
   }
@@ -142,5 +144,3 @@ export function buildValidatorAgentDefinition(): AgentConfig {
     prompt: VALIDATOR_AGENT_PROMPT_TEMPLATE,
   };
 }
-
-export { titleOrRefForHeading };

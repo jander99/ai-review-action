@@ -39,6 +39,7 @@ export interface EventContext {
   repository?: string;
   prNumber?: number;
   prTitle?: string;
+  prBody?: string;
   baseRef?: string;
   headRef?: string;
   baseSha?: string;

@@ -1,4 +1,5 @@
 # SDD ledger — plan: docs/superpowers/plans/2026-11-19-decision-review-pipeline.md
 
-Part 4 — PR 4: inline review output and prior findings (Tasks 17-18). Worktree `.worktrees/drp-4`, branch `feat/decision-review-4` off origin/main 99fe99d.
-Pre-flight: Task 17 modifies review-contract/findings.ts and previous-reviews; Task 18 consumes renderFindingComment + parseUnifiedDiff + findAnchorHunk (all on main after Parts 1-3). No handoff conflicts.
+Part 5 — PR 5: wire the action to the pipeline (Tasks 19-21). Worktree `.worktrees/drp-5`, branch `feat/decision-review-5` off origin/main f8d3cdf.
+Pre-flight: Task 19 consumes runReviewPipeline (Part 3), createLlmClient/createDecisionClient (Part 2), fetchPriorReviews + parsePriorFindings (Part 4) — all on main. Task 20 consumes postReview (Part 4) and runReviews (Task 19). Task 21 extends the study CLI from Part 1. Handoffs are sequential within the part.
+Task 19 also depends on readBaseInstructions trimming: the plan says `git show <sha>:<path>` but the test requires the base rules to fit the context; trimming is done by the context builder.
