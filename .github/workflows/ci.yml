@@ -177,3 +177,24 @@ jobs:
             echo "::error::Some tracked dist bundles have an unexpected mode. See warnings above."
             exit 1
           fi
+
+  knip:
+    name: Knip
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Find unused files, exports and dependencies
+        run: yarn knip --reporter github-actions
