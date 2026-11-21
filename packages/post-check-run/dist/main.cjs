@@ -41139,7 +41139,7 @@ var { chmod, copyFile, lstat, mkdir, open, readdir, rename, rm, rmdir, stat, sym
 var IS_WINDOWS = process.platform === "win32";
 var READONLY = fs2.constants.O_RDONLY;
 
-// node_modules/@actions/core/node_modules/@actions/exec/lib/toolrunner.js
+// node_modules/@actions/exec/lib/toolrunner.js
 var IS_WINDOWS2 = process.platform === "win32";
 
 // node_modules/@actions/core/lib/platform.js
