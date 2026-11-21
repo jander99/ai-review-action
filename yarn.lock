@@ -2886,12 +2886,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node@npm:^20.0.0":
-  version: 20.19.39
-  resolution: "@types/node@npm:20.19.39"
+"@types/node@npm:^20.19.39":
+  version: 20.19.43
+  resolution: "@types/node@npm:20.19.43"
   dependencies:
     undici-types: "npm:~6.21.0"
-  checksum: 10c0/1d16da7b5f47a7415b827fcf3b94d279febf4c14671afec74a03e47856b5270023d9beb1b9aeab4d3b622fd97d61a60206cfc2cca588663181331bc592468289
+  checksum: 10c0/9bcec3b5295bdd77ff0b44a528a69f7e22028c347507ba2c69be47ec84e30299f45043b222e9c86c510e138c9c53b2419dd5cd34920602a4a5a381c288075318
   languageName: node
   linkType: hard
 
@@ -2958,7 +2958,7 @@ __metadata:
     "@nx/esbuild": "npm:24.0.6"
     "@nx/js": "npm:24.0.6"
     "@octokit/rest": "npm:^20.1.1"
-    "@types/node": "npm:^20.0.0"
+    "@types/node": "npm:^20.19.39"
     esbuild: "npm:^0.28.1"
     knip: "npm:6.47.0"
     nx: "npm:24.0.6"
