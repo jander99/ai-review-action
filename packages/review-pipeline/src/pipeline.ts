@@ -229,6 +229,7 @@ export async function runReviewPipeline(input: PipelineInput, deps: ReviewPipeli
 
   const validated = validateReviewDocument(document);
   if (!validated.valid) {
+    deps.log(`rendered review rejected by validation:\n${document}`);
     return failure(`internal: rendered review failed validation: ${validated.reason}`, triage.line, usage);
   }
   if (document.length > MAX_CHARS) {

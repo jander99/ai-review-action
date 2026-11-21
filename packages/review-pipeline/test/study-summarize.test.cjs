@@ -16,3 +16,17 @@ test('summarizeRuns counts flips and uncertainty', () => {
   assert.deepEqual({ mean: stats.mean, min: stats.min, max: stats.max }, { mean: 0.5, min: 0.2, max: 0.8 });
   assert.ok(Math.abs(stats.sd - 0.3) < 1e-9, `sd ${stats.sd}`);
 });
+
+test('pairwiseOverlap measures finding-set overlap across runs', () => {
+  const { pairwiseOverlap } = require('../dist-test/index.cjs');
+  const A = { file: 'a.ts', startLine: 1, endLine: 3 };
+  const B = { file: 'b.ts', startLine: 1, endLine: 3 };
+  assert.equal(pairwiseOverlap([[A], [A]]), 1);
+  assert.equal(pairwiseOverlap([[A], []]), 0);
+  assert.equal(pairwiseOverlap([[A, B], [A]]), 0.5);
+  assert.equal(pairwiseOverlap([[], []]), 1);
+  // overlapping (not identical) ranges on the same file match
+  assert.equal(pairwiseOverlap([[A], [{ file: 'a.ts', startLine: 3, endLine: 5 }]]), 1);
+  // one-to-one: two findings cannot both match a single one
+  assert.equal(pairwiseOverlap([[A, { file: 'a.ts', startLine: 2, endLine: 2 }], [A]]), 0.5);
+});

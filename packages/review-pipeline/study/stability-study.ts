@@ -6,6 +6,10 @@
  *
  *   DECISION_PROVIDER=systemone DECISION_API_KEY=... DECISION_MODEL=... \
  *     node dist-test/study.cjs --runs 20 --out study-report.json
+ *
+ * `--e2e` also runs the full pipeline `--runs` times per fixture (needs
+ * LLM_PROVIDER, LLM_API_KEY, LLM_MODEL, optional LLM_BASE_URL) and reports
+ * finding-set overlap next to the judge report.
  */
 
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
@@ -13,7 +17,9 @@ import { join } from 'node:path';
 import { createDecisionClient, type DecisionClient } from '@jander99/ai-review-decisions';
 import { applyPolicy, DEFAULT_THRESHOLDS, type ProposedFinding } from '@jander99/ai-review-review-contract';
 import { judgeFinding } from '../src/judge';
-import { summarizeRuns, type StudyRun, type StudyFindingStats } from '../src/study-summarize';
+import { createLlmClient } from '@jander99/ai-review-llm-clients';
+import { runReviewPipeline } from '../src/pipeline';
+import { pairwiseOverlap, summarizeRuns, type StudyRun, type StudyFindingStats } from '../src/study-summarize';
 
 interface Fixture {
   sha: string;
@@ -22,16 +28,20 @@ interface Fixture {
   findings: Array<ProposedFinding & { expected: StudyFindingStats['expected'] }>;
 }
 
-const POOL = 3;
+const POOL = Number(process.env.STUDY_POOL ?? 3);
+// A study sends far more requests than a review; ride out rate limits.
+const MAX_RETRIES = Number(process.env.STUDY_MAX_RETRIES ?? 10);
 
-function parseArgs(argv: ReadonlyArray<string>): { runs: number; out: string | null } {
+function parseArgs(argv: ReadonlyArray<string>): { runs: number; out: string | null; e2e: boolean } {
   let runs = 20;
   let out: string | null = null;
+  let e2e = false;
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--runs') runs = Number(argv[++i]);
     else if (argv[i] === '--out') out = argv[++i];
+    else if (argv[i] === '--e2e') e2e = true;
   }
-  return { runs, out };
+  return { runs, out, e2e };
 }
 
 function loadFixtures(dir: string): Fixture[] {
@@ -52,15 +62,92 @@ async function withPool<T>(items: ReadonlyArray<T>, size: number, fn: (item: T) 
   await Promise.all(workers);
 }
 
+interface EndToEndResult {
+  fixture: string;
+  overlap: number;
+  keptCounts: number[];
+  /** Runs that failed (provider error, rejected document) and are excluded from `overlap`. */
+  failures: string[];
+  /** Wall-clock per successful run, and mean tokens per run. */
+  runtime: { meanMs: number; p50Ms: number; p95Ms: number; maxMs: number; avgTokens: { llmIn: number; llmOut: number; decisionIn: number } };
+}
+
+function runtimeStats(ms: number[], tok: { llmIn: number; llmOut: number; decisionIn: number }, n: number): EndToEndResult['runtime'] {
+  const sorted = [...ms].sort((a, b) => a - b);
+  const pick = (q: number) => (sorted.length ? sorted[Math.min(sorted.length - 1, Math.ceil(q * sorted.length) - 1)] : 0);
+  const div = n || 1;
+  return {
+    meanMs: Math.round(ms.reduce((s, v) => s + v, 0) / div),
+    p50Ms: pick(0.5),
+    p95Ms: pick(0.95),
+    maxMs: sorted[sorted.length - 1] ?? 0,
+    avgTokens: { llmIn: Math.round(tok.llmIn / div), llmOut: Math.round(tok.llmOut / div), decisionIn: Math.round(tok.decisionIn / div) },
+  };
+}
+
+async function runEndToEnd(decisions: DecisionClient, fixtures: ReadonlyArray<Fixture>, runs: number): Promise<EndToEndResult[]> {
+  const llm = createLlmClient(process.env.LLM_PROVIDER ?? '', {
+    apiKey: process.env.LLM_API_KEY ?? '',
+    model: process.env.LLM_MODEL ?? '',
+    baseUrl: process.env.LLM_BASE_URL,
+    options: {
+      maxRetries: MAX_RETRIES,
+      ...(process.env.STUDY_REASONING_EFFORT ? { reasoningEffort: process.env.STUDY_REASONING_EFFORT } : {}),
+    },
+  });
+  const out: EndToEndResult[] = [];
+  for (const fixture of fixtures) {
+    const kept: Array<Array<{ file: string; startLine: number; endLine: number }>> = [];
+    const failures: string[] = [];
+    const ms: number[] = [];
+    const tok = { llmIn: 0, llmOut: 0, decisionIn: 0 };
+    for (let i = 0; i < runs; i++) {
+      let result;
+      const started = Date.now();
+      try {
+        result = await runReviewPipeline(
+        {
+          title: fixture.sha,
+          diff: fixture.diff,
+          diffTruncated: false,
+          files: Object.entries(fixture.files).map(([path, text]) => ({ path, text })),
+          repoInstructions: [],
+          taskPrompt: 'Review this change for correctness bugs.',
+          priorFindings: [],
+        },
+        { llm, decisions, thresholds: DEFAULT_THRESHOLDS, log: (m) => { if (process.env.STUDY_VERBOSE) console.error(m); } },
+        );
+      } catch (err) {
+        failures.push(err instanceof Error ? err.message : String(err));
+        continue;
+      }
+      if (result.status === 'failed') {
+        failures.push(result.failureReason);
+        continue;
+      }
+      ms.push(Date.now() - started);
+      tok.llmIn += result.usage.llmInputTokens;
+      tok.llmOut += result.usage.llmOutputTokens;
+      tok.decisionIn += result.usage.decisionInputTokens;
+      kept.push(result.kept.map((p) => p.finding));
+      console.error(`e2e ${fixture.sha} run ${i + 1}/${runs}: ${result.kept.length} kept`);
+    }
+    out.push({ fixture: fixture.sha, overlap: pairwiseOverlap(kept), keptCounts: kept.map((k) => k.length), failures, runtime: runtimeStats(ms, tok, kept.length) });
+  }
+  return out;
+}
+
 async function main(): Promise<void> {
-  const { runs, out } = parseArgs(process.argv.slice(2));
+  const { runs, out, e2e } = parseArgs(process.argv.slice(2));
   const client: DecisionClient = createDecisionClient(process.env.DECISION_PROVIDER ?? '', {
     apiKey: process.env.DECISION_API_KEY ?? '',
     model: process.env.DECISION_MODEL ?? '',
     baseUrl: process.env.DECISION_BASE_URL,
+    options: { maxRetries: MAX_RETRIES },
   });
 
-  const fixtures = loadFixtures(join(__dirname, '..', 'study', 'fixtures'));
+  const only = process.env.STUDY_FIXTURE;
+  const fixtures = loadFixtures(join(__dirname, '..', 'study', 'fixtures')).filter((f) => !only || f.sha === only);
   const jobs: Array<{ fixture: Fixture; finding: Fixture['findings'][number] }> = [];
   for (const fixture of fixtures) for (const finding of fixture.findings) jobs.push({ fixture, finding });
 
@@ -83,7 +170,8 @@ async function main(): Promise<void> {
   });
 
   const report = summarizeRuns(results, expected);
-  const json = JSON.stringify(report, null, 2);
+  const endToEnd = e2e ? await runEndToEnd(client, fixtures, runs) : undefined;
+  const json = JSON.stringify(endToEnd ? { ...report, endToEnd } : report, null, 2);
   if (out) writeFileSync(out, json + '\n');
   else console.log(json);
 }

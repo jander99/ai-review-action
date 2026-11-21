@@ -7,7 +7,7 @@ AI Review Action reviews pull requests and pushes with a large language model, t
 - A **Linux x64** runner (`ubuntu-latest` is fine).
 - `actions/checkout` with `fetch-depth: 0` so the action can resolve the base commit and read repository instructions from it.
 - `git` on `PATH`.
-- A provider credential for the proposing LLM and one for the decision API, exposed as environment variables.
+- A credential for the proposing LLM and one for the decision API, passed as the `llm-api-key` and `decision-api-key` inputs (store them as repository secrets).
 - A prompt using the `file:` or `text:` prefix.
 - Node 24 on the runner (the action declares `using: node24`; GitHub-hosted runners provide it).
 

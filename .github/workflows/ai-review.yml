@@ -24,8 +24,9 @@ permissions:
 jobs:
   review:
     if: >-
-      github.event.pull_request.draft == false &&
-      github.event.pull_request.head.repo.full_name == github.repository
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -40,8 +41,10 @@ jobs:
           # A single LLM generates the review; a decision model judges each
           # finding against the keep/drop policy.
           llm-provider: openai
-          llm-model: gpt-5
+          llm-base-url: https://api.subq.ai/v1
+          llm-model: subq-savant-1.4
           decision-provider: systemone
+          decision-base-url: https://api.subq.ai
           decision-model: subq-snap-1.2
           prompts: file:examples/prompts/code-review.md,file:examples/prompts/security-review.md
           post-comment: true

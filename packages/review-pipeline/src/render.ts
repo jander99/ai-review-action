@@ -42,8 +42,10 @@ function location(finding: PostableFinding): string {
 }
 
 function description(finding: PostableFinding): string {
-  const { claim } = finding.finding;
-  return oneLine(finding.note ? `${claim} (${finding.note})` : claim);
+  const { claim, evidence, title } = finding.finding;
+  // The validator requires non-empty field text; models occasionally return a blank claim.
+  const base = oneLine(claim) || oneLine(evidence) || oneLine(title) || 'No description provided.';
+  return oneLine(finding.note ? `${base} (${finding.note})` : base);
 }
 
 export function renderReview(args: RenderReviewArgs): string {

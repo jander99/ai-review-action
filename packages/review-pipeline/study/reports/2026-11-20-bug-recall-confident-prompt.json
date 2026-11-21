@@ -1,0 +1,163 @@
+{
+  "summary": {
+    "proposedRecall": 0.6571428571428571,
+    "keptRecall": 0.6571428571428571,
+    "avgExtraKept": 0.02857142857142857
+  },
+  "results": [
+    {
+      "fixture": "bug-diff-header-in-hunk",
+      "runs": 5,
+      "failed": 0,
+      "proposedRecall": 1,
+      "keptRecall": 1,
+      "uncertainHits": 0,
+      "extraKept": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "proposedCounts": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "fixture": "bug-diff-section-split",
+      "runs": 5,
+      "failed": 0,
+      "proposedRecall": 1,
+      "keptRecall": 1,
+      "uncertainHits": 0,
+      "extraKept": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "proposedCounts": [
+        2,
+        3,
+        2,
+        3,
+        2
+      ]
+    },
+    {
+      "fixture": "bug-event-on-failed-review",
+      "runs": 5,
+      "failed": 0,
+      "proposedRecall": 0,
+      "keptRecall": 0,
+      "uncertainHits": 0,
+      "extraKept": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "proposedCounts": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "fixture": "bug-git-diff-failure-silent",
+      "runs": 5,
+      "failed": 0,
+      "proposedRecall": 0.8,
+      "keptRecall": 0.8,
+      "uncertainHits": 0,
+      "extraKept": [
+        0,
+        0,
+        0,
+        0,
+        1
+      ],
+      "proposedCounts": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "fixture": "bug-post-review-swallowed-error",
+      "runs": 5,
+      "failed": 0,
+      "proposedRecall": 1,
+      "keptRecall": 1,
+      "uncertainHits": 0,
+      "extraKept": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "proposedCounts": [
+        2,
+        3,
+        1,
+        1,
+        2
+      ]
+    },
+    {
+      "fixture": "bug-render-unsanitized",
+      "runs": 5,
+      "failed": 0,
+      "proposedRecall": 0,
+      "keptRecall": 0,
+      "uncertainHits": 0,
+      "extraKept": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "proposedCounts": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "fixture": "bug-secrets-passed-as-env",
+      "runs": 5,
+      "failed": 0,
+      "proposedRecall": 0.8,
+      "keptRecall": 0.8,
+      "uncertainHits": 0,
+      "extraKept": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "proposedCounts": [
+        1,
+        0,
+        1,
+        1,
+        1
+      ]
+    }
+  ]
+}
