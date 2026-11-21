@@ -22,6 +22,6 @@
     "esbuild": "^0.28.1",
     "knip": "6.47.0",
     "nx": "24.0.6",
-    "typescript": "6.0.3"
+    "typescript": "7.0.2"
   }
 }
