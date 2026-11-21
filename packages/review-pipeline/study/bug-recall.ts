@@ -18,6 +18,16 @@ import { createLlmClient, type LlmClient } from '@jander99/ai-review-llm-clients
 import { runReviewPipeline } from '../src/pipeline';
 
 const SLACK = 3;
+
+const mean = (xs: number[]) => (xs.length ? xs.reduce((s, v) => s + v, 0) / xs.length : 0);
+function pct(sorted: number[], q: number): number {
+  return sorted.length ? sorted[Math.min(sorted.length - 1, Math.ceil(q * sorted.length) - 1)] : 0;
+}
+/** Wall-clock stats in ms for one set of runs. */
+function stats(xs: number[]) {
+  const sorted = [...xs].sort((a, b) => a - b);
+  return { runs: xs.length, meanMs: Math.round(mean(xs)), p50Ms: pct(sorted, 0.5), p95Ms: pct(sorted, 0.95), maxMs: sorted[sorted.length - 1] ?? 0 };
+}
 const MAX_RETRIES = Number(process.env.STUDY_MAX_RETRIES ?? 10);
 
 interface BugFixture {
@@ -59,6 +69,9 @@ async function main(): Promise<void> {
   });
 
   const results = [];
+  const allMs: number[] = [];
+  const allCalls: number[] = [];
+  const studyStart = Date.now();
   for (const fx of fixtures) {
     let proposedHits = 0;
     let keptHits = 0;
@@ -66,11 +79,17 @@ async function main(): Promise<void> {
     let failed = 0;
     const extraKept: number[] = [];
     const proposedCounts: number[] = [];
+    const runMs: number[] = [];
+    const llmCalls: number[] = [];
+    const tokens = { llmIn: 0, llmOut: 0, decisionIn: 0 };
     for (let i = 0; i < runs; i++) {
       let proposed: Loc[] = [];
+      let calls = 0;
+      const started = Date.now();
       const llm: LlmClient = {
         ...base,
         async complete(req) {
+          calls++;
           const res = await base.complete(req);
           const list = (res.value as { findings?: Loc[] })?.findings;
           if (Array.isArray(list)) proposed = list;
@@ -91,6 +110,13 @@ async function main(): Promise<void> {
           { llm, decisions, thresholds: DEFAULT_THRESHOLDS, log: () => {} },
         );
         if (result.status === 'failed') { failed++; continue; }
+        runMs.push(Date.now() - started);
+        allMs.push(Date.now() - started);
+        allCalls.push(calls);
+        llmCalls.push(calls);
+        tokens.llmIn += result.usage.llmInputTokens;
+        tokens.llmOut += result.usage.llmOutputTokens;
+        tokens.decisionIn += result.usage.decisionInputTokens;
         const kept = result.kept.map((p) => p.finding);
         const uncertain = result.uncertain.map((p) => p.finding);
         if (proposed.some((f) => hits(f, fx.bug))) proposedHits++;
@@ -105,12 +131,13 @@ async function main(): Promise<void> {
       }
     }
     const done = runs - failed;
-    results.push({ fixture: fx.sha, runs: done, failed, proposedRecall: done ? proposedHits / done : 0, keptRecall: done ? keptHits / done : 0, uncertainHits, extraKept, proposedCounts });
+    results.push({ fixture: fx.sha, runs: done, failed, proposedRecall: done ? proposedHits / done : 0, keptRecall: done ? keptHits / done : 0, uncertainHits, extraKept, proposedCounts, runtime: { ...stats(runMs), llmCallsPerRun: mean(llmCalls), avgTokens: { llmIn: Math.round(tokens.llmIn / (done || 1)), llmOut: Math.round(tokens.llmOut / (done || 1)), decisionIn: Math.round(tokens.decisionIn / (done || 1)) } } });
   }
   const total = results.reduce((s, r) => s + r.runs, 0) || 1;
   const summary = {
     proposedRecall: results.reduce((s, r) => s + r.proposedRecall * r.runs, 0) / total,
     keptRecall: results.reduce((s, r) => s + r.keptRecall * r.runs, 0) / total,
+    runtime: { ...stats(allMs), llmCallsPerRun: mean(allCalls), studyWallMs: Date.now() - studyStart },
     avgExtraKept: results.flatMap((r) => r.extraKept).reduce((s, v) => s + v, 0) / (results.flatMap((r) => r.extraKept).length || 1),
   };
   const json = JSON.stringify({ summary, results }, null, 2);

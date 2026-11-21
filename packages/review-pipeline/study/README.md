@@ -64,3 +64,10 @@ node dist-test/bug-recall.cjs --runs 5 --out bug-report.json
 
 Regenerate fixtures with `node study/generate-bug-fixtures.cjs`. A hit is a
 finding in the right file within 3 lines of a ground-truth range.
+
+## Runtime metrics
+
+Both studies record wall-clock per successful run (`meanMs`, `p50Ms`, `p95Ms`,
+`maxMs`) and mean tokens per run (`llmIn`, `llmOut`, `decisionIn`); bug-recall
+also records LLM calls per run. Run with `STUDY_POOL=1` for clean latency; a
+larger pool adds queueing to the numbers. Runs that skip the proposer count as 0 tokens.

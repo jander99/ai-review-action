@@ -68,6 +68,21 @@ interface EndToEndResult {
   keptCounts: number[];
   /** Runs that failed (provider error, rejected document) and are excluded from `overlap`. */
   failures: string[];
+  /** Wall-clock per successful run, and mean tokens per run. */
+  runtime: { meanMs: number; p50Ms: number; p95Ms: number; maxMs: number; avgTokens: { llmIn: number; llmOut: number; decisionIn: number } };
+}
+
+function runtimeStats(ms: number[], tok: { llmIn: number; llmOut: number; decisionIn: number }, n: number): EndToEndResult['runtime'] {
+  const sorted = [...ms].sort((a, b) => a - b);
+  const pick = (q: number) => (sorted.length ? sorted[Math.min(sorted.length - 1, Math.ceil(q * sorted.length) - 1)] : 0);
+  const div = n || 1;
+  return {
+    meanMs: Math.round(ms.reduce((s, v) => s + v, 0) / div),
+    p50Ms: pick(0.5),
+    p95Ms: pick(0.95),
+    maxMs: sorted[sorted.length - 1] ?? 0,
+    avgTokens: { llmIn: Math.round(tok.llmIn / div), llmOut: Math.round(tok.llmOut / div), decisionIn: Math.round(tok.decisionIn / div) },
+  };
 }
 
 async function runEndToEnd(decisions: DecisionClient, fixtures: ReadonlyArray<Fixture>, runs: number): Promise<EndToEndResult[]> {
@@ -84,8 +99,11 @@ async function runEndToEnd(decisions: DecisionClient, fixtures: ReadonlyArray<Fi
   for (const fixture of fixtures) {
     const kept: Array<Array<{ file: string; startLine: number; endLine: number }>> = [];
     const failures: string[] = [];
+    const ms: number[] = [];
+    const tok = { llmIn: 0, llmOut: 0, decisionIn: 0 };
     for (let i = 0; i < runs; i++) {
       let result;
+      const started = Date.now();
       try {
         result = await runReviewPipeline(
         {
@@ -107,10 +125,14 @@ async function runEndToEnd(decisions: DecisionClient, fixtures: ReadonlyArray<Fi
         failures.push(result.failureReason);
         continue;
       }
+      ms.push(Date.now() - started);
+      tok.llmIn += result.usage.llmInputTokens;
+      tok.llmOut += result.usage.llmOutputTokens;
+      tok.decisionIn += result.usage.decisionInputTokens;
       kept.push(result.kept.map((p) => p.finding));
       console.error(`e2e ${fixture.sha} run ${i + 1}/${runs}: ${result.kept.length} kept`);
     }
-    out.push({ fixture: fixture.sha, overlap: pairwiseOverlap(kept), keptCounts: kept.map((k) => k.length), failures });
+    out.push({ fixture: fixture.sha, overlap: pairwiseOverlap(kept), keptCounts: kept.map((k) => k.length), failures, runtime: runtimeStats(ms, tok, kept.length) });
   }
   return out;
 }
