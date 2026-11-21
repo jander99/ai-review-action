@@ -25,7 +25,7 @@ var __copyProps = (to, from, except, desc) => {
 };
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-// node_modules/@octokit/core/node_modules/universal-user-agent/index.js
+// node_modules/universal-user-agent/index.js
 function getUserAgent() {
   if (typeof navigator === "object" && "userAgent" in navigator) {
     return navigator.userAgent;
@@ -36,12 +36,12 @@ function getUserAgent() {
   return "<environment undetectable>";
 }
 var init_universal_user_agent = __esm({
-  "node_modules/@octokit/core/node_modules/universal-user-agent/index.js"() {
+  "node_modules/universal-user-agent/index.js"() {
     "use strict";
   }
 });
 
-// node_modules/@octokit/core/node_modules/before-after-hook/lib/register.js
+// node_modules/before-after-hook/lib/register.js
 function register(state, name, method, options) {
   if (typeof method !== "function") {
     throw new Error("method for before hook must be a function");
@@ -64,12 +64,12 @@ function register(state, name, method, options) {
   });
 }
 var init_register = __esm({
-  "node_modules/@octokit/core/node_modules/before-after-hook/lib/register.js"() {
+  "node_modules/before-after-hook/lib/register.js"() {
     "use strict";
   }
 });
 
-// node_modules/@octokit/core/node_modules/before-after-hook/lib/add.js
+// node_modules/before-after-hook/lib/add.js
 function addHook(state, kind, name, hook2) {
   const orig = hook2;
   if (!state.registry[name]) {
@@ -104,12 +104,12 @@ function addHook(state, kind, name, hook2) {
   });
 }
 var init_add = __esm({
-  "node_modules/@octokit/core/node_modules/before-after-hook/lib/add.js"() {
+  "node_modules/before-after-hook/lib/add.js"() {
     "use strict";
   }
 });
 
-// node_modules/@octokit/core/node_modules/before-after-hook/lib/remove.js
+// node_modules/before-after-hook/lib/remove.js
 function removeHook(state, name, method) {
   if (!state.registry[name]) {
     return;
@@ -123,12 +123,12 @@ function removeHook(state, name, method) {
   state.registry[name].splice(index, 1);
 }
 var init_remove = __esm({
-  "node_modules/@octokit/core/node_modules/before-after-hook/lib/remove.js"() {
+  "node_modules/before-after-hook/lib/remove.js"() {
     "use strict";
   }
 });
 
-// node_modules/@octokit/core/node_modules/before-after-hook/index.js
+// node_modules/before-after-hook/index.js
 function bindApi(hook2, state, name) {
   const removeHookRef = bindable(removeHook, null).apply(
     null,
@@ -160,7 +160,7 @@ function Collection() {
 }
 var bind, bindable, before_after_hook_default;
 var init_before_after_hook = __esm({
-  "node_modules/@octokit/core/node_modules/before-after-hook/index.js"() {
+  "node_modules/before-after-hook/index.js"() {
     "use strict";
     init_register();
     init_add();
@@ -171,7 +171,7 @@ var init_before_after_hook = __esm({
   }
 });
 
-// node_modules/@octokit/core/node_modules/@octokit/endpoint/dist-bundle/index.js
+// node_modules/@octokit/endpoint/dist-bundle/index.js
 function lowercaseKeys(object) {
   if (!object) {
     return {};
@@ -470,7 +470,7 @@ function withDefaults(oldDefaults, newDefaults) {
 }
 var VERSION, userAgent, DEFAULTS, urlVariableRegex, endpoint;
 var init_dist_bundle = __esm({
-  "node_modules/@octokit/core/node_modules/@octokit/endpoint/dist-bundle/index.js"() {
+  "node_modules/@octokit/endpoint/dist-bundle/index.js"() {
     "use strict";
     init_universal_user_agent();
     VERSION = "0.0.0-development";
@@ -1022,10 +1022,10 @@ var init_json_with_bigint = __esm({
   }
 });
 
-// node_modules/@octokit/core/node_modules/@octokit/request-error/dist-src/index.js
+// node_modules/@octokit/request-error/dist-src/index.js
 var RequestError;
 var init_dist_src = __esm({
-  "node_modules/@octokit/core/node_modules/@octokit/request-error/dist-src/index.js"() {
+  "node_modules/@octokit/request-error/dist-src/index.js"() {
     "use strict";
     RequestError = class extends Error {
       name;
@@ -1067,7 +1067,7 @@ var init_dist_src = __esm({
   }
 });
 
-// node_modules/@octokit/core/node_modules/@octokit/request/dist-bundle/index.js
+// node_modules/@octokit/request/dist-bundle/index.js
 function isPlainObject2(value) {
   if (typeof value !== "object" || value === null) return false;
   if (Object.prototype.toString.call(value) !== "[object Object]") return false;
@@ -1242,7 +1242,7 @@ function withDefaults2(oldEndpoint, newDefaults) {
 }
 var VERSION2, defaults_default, noop, request;
 var init_dist_bundle2 = __esm({
-  "node_modules/@octokit/core/node_modules/@octokit/request/dist-bundle/index.js"() {
+  "node_modules/@octokit/request/dist-bundle/index.js"() {
     "use strict";
     init_dist_bundle();
     init_universal_user_agent();
@@ -1260,7 +1260,7 @@ var init_dist_bundle2 = __esm({
   }
 });
 
-// node_modules/@octokit/core/node_modules/@octokit/graphql/dist-bundle/index.js
+// node_modules/@octokit/graphql/dist-bundle/index.js
 function _buildMessageForResponseErrors(data) {
   return `Request failed due to following response errors:
 ` + data.errors.map((e) => ` - ${e.message}`).join("\n");
@@ -1332,7 +1332,7 @@ function withCustomRequest(customRequest) {
 }
 var VERSION3, GraphqlResponseError, NON_VARIABLE_OPTIONS, FORBIDDEN_VARIABLE_OPTIONS, GHES_V3_SUFFIX_REGEX, graphql2;
 var init_dist_bundle3 = __esm({
-  "node_modules/@octokit/core/node_modules/@octokit/graphql/dist-bundle/index.js"() {
+  "node_modules/@octokit/graphql/dist-bundle/index.js"() {
     "use strict";
     init_dist_bundle2();
     init_universal_user_agent();
@@ -1378,7 +1378,7 @@ var init_dist_bundle3 = __esm({
   }
 });
 
-// node_modules/@octokit/core/node_modules/@octokit/auth-token/dist-bundle/index.js
+// node_modules/@octokit/auth-token/dist-bundle/index.js
 async function auth(token) {
   const isApp = isJWT(token);
   const isInstallation = token.startsWith("v1.") || token.startsWith("ghs_");
@@ -1406,7 +1406,7 @@ async function hook(token, request2, route, parameters) {
 }
 var b64url, sep, jwtRE, isJWT, createTokenAuth;
 var init_dist_bundle4 = __esm({
-  "node_modules/@octokit/core/node_modules/@octokit/auth-token/dist-bundle/index.js"() {
+  "node_modules/@octokit/auth-token/dist-bundle/index.js"() {
     "use strict";
     b64url = "(?:[a-zA-Z0-9_-]+)";
     sep = "\\.";
