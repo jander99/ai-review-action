@@ -1,0 +1,31 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreExportsUsedInFile": true,
+  // tsconfig.base.json sets importHelpers; esbuild inlines the helpers, so
+  // tslib is never imported from source.
+  "ignoreDependencies": ["tslib"],
+  "workspaces": {
+    ".": {
+      // post-check-run, post-comment and run-reviews have no package.json, so
+      // knip analyses them as part of the root workspace.
+      "entry": ["packages/{post-check-run,post-comment,run-reviews}/{src/{index,main,action}.ts,test/**/*.test.cjs}"],
+      "project": ["packages/{post-check-run,post-comment,run-reviews}/{src,test}/**/*.{ts,cjs}"],
+      // TODO: both are unused. Left in place so this change does not touch
+      // yarn.lock; remove them in a follow-up.
+      "ignoreDependencies": ["@actions/exec", "@nx/js"]
+    },
+    "packages/*": {
+      // Entries mirror the Nx esbuild targets in each project.json: bundle
+      // entry points, the `src/index.ts` test bundles, tests, and study scripts.
+      "entry": ["src/index.ts", "src/main.ts", "src/action.ts", "test/**/*.test.cjs", "study/*.{ts,cjs}"],
+      "project": ["src/**/*.ts", "test/**/*.{cjs,ts}", "study/**/*.{ts,cjs}"]
+    },
+    "packages/root-action": {
+      // The repo-root dist/main.cjs bundles src/action-entry.ts (see root project.json).
+      "entry": ["src/main.ts", "src/action-entry.ts", "test/**/*.test.cjs"],
+      "project": ["src/**/*.ts", "test/**/*.{cjs,ts}"],
+      // TODO: unused here, but removing it may shift hoisting and drift the committed bundles.
+      "ignoreDependencies": ["@octokit/rest"]
+    }
+  }
+}
