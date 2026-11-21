@@ -153,9 +153,12 @@ test('bundle contains exactly one require.main === module guard', () => {
 test('require() on the root bundle triggers NO @actions/core calls', () => {
   // Block 1 of the Phase-3 bounded remediation: importing the root
   // bundle as a library must NOT trigger the leaf wrapper IIFEs.
-  // We detect this by patching @actions/core so every setOutput,
-  // setFailed, and warning call records itself. Requiring the
-  // bundle must produce zero recorded calls.
+  // @actions/core is inlined into the bundle, so it cannot be spied on
+  // through the module cache (and v3 is ESM-only, so it cannot be
+  // required here at all). Instead we observe its effects: setOutput,
+  // setFailed and warning all write `::command::` lines to stdout, and
+  // setFailed sets process.exitCode. Requiring the bundle must produce
+  // neither.
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-review-root-action-no-side-effects-'));
   try {
     fs.copyFileSync(
@@ -163,33 +166,15 @@ test('require() on the root bundle triggers NO @actions/core calls', () => {
       path.join(scratch, 'main.cjs'),
     );
     const recorded = [];
-    const corePath = require.resolve('@actions/core');
-    // Save the original cached module so we can restore it.
-    const originalCached = require.cache[corePath];
-    require.cache[corePath] = {
-      id: 'actions-core-spy',
-      filename: corePath,
-      loaded: true,
-      exports: new Proxy(
-        {},
-        {
-          get(_target, key) {
-            if (key === 'setOutput') {
-              return (name, value) => recorded.push(['setOutput', name, value]);
-            }
-            if (key === 'setFailed') {
-              return (message) => recorded.push(['setFailed', message]);
-            }
-            if (key === 'warning') {
-              return (message) => recorded.push(['warning', message]);
-            }
-            return undefined;
-          },
-        },
-      ),
+    const originalWrite = process.stdout.write;
+    const originalExitCode = process.exitCode;
+    process.stdout.write = function (chunk, ...rest) {
+      const text = String(chunk);
+      if (/^::|^##\[/m.test(text)) recorded.push(text.trim());
+      return originalWrite.call(process.stdout, chunk, ...rest);
     };
     try {
-      // Force a fresh require so we hit the spy.
+      // Force a fresh require so the bundle's top level re-executes.
       delete require.cache[path.join(scratch, 'main.cjs')];
       const originalCwd = process.cwd();
       process.chdir(scratch);
@@ -199,18 +184,16 @@ test('require() on the root bundle triggers NO @actions/core calls', () => {
         process.chdir(originalCwd);
       }
     } finally {
-      // Restore the original cached module.
-      if (originalCached) {
-        require.cache[corePath] = originalCached;
-      } else {
-        delete require.cache[corePath];
-      }
+      process.stdout.write = originalWrite;
     }
+    const exitCodeChanged = process.exitCode !== originalExitCode;
+    process.exitCode = originalExitCode;
     assert.deepEqual(
       recorded,
       [],
       `requiring the root bundle must NOT trigger any @actions/core calls; got: ${JSON.stringify(recorded)}`,
     );
+    assert.equal(exitCodeChanged, false, 'requiring the root bundle must not set process.exitCode');
   } finally {
     fs.rmSync(scratch, { recursive: true, force: true });
   }
