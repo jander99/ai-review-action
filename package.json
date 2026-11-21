@@ -18,8 +18,8 @@
   "devDependencies": {
     "@nx/esbuild": "24.0.6",
     "@nx/js": "24.0.6",
-    "@types/node": "^26.0.0",
-    "esbuild": "^0.28.1",
+    "@types/node": "26.6.6",
+    "esbuild": "0.28.1",
     "knip": "6.47.0",
     "nx": "24.0.6",
     "typescript": "6.0.3"
