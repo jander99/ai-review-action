@@ -1,0 +1,22 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:best-practices"],
+  "timezone": "America/Chicago",
+  "schedule": ["before 6am on monday"],
+  "prConcurrentLimit": 5,
+  "dependencyDashboard": true,
+  "vulnerabilityAlerts": { "schedule": ["at any time"] },
+  "packageRules": [
+    {
+      "description": "Keep Nx packages moving together",
+      "matchPackageNames": ["nx", "@nx/**"],
+      "groupName": "nx"
+    },
+    {
+      "description": "Provider SDKs need conformance suites re-run; never automerge",
+      "matchPackageNames": ["@anthropic-ai/sdk", "openai", "@google/genai", "@typesafe-ai/sdk"],
+      "groupName": "provider SDKs",
+      "automerge": false
+    }
+  ]
+}
