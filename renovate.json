@@ -4,7 +4,9 @@
   "timezone": "America/Chicago",
   "schedule": ["before 6am on monday"],
   "prConcurrentLimit": 5,
-  "dependencyDashboard": true,
+  "dependencyDashboard": {
+    "enabled": true
+  },
   "vulnerabilityAlerts": { "schedule": ["at any time"] },
   "packageRules": [
     {
