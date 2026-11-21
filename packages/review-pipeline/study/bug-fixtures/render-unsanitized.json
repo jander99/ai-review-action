@@ -1,0 +1,25 @@
+{
+  "sha": "bug-render-unsanitized",
+  "diff": "diff --git a/packages/review-pipeline/src/render.ts b/packages/review-pipeline/src/render.ts\nindex 002c7e9..c92a77e 100644\n--- a/packages/review-pipeline/src/render.ts\n+++ b/packages/review-pipeline/src/render.ts\n@@ -27,12 +27,14 @@\n   readonly changedLines: number;\n }\n \n function location(finding: PostableFinding): string {\n   const { file, startLine, endLine } = finding.finding;\n+  return startLine === endLine ? `${file}:${startLine}` : `${file}:${startLine}-${endLine}`;\n }\n \n function description(finding: PostableFinding): string {\n   const { claim } = finding.finding;\n+  return finding.note ? `${claim} (${finding.note})` : claim;\n }\n \n export function renderReview(args: RenderReviewArgs): string {\n@@ -49,6 +49,7 @@\n   const toParsed = (finding: PostableFinding) => ({\n     severity: finding.severity,\n     emoji: finding.severity === 'Critical' ? '🔴' : finding.severity === 'Warning' ? '🟡' : '🟢',\n+    title: finding.finding.title,\n     status: 'new' as const,\n     location: location(finding),\n     description: description(finding),\n",
+  "files": {
+    "packages/review-pipeline/src/render.ts": "/**\n * Rendering: pipeline findings → the canonical review document.\n *\n * The document is the product, so it goes through the same contract every\n * other review does — this only chooses the content, never the shape.\n */\n\nimport {\n  renderDocument,\n  type DiffFile,\n  type ParsedDocument,\n  type PostableFinding,\n} from '@jander99/ai-review-review-contract';\nimport type { ReviewDepth } from './triage';\n\nconst SEVERITY_RANK: Readonly<Record<string, number>> = { Critical: 0, Warning: 1, Suggestion: 2 };\n\nexport interface RenderReviewArgs {\n  readonly title: string;\n  readonly triage: string;\n  readonly scope: string[];\n  readonly kept: PostableFinding[];\n  readonly uncertain: PostableFinding[];\n  readonly duplicates: number;\n  readonly depth: ReviewDepth;\n  readonly diffFiles: ReadonlyArray<DiffFile>;\n  readonly changedLines: number;\n}\n\nfunction location(finding: PostableFinding): string {\n  const { file, startLine, endLine } = finding.finding;\n  return startLine === endLine ? `${file}:${startLine}` : `${file}:${startLine}-${endLine}`;\n}\n\nfunction description(finding: PostableFinding): string {\n  const { claim } = finding.finding;\n  return finding.note ? `${claim} (${finding.note})` : claim;\n}\n\nexport function renderReview(args: RenderReviewArgs): string {\n  const sortFindings = (list: PostableFinding[]) =>\n    [...list].sort(\n      (a, b) =>\n        (SEVERITY_RANK[a.severity] ?? 9) - (SEVERITY_RANK[b.severity] ?? 9) ||\n        a.finding.file.localeCompare(b.finding.file) ||\n        a.finding.startLine - b.finding.startLine,\n    );\n\n  const toParsed = (finding: PostableFinding) => ({\n    severity: finding.severity,\n    emoji: finding.severity === 'Critical' ? '🔴' : finding.severity === 'Warning' ? '🟡' : '🟢',\n    title: finding.finding.title,\n    status: 'new' as const,\n    location: location(finding),\n    description: description(finding),\n  });\n\n  const document: ParsedDocument = {\n    title: args.title,\n    triage: args.triage,\n    scope: [\n      `Reviewed ${args.diffFiles.length} files (${args.changedLines} changed lines); depth: ${args.depth}.`,\n      ...args.scope,\n    ],\n    summary: {\n      new: args.kept.length,\n      unresolved: args.duplicates,\n      resolved: 0,\n      ...(args.uncertain.length > 0 ? { uncertain: args.uncertain.length } : {}),\n    },\n    findings: sortFindings(args.kept).map(toParsed),\n    ...(args.uncertain.length > 0 ? { uncertain: sortFindings(args.uncertain).map(toParsed) } : {}),\n  };\n\n  return renderDocument(document);\n}\n"
+  },
+  "bug": {
+    "file": "packages/review-pipeline/src/render.ts",
+    "description": "Model-controlled title, claim and file path are rendered unsanitized, so newlines or markdown in them break the review document format.",
+    "ranges": [
+      {
+        "startLine": 32,
+        "endLine": 32
+      },
+      {
+        "startLine": 37,
+        "endLine": 37
+      },
+      {
+        "startLine": 52,
+        "endLine": 52
+      }
+    ]
+  }
+}

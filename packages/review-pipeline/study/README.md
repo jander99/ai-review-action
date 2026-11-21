@@ -48,3 +48,19 @@ Read from `keepDropFlipRate` and `uncertainRate` in the report:
 Cross-check each finding's `expected` tag against its `verdicts`: a
 `supported` finding that mostly drops, or an `unsupported` one that mostly
 keeps, is a calibration bug, not noise.
+
+## Known-bug recall
+
+`bug-fixtures/` holds seven real v2 bugs (fixed in PR #49) re-presented as the
+change: the fix is reversed and its removed side stripped so the diff cannot leak
+the answer. `bug-recall.ts` runs the full pipeline per fixture and reports
+`proposedRecall` (the LLM named the bug) and `keptRecall` (it survived the
+judge). Same env as the stability study; build and run:
+
+```bash
+esbuild study/bug-recall.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist-test/bug-recall.cjs
+node dist-test/bug-recall.cjs --runs 5 --out bug-report.json
+```
+
+Regenerate fixtures with `node study/generate-bug-fixtures.cjs`. A hit is a
+finding in the right file within 3 lines of a ground-truth range.
