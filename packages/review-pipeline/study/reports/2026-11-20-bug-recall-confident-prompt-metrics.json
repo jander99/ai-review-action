@@ -1,0 +1,263 @@
+{
+  "summary": {
+    "proposedRecall": 0.6,
+    "keptRecall": 0.6,
+    "runtime": {
+      "runs": 35,
+      "meanMs": 8337,
+      "p50Ms": 6809,
+      "p95Ms": 29935,
+      "maxMs": 34831,
+      "llmCallsPerRun": 1.0571428571428572,
+      "studyWallMs": 291798
+    },
+    "avgExtraKept": 0
+  },
+  "results": [
+    {
+      "fixture": "bug-diff-header-in-hunk",
+      "runs": 5,
+      "failed": 0,
+      "proposedRecall": 1,
+      "keptRecall": 1,
+      "uncertainHits": 0,
+      "extraKept": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "proposedCounts": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "runtime": {
+        "runs": 5,
+        "meanMs": 9609,
+        "p50Ms": 9958,
+        "p95Ms": 10539,
+        "maxMs": 10539,
+        "llmCallsPerRun": 1,
+        "avgTokens": {
+          "llmIn": 1899,
+          "llmOut": 4435,
+          "decisionIn": 2119
+        }
+      }
+    },
+    {
+      "fixture": "bug-diff-section-split",
+      "runs": 5,
+      "failed": 0,
+      "proposedRecall": 1,
+      "keptRecall": 1,
+      "uncertainHits": 0,
+      "extraKept": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "proposedCounts": [
+        1,
+        2,
+        3,
+        3,
+        3
+      ],
+      "runtime": {
+        "runs": 5,
+        "meanMs": 23228,
+        "p50Ms": 18039,
+        "p95Ms": 34831,
+        "maxMs": 34831,
+        "llmCallsPerRun": 1.4,
+        "avgTokens": {
+          "llmIn": 1797,
+          "llmOut": 6783,
+          "decisionIn": 5569
+        }
+      }
+    },
+    {
+      "fixture": "bug-event-on-failed-review",
+      "runs": 5,
+      "failed": 0,
+      "proposedRecall": 0,
+      "keptRecall": 0,
+      "uncertainHits": 0,
+      "extraKept": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "proposedCounts": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "runtime": {
+        "runs": 5,
+        "meanMs": 2055,
+        "p50Ms": 1650,
+        "p95Ms": 3635,
+        "maxMs": 3635,
+        "llmCallsPerRun": 1,
+        "avgTokens": {
+          "llmIn": 3584,
+          "llmOut": 693,
+          "decisionIn": 337
+        }
+      }
+    },
+    {
+      "fixture": "bug-git-diff-failure-silent",
+      "runs": 5,
+      "failed": 0,
+      "proposedRecall": 1,
+      "keptRecall": 1,
+      "uncertainHits": 0,
+      "extraKept": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "proposedCounts": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "runtime": {
+        "runs": 5,
+        "meanMs": 6341,
+        "p50Ms": 6809,
+        "p95Ms": 8341,
+        "maxMs": 8341,
+        "llmCallsPerRun": 1,
+        "avgTokens": {
+          "llmIn": 3187,
+          "llmOut": 2776,
+          "decisionIn": 2610
+        }
+      }
+    },
+    {
+      "fixture": "bug-post-review-swallowed-error",
+      "runs": 5,
+      "failed": 0,
+      "proposedRecall": 1,
+      "keptRecall": 1,
+      "uncertainHits": 0,
+      "extraKept": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "proposedCounts": [
+        3,
+        2,
+        2,
+        1,
+        2
+      ],
+      "runtime": {
+        "runs": 5,
+        "meanMs": 8694,
+        "p50Ms": 8731,
+        "p95Ms": 10774,
+        "maxMs": 10774,
+        "llmCallsPerRun": 1,
+        "avgTokens": {
+          "llmIn": 2128,
+          "llmOut": 3792,
+          "decisionIn": 3694
+        }
+      }
+    },
+    {
+      "fixture": "bug-render-unsanitized",
+      "runs": 5,
+      "failed": 0,
+      "proposedRecall": 0.2,
+      "keptRecall": 0.2,
+      "uncertainHits": 0,
+      "extraKept": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "proposedCounts": [
+        0,
+        0,
+        1,
+        0,
+        0
+      ],
+      "runtime": {
+        "runs": 5,
+        "meanMs": 5776,
+        "p50Ms": 4172,
+        "p95Ms": 13206,
+        "maxMs": 13206,
+        "llmCallsPerRun": 1,
+        "avgTokens": {
+          "llmIn": 1525,
+          "llmOut": 2246,
+          "decisionIn": 848
+        }
+      }
+    },
+    {
+      "fixture": "bug-secrets-passed-as-env",
+      "runs": 5,
+      "failed": 0,
+      "proposedRecall": 0,
+      "keptRecall": 0,
+      "uncertainHits": 0,
+      "extraKept": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "proposedCounts": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "runtime": {
+        "runs": 5,
+        "meanMs": 2656,
+        "p50Ms": 2734,
+        "p95Ms": 4868,
+        "maxMs": 4868,
+        "llmCallsPerRun": 1,
+        "avgTokens": {
+          "llmIn": 1098,
+          "llmOut": 939,
+          "decisionIn": 344
+        }
+      }
+    }
+  ]
+}

@@ -1,44 +1,44 @@
-# AI Review Action — Current Design
+# AI Review Action — Design
 
-> Status: **implemented core action; contract coverage and documentation follow-up remain.**
+> Status: **v2 implemented.** The full design and plan are in `docs/superpowers/`.
 
 ## Summary
 
-AI Review Action runs repository reviews through the OpenCode CLI in GitHub Actions. The workflow supplies the runner, checkout, credentials, prompts, optional configuration, skills, MCPs, and plugins. The action owns the review agent, runtime configuration, invocation orchestration, result aggregation, and publication.
+AI Review Action makes AI reviews more repeatable. An LLM only **proposes** findings as schema-validated JSON. A **decision API** judges every judgment: is the finding supported, how severe, is it a duplicate of a prior finding. Code thresholds the typed probabilities into keep, uncertain or drop. The result is posted as a batched inline PR review, or as a check run on non-PR events.
 
-The root action (`packages/root-action`) is a single JavaScript bundle that wires `run-reviews`, `validate-review`, `post-comment`, `post-check-run`, and `post-error-comment` together. Each leaf package exports a plain TypeScript API (`runReviews`, `validateReview`, `postComment`, `postCheckRun`, `postErrorComment`) and the leaf action's `dist/main.cjs` is a thin wrapper that translates `@actions/core` inputs and outputs. The bundle uses `require.main === module` to gate the action entrypoint, so the same file can also be imported as a library.
+There is no agent loop, no tool calling and no CLI harness. The reviewer sees the filtered diff, the changed files' text and the base-branch repository instructions, and nothing else.
 
-The sub-actions remain available for callers who want fine-grained composition:
+## Pipeline
 
-- `setup-opencode` installs a pinned Linux x64 OpenCode release after verifying its SHA-256 checksum.
-- The root action asserts the installed OpenCode version before reviewing.
-- `run-reviews` removes workspace-root `opencode.json` and `opencode.jsonc`, builds an isolated merged configuration under the runner temp directory, and uses an isolated OpenCode home.
-- The action injects event/ref context into an action-owned agent definition. It does not materialize a diff; the model uses Git to decide what to inspect.
-- Prompts use `file:` or `text:` sources. `models` and `prompts` are cross-producted in stable lexical order.
-- Multiple reviews are deterministically merged into one canonical document; findings dedup by normalized key, and the merge enforces the 256 KB contract maximum (exceeding it throws).
-- Results expose review text, successful models, cost, and token totals, including per-model JSON outputs.
-- Pull requests publish comments; non-PR events publish check runs. Publishing can be disabled independently.
-- Debug mode captures stdout/stderr, applies best-effort credential redaction, compresses the files, and uploads a short-lived artifact.
-- Prior AI review comments for the same pull request are fetched, sanitized, and size-capped, then injected into the reviewer prompt so status changes (`unresolved`, `resolved`) propagate to the next run.
-- The validator runs a deterministic structural check first and a model-based check second; the model only sees a sanitized config that does not embed the reviewer prompt, the runner-local path, or any literal user secret.
+1. `previous-reviews` reads prior bot findings (issue comments, inline review comments and review bodies, all pages) with stable finding ids.
+2. `run-reviews` computes the filtered diff and reads context and repository instructions from the base commit.
+3. **Triage** (decision API) asks PR-level questions, gates review depth (light or detailed) and emits a triage line.
+4. **Propose** (LLM): one call returns findings; invalid JSON gets one retry.
+5. **Judge** (decision API): one request per finding, 3 at a time. Any finding unjudged after the SDK's retries fails the run; a partial review is never posted.
+6. **Policy** (`review-contract`): `P(supported) >= keep-threshold` keeps, `<= drop-threshold` drops, between is uncertain (rendered collapsed). Severity is the argmax if it clears `severity-threshold`, otherwise the lower neighbour. Duplicates of prior findings are dropped and counted.
+7. Render the canonical review document and post it. Findings that cannot be anchored to a diff hunk go in the review body, never dropped.
 
-## Runtime and security contracts
+## Packages
 
-- Supported execution target: Linux x64. The bundled installer does not support macOS, Windows, or Linux arm64.
-- OpenCode installation is separate from review execution. Production workflows should pin both action references to a full commit SHA and provide the checksum for the exact OpenCode archive.
-- Provider credentials remain environment variables and are referenced through OpenCode `{env:VAR}` configuration values. Supported built-in integrations include Anthropic, OpenAI, Gemini, GitHub Copilot, MiniMax, Kimi/Moonshot, AWS Bedrock, and Google Vertex Anthropic.
-- Default permissions allow reading and Git inspection; edits, questions, and loop-breaking require confirmation; Bash is allowed unless the workflow overrides the `permission` input. OpenCode does not provide a reliable Bash sub-command allow-list.
-- The workflow author is the trust boundary. A model with Bash access may read or exfiltrate environment variables, repository instructions can influence behavior, fork workflows normally lack provider secrets, and review completeness is not guaranteed.
-- Debug redaction is pattern-based and is not a guarantee that source, prompts, model output, URLs, or unknown secrets are absent from artifacts.
+- `review-contract`: review format, parser/validator, merge, policy, diff parsing, finding comments, proposer schema. The single source of truth for the format.
+- `decisions`, `llm-clients`: provider adapters on official SDKs behind `DecisionClient` and `LlmClient`, each with a registry and a shared conformance suite.
+- `review-pipeline`: `runReviewPipeline(input, deps)`, pure orchestration over injected clients; plus the repeat-stability study.
+- `run-reviews`: IO (event context, diff, instructions) and the call into the pipeline.
+- `previous-reviews`, `post-comment`, `post-check-run`, `post-error-comment`: GitHub IO.
+- `root-action`: shared orchestration and the action entry points.
 
-## Remaining work
+## Contracts
 
-1. Add contract fixtures/tests for the pinned OpenCode 1.18.4 CLI and JSONL result ABI.
-2. Decide whether merged OpenCode configuration should gain schema validation. Earlier design text described this, but the current implementation does not validate against `$schema`.
-3. Keep user-facing documentation aligned when action inputs, provider fallbacks, or OpenCode runtime contracts change.
+- **Provider adapters** take `{baseUrl?, apiKey, model, timeoutMs?, options?}`. They never read `process.env`, pass key and base URL explicitly to the SDK, redact secrets from errors, and use only the SDK's built-in retries. There is no fallback from the decision API to an LLM.
+- **Untrusted input:** PR content is fenced data; repo instructions come from the base SHA; judge state is JSON-encoded.
+- **Failure behavior:** decision API down, or any finding unjudged, fails the check with an error comment. A proposer that returns no valid findings after one retry posts "no findings produced", not a clean pass.
+- **Default posture:** a `COMMENT` review. `APPROVE` and `REQUEST_CHANGES` are opt-in and apply only to completed reviews.
+
+## Release gate
+
+Before a release, run the repeat-stability study and the end-to-end overlap measure (`packages/review-pipeline/study/README.md`) against real diffs. Keep/drop flips must be rare outside the uncertain band; tune default thresholds from the reports.
 
 ## Related documentation
 
-- [README](../README.md) — setup, inputs, outputs, examples, and operational limitations.
-- [Contributing](../CONTRIBUTING.md) — local development and verification commands.
-- [Security policy](../SECURITY.md) — threat model, supply-chain guidance, and reporting.
+- [README](../README.md), [Contributing](../CONTRIBUTING.md), [Security policy](../SECURITY.md), [Architecture](architecture.md).
+- [Design spec](superpowers/specs/2026-11-19-decision-review-pipeline-design.md) and [implementation plan](superpowers/plans/2026-11-19-decision-review-pipeline.md).

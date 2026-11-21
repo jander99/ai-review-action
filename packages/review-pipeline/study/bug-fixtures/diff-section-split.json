@@ -1,0 +1,25 @@
+{
+  "sha": "bug-diff-section-split",
+  "diff": "diff --git a/packages/review-pipeline/src/context.ts b/packages/review-pipeline/src/context.ts\nindex 1b27f74..7d05d62 100644\n--- a/packages/review-pipeline/src/context.ts\n+++ b/packages/review-pipeline/src/context.ts\n@@ -7,6 +7,7 @@\n  * shrinking the prompt.\n  */\n \n+import { parseUnifiedDiff } from '@jander99/ai-review-review-contract';\n \n export const CONTEXT_MAX_BYTES = 300_000;\n export const PROMPT_RESERVE_TOKENS = 8_000;\n@@ -35,7 +35,25 @@\n }\n \n function splitDiffSections(diff: string): string[] {\n+  // parseUnifiedDiff knows what a section is; reuse it to find boundaries.\n+  const files = parseUnifiedDiff(diff);\n+  if (files.length === 0) {\n+    return diff.trim() === '' ? [] : [diff];\n   }\n+  const sections: string[] = [];\n+  let rest = diff;\n+  for (const file of files) {\n+    const marker = `diff --git a/${file.path} b/${file.path}`;\n+    const idx = rest.indexOf(marker);\n+    if (idx === -1) {\n+      continue;\n+    }\n+    const next = files[files.indexOf(file) + 1];\n+    const end = next ? rest.indexOf(`diff --git a/${next.path} b/${next.path}`, idx + marker.length) : rest.length;\n+    sections.push(rest.slice(idx, end === -1 ? rest.length : end));\n+    rest = rest.slice(0, idx) + rest.slice(end === -1 ? rest.length : end);\n+  }\n+  return sections;\n }\n \n export function buildReviewContext(\n",
+  "files": {
+    "packages/review-pipeline/src/context.ts": "/**\n * Context assembly for the proposer.\n *\n * The diff is the review's subject and the context files are supporting\n * material, so files are dropped first. Everything is fenced as untrusted\n * input, and every omission is recorded as a note rather than silently\n * shrinking the prompt.\n */\n\nimport { parseUnifiedDiff } from '@jander99/ai-review-review-contract';\n\nexport const CONTEXT_MAX_BYTES = 300_000;\nexport const PROMPT_RESERVE_TOKENS = 8_000;\n\nexport function estimateTokens(text: string): number {\n  return Math.ceil(text.length / 4);\n}\n\n/** Wrap content in a tag, neutralizing any closing tag the content contains. */\nexport function fence(tag: string, content: string): string {\n  const neutralized = content.split(`</${tag}>`).join(`<\\\\/${tag}>`);\n  return `<${tag}>\\n${neutralized}\\n</${tag}>`;\n}\n\nexport interface ContextFile {\n  readonly path: string;\n  readonly text: string;\n}\n\nexport interface ReviewContext {\n  readonly diff: string;\n  readonly diffTruncated: boolean;\n  readonly files: ReadonlyArray<ContextFile>;\n  readonly notes: ReadonlyArray<string>;\n}\n\nfunction splitDiffSections(diff: string): string[] {\n  // parseUnifiedDiff knows what a section is; reuse it to find boundaries.\n  const files = parseUnifiedDiff(diff);\n  if (files.length === 0) {\n    return diff.trim() === '' ? [] : [diff];\n  }\n  const sections: string[] = [];\n  let rest = diff;\n  for (const file of files) {\n    const marker = `diff --git a/${file.path} b/${file.path}`;\n    const idx = rest.indexOf(marker);\n    if (idx === -1) {\n      continue;\n    }\n    const next = files[files.indexOf(file) + 1];\n    const end = next ? rest.indexOf(`diff --git a/${next.path} b/${next.path}`, idx + marker.length) : rest.length;\n    sections.push(rest.slice(idx, end === -1 ? rest.length : end));\n    rest = rest.slice(0, idx) + rest.slice(end === -1 ? rest.length : end);\n  }\n  return sections;\n}\n\nexport function buildReviewContext(\n  input: { diff: string; diffTruncated: boolean; files: ReadonlyArray<ContextFile> },\n  budgetTokens: number,\n): ReviewContext {\n  const notes: string[] = [];\n\n  let files = [...input.files].sort((a, b) => a.path.localeCompare(b.path)).filter((file) => {\n    if (file.text.length > CONTEXT_MAX_BYTES) {\n      notes.push(`context omitted: ${file.path}`);\n      return false;\n    }\n    return true;\n  });\n\n  let sections = splitDiffSections(input.diff);\n  let diffTruncated = input.diffTruncated;\n\n  const size = () => estimateTokens(sections.join('')) + files.reduce((sum, f) => sum + estimateTokens(f.text), 0);\n\n  while (files.length > 0 && size() + PROMPT_RESERVE_TOKENS > budgetTokens) {\n    const dropped = files.pop()!;\n    notes.push(`context omitted: ${dropped.path}`);\n  }\n  while (sections.length > 1 && size() + PROMPT_RESERVE_TOKENS > budgetTokens) {\n    const dropped = sections[sections.length - 1];\n    const path = dropped.match(/^diff --git a\\/(.+?) b\\//)?.[1] ?? '';\n    sections = sections.slice(0, -1);\n    diffTruncated = true;\n    notes.push(`diff section omitted: ${path}`);\n  }\n\n  return { diff: sections.join(''), diffTruncated, files, notes };\n}\n"
+  },
+  "bug": {
+    "file": "packages/review-pipeline/src/context.ts",
+    "description": "splitDiffSections re-derives paths and string-searches for markers; renames, quoted paths, or repeated markers split wrongly or drop sections.",
+    "ranges": [
+      {
+        "startLine": 10,
+        "endLine": 10
+      },
+      {
+        "startLine": 38,
+        "endLine": 41
+      },
+      {
+        "startLine": 43,
+        "endLine": 56
+      }
+    ]
+  }
+}

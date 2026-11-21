@@ -123,8 +123,6 @@ export async function proposeFindings(
     });
   }
 
-  kept.sort((a, b) => a.file.localeCompare(b.file) || a.startLine - b.startLine || a.title.localeCompare(b.title));
-
   const seen = new Set<string>();
   const unique = kept.filter((f) => {
     if (seen.has(f.id)) {
@@ -139,5 +137,9 @@ export async function proposeFindings(
     log(`truncated ${unique.length} findings to ${limit}`);
   }
 
-  return { status: 'ok', findings: unique.slice(0, limit), usage };
+  // Truncate in the model's order (the prompt asks for most severe first), then sort for stable output.
+  const limited = unique.slice(0, limit);
+  limited.sort((a, b) => a.file.localeCompare(b.file) || a.startLine - b.startLine || a.title.localeCompare(b.title));
+
+  return { status: 'ok', findings: limited, usage };
 }

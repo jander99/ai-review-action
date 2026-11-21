@@ -77,3 +77,50 @@ export function summarizeRuns(
     uncertainRate: runs.length > 0 ? uncertain / runs.length : 0,
   };
 }
+
+export interface LocatedFinding {
+  readonly file: string;
+  readonly startLine: number;
+  readonly endLine: number;
+}
+
+function sortedByLocation(run: ReadonlyArray<LocatedFinding>): LocatedFinding[] {
+  return [...run].sort((a, b) => a.file.localeCompare(b.file) || a.startLine - b.startLine || a.endLine - b.endLine);
+}
+
+function jaccard(a: ReadonlyArray<LocatedFinding>, b: ReadonlyArray<LocatedFinding>): number {
+  if (a.length === 0 && b.length === 0) return 1;
+  const left = sortedByLocation(a);
+  const right = sortedByLocation(b);
+  const used = new Set<number>();
+  let matched = 0;
+  for (const finding of left) {
+    const hit = right.findIndex(
+      (other, i) =>
+        !used.has(i) && other.file === finding.file && other.startLine <= finding.endLine && finding.startLine <= other.endLine,
+    );
+    if (hit !== -1) {
+      used.add(hit);
+      matched += 1;
+    }
+  }
+  return matched / (left.length + right.length - matched);
+}
+
+/**
+ * End-to-end repeatability: the mean pairwise Jaccard overlap of the finding
+ * sets across runs. Findings match when they share a file and their line
+ * ranges overlap; matching is greedy and one-to-one in sorted order. Fewer
+ * than two runs have no pairs and count as fully overlapping.
+ */
+export function pairwiseOverlap(runs: ReadonlyArray<ReadonlyArray<LocatedFinding>>): number {
+  let total = 0;
+  let pairs = 0;
+  for (let i = 0; i < runs.length; i++) {
+    for (let j = i + 1; j < runs.length; j++) {
+      total += jaccard(runs[i], runs[j]);
+      pairs += 1;
+    }
+  }
+  return pairs === 0 ? 1 : total / pairs;
+}
