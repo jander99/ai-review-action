@@ -6,6 +6,6 @@
   "dependencies": {
     "@actions/core": "^3.0.0",
     "@actions/github": "^6.0.0",
-    "@octokit/rest": "^21.0.0"
+    "@octokit/rest": "^22.0.0"
   }
 }
