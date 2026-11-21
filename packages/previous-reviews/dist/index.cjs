@@ -1,15 +1,14 @@
 "use strict";
-var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
-var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __commonJS = (cb, mod) => function __require() {
+var __esm = (fn, res, err) => function __init() {
+  if (err) throw err[0];
   try {
-    return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+    return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
   } catch (e) {
-    throw mod = 0, e;
+    throw err = [e], e;
   }
 };
 var __export = (target, all) => {
@@ -24,211 +23,459 @@ var __copyProps = (to, from, except, desc) => {
   }
   return to;
 };
-var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
-  // If the importer is in node compatibility mode or this is not an ESM
-  // file that has been converted to a CommonJS file using a Babel-
-  // compatible transform (i.e. "__esModule" has not been set), then set
-  // "default" to the CommonJS "module.exports" for node compatibility.
-  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
-  mod
-));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-// node_modules/universal-user-agent/dist-node/index.js
-var require_dist_node = __commonJS({
-  "node_modules/universal-user-agent/dist-node/index.js"(exports2) {
+// node_modules/@octokit/core/node_modules/universal-user-agent/index.js
+function getUserAgent() {
+  if (typeof navigator === "object" && "userAgent" in navigator) {
+    return navigator.userAgent;
+  }
+  if (typeof process === "object" && process.version !== void 0) {
+    return `Node.js/${process.version.substr(1)} (${process.platform}; ${process.arch})`;
+  }
+  return "<environment undetectable>";
+}
+var init_universal_user_agent = __esm({
+  "node_modules/@octokit/core/node_modules/universal-user-agent/index.js"() {
     "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    function getUserAgent() {
-      if (typeof navigator === "object" && "userAgent" in navigator) {
-        return navigator.userAgent;
-      }
-      if (typeof process === "object" && process.version !== void 0) {
-        return `Node.js/${process.version.substr(1)} (${process.platform}; ${process.arch})`;
-      }
-      return "<environment undetectable>";
-    }
-    exports2.getUserAgent = getUserAgent;
   }
 });
 
-// node_modules/before-after-hook/lib/register.js
-var require_register = __commonJS({
-  "node_modules/before-after-hook/lib/register.js"(exports2, module2) {
+// node_modules/@octokit/core/node_modules/before-after-hook/lib/register.js
+function register(state, name, method, options) {
+  if (typeof method !== "function") {
+    throw new Error("method for before hook must be a function");
+  }
+  if (!options) {
+    options = {};
+  }
+  if (Array.isArray(name)) {
+    return name.reverse().reduce((callback, name2) => {
+      return register.bind(null, state, name2, callback, options);
+    }, method)();
+  }
+  return Promise.resolve().then(() => {
+    if (!state.registry[name]) {
+      return method(options);
+    }
+    return state.registry[name].reduce((method2, registered) => {
+      return registered.hook.bind(null, method2, options);
+    }, method)();
+  });
+}
+var init_register = __esm({
+  "node_modules/@octokit/core/node_modules/before-after-hook/lib/register.js"() {
     "use strict";
-    module2.exports = register;
-    function register(state, name, method, options) {
-      if (typeof method !== "function") {
-        throw new Error("method for before hook must be a function");
-      }
-      if (!options) {
-        options = {};
-      }
-      if (Array.isArray(name)) {
-        return name.reverse().reduce(function(callback, name2) {
-          return register.bind(null, state, name2, callback, options);
-        }, method)();
-      }
-      return Promise.resolve().then(function() {
-        if (!state.registry[name]) {
-          return method(options);
-        }
-        return state.registry[name].reduce(function(method2, registered) {
-          return registered.hook.bind(null, method2, options);
-        }, method)();
+  }
+});
+
+// node_modules/@octokit/core/node_modules/before-after-hook/lib/add.js
+function addHook(state, kind, name, hook2) {
+  const orig = hook2;
+  if (!state.registry[name]) {
+    state.registry[name] = [];
+  }
+  if (kind === "before") {
+    hook2 = (method, options) => {
+      return Promise.resolve().then(orig.bind(null, options)).then(method.bind(null, options));
+    };
+  }
+  if (kind === "after") {
+    hook2 = (method, options) => {
+      let result;
+      return Promise.resolve().then(method.bind(null, options)).then((result_) => {
+        result = result_;
+        return orig(result, options);
+      }).then(() => {
+        return result;
       });
-    }
+    };
   }
-});
-
-// node_modules/before-after-hook/lib/add.js
-var require_add = __commonJS({
-  "node_modules/before-after-hook/lib/add.js"(exports2, module2) {
-    "use strict";
-    module2.exports = addHook;
-    function addHook(state, kind, name, hook) {
-      var orig = hook;
-      if (!state.registry[name]) {
-        state.registry[name] = [];
-      }
-      if (kind === "before") {
-        hook = function(method, options) {
-          return Promise.resolve().then(orig.bind(null, options)).then(method.bind(null, options));
-        };
-      }
-      if (kind === "after") {
-        hook = function(method, options) {
-          var result;
-          return Promise.resolve().then(method.bind(null, options)).then(function(result_) {
-            result = result_;
-            return orig(result, options);
-          }).then(function() {
-            return result;
-          });
-        };
-      }
-      if (kind === "error") {
-        hook = function(method, options) {
-          return Promise.resolve().then(method.bind(null, options)).catch(function(error) {
-            return orig(error, options);
-          });
-        };
-      }
-      state.registry[name].push({
-        hook,
-        orig
+  if (kind === "error") {
+    hook2 = (method, options) => {
+      return Promise.resolve().then(method.bind(null, options)).catch((error) => {
+        return orig(error, options);
       });
-    }
+    };
+  }
+  state.registry[name].push({
+    hook: hook2,
+    orig
+  });
+}
+var init_add = __esm({
+  "node_modules/@octokit/core/node_modules/before-after-hook/lib/add.js"() {
+    "use strict";
   }
 });
 
-// node_modules/before-after-hook/lib/remove.js
-var require_remove = __commonJS({
-  "node_modules/before-after-hook/lib/remove.js"(exports2, module2) {
+// node_modules/@octokit/core/node_modules/before-after-hook/lib/remove.js
+function removeHook(state, name, method) {
+  if (!state.registry[name]) {
+    return;
+  }
+  const index = state.registry[name].map((registered) => {
+    return registered.orig;
+  }).indexOf(method);
+  if (index === -1) {
+    return;
+  }
+  state.registry[name].splice(index, 1);
+}
+var init_remove = __esm({
+  "node_modules/@octokit/core/node_modules/before-after-hook/lib/remove.js"() {
     "use strict";
-    module2.exports = removeHook;
-    function removeHook(state, name, method) {
-      if (!state.registry[name]) {
-        return;
-      }
-      var index = state.registry[name].map(function(registered) {
-        return registered.orig;
-      }).indexOf(method);
-      if (index === -1) {
-        return;
-      }
-      state.registry[name].splice(index, 1);
-    }
   }
 });
 
-// node_modules/before-after-hook/index.js
-var require_before_after_hook = __commonJS({
-  "node_modules/before-after-hook/index.js"(exports2, module2) {
+// node_modules/@octokit/core/node_modules/before-after-hook/index.js
+function bindApi(hook2, state, name) {
+  const removeHookRef = bindable(removeHook, null).apply(
+    null,
+    name ? [state, name] : [state]
+  );
+  hook2.api = { remove: removeHookRef };
+  hook2.remove = removeHookRef;
+  ["before", "error", "after", "wrap"].forEach((kind) => {
+    const args = name ? [state, kind, name] : [state, kind];
+    hook2[kind] = hook2.api[kind] = bindable(addHook, null).apply(null, args);
+  });
+}
+function Singular() {
+  const singularHookName = /* @__PURE__ */ Symbol("Singular");
+  const singularHookState = {
+    registry: {}
+  };
+  const singularHook = register.bind(null, singularHookState, singularHookName);
+  bindApi(singularHook, singularHookState, singularHookName);
+  return singularHook;
+}
+function Collection() {
+  const state = {
+    registry: {}
+  };
+  const hook2 = register.bind(null, state);
+  bindApi(hook2, state);
+  return hook2;
+}
+var bind, bindable, before_after_hook_default;
+var init_before_after_hook = __esm({
+  "node_modules/@octokit/core/node_modules/before-after-hook/index.js"() {
     "use strict";
-    var register = require_register();
-    var addHook = require_add();
-    var removeHook = require_remove();
-    var bind = Function.bind;
-    var bindable = bind.bind(bind);
-    function bindApi(hook, state, name) {
-      var removeHookRef = bindable(removeHook, null).apply(
-        null,
-        name ? [state, name] : [state]
+    init_register();
+    init_add();
+    init_remove();
+    bind = Function.bind;
+    bindable = bind.bind(bind);
+    before_after_hook_default = { Singular, Collection };
+  }
+});
+
+// node_modules/@octokit/core/node_modules/@octokit/endpoint/dist-bundle/index.js
+function lowercaseKeys(object) {
+  if (!object) {
+    return {};
+  }
+  return Object.keys(object).reduce((newObj, key) => {
+    newObj[key.toLowerCase()] = object[key];
+    return newObj;
+  }, {});
+}
+function isPlainObject(value) {
+  if (typeof value !== "object" || value === null) return false;
+  if (Object.prototype.toString.call(value) !== "[object Object]") return false;
+  const proto = Object.getPrototypeOf(value);
+  if (proto === null) return true;
+  const Ctor = Object.prototype.hasOwnProperty.call(proto, "constructor") && proto.constructor;
+  return typeof Ctor === "function" && Ctor instanceof Ctor && Function.prototype.call(Ctor) === Function.prototype.call(value);
+}
+function mergeDeep(defaults, options) {
+  const result = Object.assign({}, defaults);
+  Object.keys(options).forEach((key) => {
+    if (isPlainObject(options[key])) {
+      if (!(key in defaults)) Object.assign(result, { [key]: options[key] });
+      else result[key] = mergeDeep(defaults[key], options[key]);
+    } else {
+      Object.assign(result, { [key]: options[key] });
+    }
+  });
+  return result;
+}
+function removeUndefinedProperties(obj) {
+  for (const key in obj) {
+    if (obj[key] === void 0) {
+      delete obj[key];
+    }
+  }
+  return obj;
+}
+function merge(defaults, route, options) {
+  if (typeof route === "string") {
+    let [method, url] = route.split(" ");
+    options = Object.assign(url ? { method, url } : { url: method }, options);
+  } else {
+    options = Object.assign({}, route);
+  }
+  options.headers = lowercaseKeys(options.headers);
+  removeUndefinedProperties(options);
+  removeUndefinedProperties(options.headers);
+  const mergedOptions = mergeDeep(defaults || {}, options);
+  if (options.url === "/graphql") {
+    if (defaults && defaults.mediaType.previews?.length) {
+      mergedOptions.mediaType.previews = defaults.mediaType.previews.filter(
+        (preview) => !mergedOptions.mediaType.previews.includes(preview)
+      ).concat(mergedOptions.mediaType.previews);
+    }
+    mergedOptions.mediaType.previews = (mergedOptions.mediaType.previews || []).map((preview) => preview.replace(/-preview/, ""));
+  }
+  return mergedOptions;
+}
+function addQueryParameters(url, parameters) {
+  const separator = /\?/.test(url) ? "&" : "?";
+  const names = Object.keys(parameters);
+  if (names.length === 0) {
+    return url;
+  }
+  return url + separator + names.map((name) => {
+    if (name === "q") {
+      return "q=" + parameters.q.split("+").map(encodeURIComponent).join("+");
+    }
+    return `${name}=${encodeURIComponent(parameters[name])}`;
+  }).join("&");
+}
+function removeNonChars(variableName) {
+  return variableName.replace(/(?:^\W+)|(?:(?<!\W)\W+$)/g, "").split(/,/);
+}
+function extractUrlVariableNames(url) {
+  const matches = url.match(urlVariableRegex);
+  if (!matches) {
+    return [];
+  }
+  return matches.map(removeNonChars).reduce((a, b) => a.concat(b), []);
+}
+function omit(object, keysToOmit) {
+  const result = { __proto__: null };
+  for (const key of Object.keys(object)) {
+    if (keysToOmit.indexOf(key) === -1) {
+      result[key] = object[key];
+    }
+  }
+  return result;
+}
+function encodeReserved(str) {
+  return str.split(/(%[0-9A-Fa-f]{2})/g).map(function(part) {
+    if (!/%[0-9A-Fa-f]/.test(part)) {
+      part = encodeURI(part).replace(/%5B/g, "[").replace(/%5D/g, "]");
+    }
+    return part;
+  }).join("");
+}
+function encodeUnreserved(str) {
+  return encodeURIComponent(str).replace(/[!'()*]/g, function(c) {
+    return "%" + c.charCodeAt(0).toString(16).toUpperCase();
+  });
+}
+function encodeValue(operator, value, key) {
+  value = operator === "+" || operator === "#" ? encodeReserved(value) : encodeUnreserved(value);
+  if (key) {
+    return encodeUnreserved(key) + "=" + value;
+  } else {
+    return value;
+  }
+}
+function isDefined(value) {
+  return value !== void 0 && value !== null;
+}
+function isKeyOperator(operator) {
+  return operator === ";" || operator === "&" || operator === "?";
+}
+function getValues(context, operator, key, modifier) {
+  var value = context[key], result = [];
+  if (isDefined(value) && value !== "") {
+    if (typeof value === "string" || typeof value === "number" || typeof value === "bigint" || typeof value === "boolean") {
+      value = value.toString();
+      if (modifier && modifier !== "*") {
+        value = value.substring(0, parseInt(modifier, 10));
+      }
+      result.push(
+        encodeValue(operator, value, isKeyOperator(operator) ? key : "")
       );
-      hook.api = { remove: removeHookRef };
-      hook.remove = removeHookRef;
-      ["before", "error", "after", "wrap"].forEach(function(kind) {
-        var args = name ? [state, kind, name] : [state, kind];
-        hook[kind] = hook.api[kind] = bindable(addHook, null).apply(null, args);
-      });
-    }
-    function HookSingular() {
-      var singularHookName = "h";
-      var singularHookState = {
-        registry: {}
-      };
-      var singularHook = register.bind(null, singularHookState, singularHookName);
-      bindApi(singularHook, singularHookState, singularHookName);
-      return singularHook;
-    }
-    function HookCollection() {
-      var state = {
-        registry: {}
-      };
-      var hook = register.bind(null, state);
-      bindApi(hook, state);
-      return hook;
-    }
-    var collectionHookDeprecationMessageDisplayed = false;
-    function Hook() {
-      if (!collectionHookDeprecationMessageDisplayed) {
-        console.warn(
-          '[before-after-hook]: "Hook()" repurposing warning, use "Hook.Collection()". Read more: https://git.io/upgrade-before-after-hook-to-1.4'
-        );
-        collectionHookDeprecationMessageDisplayed = true;
+    } else {
+      if (modifier === "*") {
+        if (Array.isArray(value)) {
+          value.filter(isDefined).forEach(function(value2) {
+            result.push(
+              encodeValue(operator, value2, isKeyOperator(operator) ? key : "")
+            );
+          });
+        } else {
+          Object.keys(value).forEach(function(k) {
+            if (isDefined(value[k])) {
+              result.push(encodeValue(operator, value[k], k));
+            }
+          });
+        }
+      } else {
+        const tmp = [];
+        if (Array.isArray(value)) {
+          value.filter(isDefined).forEach(function(value2) {
+            tmp.push(encodeValue(operator, value2));
+          });
+        } else {
+          Object.keys(value).forEach(function(k) {
+            if (isDefined(value[k])) {
+              tmp.push(encodeUnreserved(k));
+              tmp.push(encodeValue(operator, value[k].toString()));
+            }
+          });
+        }
+        if (isKeyOperator(operator)) {
+          result.push(encodeUnreserved(key) + "=" + tmp.join(","));
+        } else if (tmp.length !== 0) {
+          result.push(tmp.join(","));
+        }
       }
-      return HookCollection();
     }
-    Hook.Singular = HookSingular.bind();
-    Hook.Collection = HookCollection.bind();
-    module2.exports = Hook;
-    module2.exports.Hook = Hook;
-    module2.exports.Singular = Hook.Singular;
-    module2.exports.Collection = Hook.Collection;
+  } else {
+    if (operator === ";") {
+      if (isDefined(value)) {
+        result.push(encodeUnreserved(key));
+      }
+    } else if (value === "" && (operator === "&" || operator === "?")) {
+      result.push(encodeUnreserved(key) + "=");
+    } else if (value === "") {
+      result.push("");
+    }
   }
-});
-
-// node_modules/@octokit/endpoint/dist-node/index.js
-var require_dist_node2 = __commonJS({
-  "node_modules/@octokit/endpoint/dist-node/index.js"(exports2, module2) {
-    "use strict";
-    var __defProp2 = Object.defineProperty;
-    var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
-    var __getOwnPropNames2 = Object.getOwnPropertyNames;
-    var __hasOwnProp2 = Object.prototype.hasOwnProperty;
-    var __export2 = (target, all) => {
-      for (var name in all)
-        __defProp2(target, name, { get: all[name], enumerable: true });
-    };
-    var __copyProps2 = (to, from, except, desc) => {
-      if (from && typeof from === "object" || typeof from === "function") {
-        for (let key of __getOwnPropNames2(from))
-          if (!__hasOwnProp2.call(to, key) && key !== except)
-            __defProp2(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc2(from, key)) || desc.enumerable });
+  return result;
+}
+function parseUrl(template) {
+  return {
+    expand: expand.bind(null, template)
+  };
+}
+function expand(template, context) {
+  var operators = ["+", "#", ".", "/", ";", "?", "&"];
+  template = template.replace(
+    /\{([^\{\}]+)\}|([^\{\}]+)/g,
+    function(_, expression, literal) {
+      if (expression) {
+        let operator = "";
+        const values = [];
+        if (operators.indexOf(expression.charAt(0)) !== -1) {
+          operator = expression.charAt(0);
+          expression = expression.substr(1);
+        }
+        expression.split(/,/g).forEach(function(variable) {
+          var tmp = /([^:\*]*)(?::(\d+)|(\*))?/.exec(variable);
+          values.push(getValues(context, operator, tmp[1], tmp[2] || tmp[3]));
+        });
+        if (operator && operator !== "+") {
+          var separator = ",";
+          if (operator === "?") {
+            separator = "&";
+          } else if (operator !== "#") {
+            separator = operator;
+          }
+          return (values.length !== 0 ? operator : "") + values.join(separator);
+        } else {
+          return values.join(",");
+        }
+      } else {
+        return encodeReserved(literal);
       }
-      return to;
-    };
-    var __toCommonJS2 = (mod) => __copyProps2(__defProp2({}, "__esModule", { value: true }), mod);
-    var dist_src_exports = {};
-    __export2(dist_src_exports, {
-      endpoint: () => endpoint
-    });
-    module2.exports = __toCommonJS2(dist_src_exports);
-    var import_universal_user_agent = require_dist_node();
-    var VERSION = "9.0.6";
-    var userAgent = `octokit-endpoint.js/${VERSION} ${(0, import_universal_user_agent.getUserAgent)()}`;
-    var DEFAULTS = {
+    }
+  );
+  if (template === "/") {
+    return template;
+  } else {
+    return template.replace(/\/$/, "");
+  }
+}
+function parse(options) {
+  let method = options.method.toUpperCase();
+  let url = (options.url || "/").replace(/:([a-z]\w+)/g, "{$1}");
+  let headers = Object.assign({}, options.headers);
+  let body;
+  let parameters = omit(options, [
+    "method",
+    "baseUrl",
+    "url",
+    "headers",
+    "request",
+    "mediaType"
+  ]);
+  const urlVariableNames = extractUrlVariableNames(url);
+  url = parseUrl(url).expand(parameters);
+  if (!/^http/.test(url)) {
+    url = options.baseUrl + url;
+  }
+  const omittedParameters = Object.keys(options).filter((option) => urlVariableNames.includes(option)).concat("baseUrl");
+  const remainingParameters = omit(parameters, omittedParameters);
+  const isBinaryRequest = /application\/octet-stream/i.test(headers.accept);
+  if (!isBinaryRequest) {
+    if (options.mediaType.format) {
+      headers.accept = headers.accept.split(/,/).map(
+        (format) => format.replace(
+          /application\/vnd(\.\w+)(\.v3)?(\.\w+)?(\+json)?$/,
+          `application/vnd$1$2.${options.mediaType.format}`
+        )
+      ).join(",");
+    }
+    if (url.endsWith("/graphql")) {
+      if (options.mediaType.previews?.length) {
+        const previewsFromAcceptHeader = headers.accept.match(/(?<![\w-])[\w-]+(?=-preview)/g) || [];
+        headers.accept = previewsFromAcceptHeader.concat(options.mediaType.previews).map((preview) => {
+          const format = options.mediaType.format ? `.${options.mediaType.format}` : "+json";
+          return `application/vnd.github.${preview}-preview${format}`;
+        }).join(",");
+      }
+    }
+  }
+  if (["GET", "HEAD"].includes(method)) {
+    url = addQueryParameters(url, remainingParameters);
+  } else {
+    if ("data" in remainingParameters) {
+      body = remainingParameters.data;
+    } else {
+      if (Object.keys(remainingParameters).length) {
+        body = remainingParameters;
+      }
+    }
+  }
+  if (!headers["content-type"] && typeof body !== "undefined") {
+    headers["content-type"] = "application/json; charset=utf-8";
+  }
+  if (["PATCH", "PUT"].includes(method) && typeof body === "undefined") {
+    body = "";
+  }
+  return Object.assign(
+    { method, url, headers },
+    typeof body !== "undefined" ? { body } : null,
+    options.request ? { request: options.request } : null
+  );
+}
+function endpointWithDefaults(defaults, route, options) {
+  return parse(merge(defaults, route, options));
+}
+function withDefaults(oldDefaults, newDefaults) {
+  const DEFAULTS2 = merge(oldDefaults, newDefaults);
+  const endpoint2 = endpointWithDefaults.bind(null, DEFAULTS2);
+  return Object.assign(endpoint2, {
+    DEFAULTS: DEFAULTS2,
+    defaults: withDefaults.bind(null, DEFAULTS2),
+    merge: merge.bind(null, DEFAULTS2),
+    parse
+  });
+}
+var VERSION, userAgent, DEFAULTS, urlVariableRegex, endpoint;
+var init_dist_bundle = __esm({
+  "node_modules/@octokit/core/node_modules/@octokit/endpoint/dist-bundle/index.js"() {
+    "use strict";
+    init_universal_user_agent();
+    VERSION = "0.0.0-development";
+    userAgent = `octokit-endpoint.js/${VERSION} ${getUserAgent()}`;
+    DEFAULTS = {
       method: "GET",
       baseUrl: "https://api.github.com",
       headers: {
@@ -239,461 +486,570 @@ var require_dist_node2 = __commonJS({
         format: ""
       }
     };
-    function lowercaseKeys(object) {
-      if (!object) {
-        return {};
+    urlVariableRegex = /\{[^{}}]+\}/g;
+    endpoint = withDefaults(null, DEFAULTS);
+  }
+});
+
+// node_modules/content-type/dist/index.js
+function parse2(header, options) {
+  const stopFlags = SEMI_FLAG | (options?.comma === true ? COMMA_FLAG : 0);
+  const len = header.length;
+  let valueStart = options?.start ?? 0;
+  while ((CHAR_MAP[header.charCodeAt(valueStart)] & OWS) !== 0) {
+    valueStart++;
+  }
+  let index = valueStart;
+  let typeFlags = 0;
+  let whitespace = -1;
+  let stop = options?.parameters === false ? COMMA_FLAG : 0;
+  while (index < len) {
+    const code = header.charCodeAt(index);
+    const flags = CHAR_MAP[code];
+    if ((flags & stopFlags) !== 0) {
+      stop |= flags & COMMA_FLAG;
+      break;
+    }
+    if ((flags & OWS) !== 0) {
+      if (whitespace === -1)
+        whitespace = index;
+    } else {
+      whitespace = -1;
+    }
+    typeFlags |= code & NON_ASCII | flags;
+    index++;
+  }
+  const valueEnd = whitespace === -1 ? index : whitespace;
+  const value = header.slice(valueStart, valueEnd);
+  const type = (typeFlags & CASE_FLAGS) === 0 ? value : value.toLowerCase();
+  if (index === len || stop !== 0) {
+    return { type, index, parameters: new NullObject() };
+  }
+  return parseParameters(header, type, index, len, stopFlags);
+}
+function parseParameters(header, type, index, len, stopFlags) {
+  const parameters = new NullObject();
+  parameter: while (index < len) {
+    index++;
+    while ((CHAR_MAP[header.charCodeAt(index)] & OWS) !== 0) {
+      index++;
+    }
+    const keyStart = index;
+    let keyFlags = 0;
+    let keyWhitespace = -1;
+    while (index < len) {
+      const code = header.charCodeAt(index);
+      const flags = CHAR_MAP[code];
+      if ((flags & stopFlags) !== 0) {
+        if ((flags & COMMA_FLAG) !== 0)
+          break parameter;
+        continue parameter;
       }
-      return Object.keys(object).reduce((newObj, key) => {
-        newObj[key.toLowerCase()] = object[key];
-        return newObj;
-      }, {});
-    }
-    function isPlainObject(value) {
-      if (typeof value !== "object" || value === null)
-        return false;
-      if (Object.prototype.toString.call(value) !== "[object Object]")
-        return false;
-      const proto = Object.getPrototypeOf(value);
-      if (proto === null)
-        return true;
-      const Ctor = Object.prototype.hasOwnProperty.call(proto, "constructor") && proto.constructor;
-      return typeof Ctor === "function" && Ctor instanceof Ctor && Function.prototype.call(Ctor) === Function.prototype.call(value);
-    }
-    function mergeDeep(defaults, options) {
-      const result = Object.assign({}, defaults);
-      Object.keys(options).forEach((key) => {
-        if (isPlainObject(options[key])) {
-          if (!(key in defaults))
-            Object.assign(result, { [key]: options[key] });
-          else
-            result[key] = mergeDeep(defaults[key], options[key]);
-        } else {
-          Object.assign(result, { [key]: options[key] });
+      if (code === EQ) {
+        const keyEnd = keyWhitespace === -1 ? index : keyWhitespace;
+        const value = header.slice(keyStart, keyEnd);
+        const key = (keyFlags & CASE_FLAGS) === 0 ? value : value.toLowerCase();
+        index++;
+        while ((CHAR_MAP[header.charCodeAt(index)] & OWS) !== 0) {
+          index++;
         }
-      });
-      return result;
-    }
-    function removeUndefinedProperties(obj) {
-      for (const key in obj) {
-        if (obj[key] === void 0) {
-          delete obj[key];
-        }
-      }
-      return obj;
-    }
-    function merge(defaults, route, options) {
-      if (typeof route === "string") {
-        let [method, url] = route.split(" ");
-        options = Object.assign(url ? { method, url } : { url: method }, options);
-      } else {
-        options = Object.assign({}, route);
-      }
-      options.headers = lowercaseKeys(options.headers);
-      removeUndefinedProperties(options);
-      removeUndefinedProperties(options.headers);
-      const mergedOptions = mergeDeep(defaults || {}, options);
-      if (options.url === "/graphql") {
-        if (defaults && defaults.mediaType.previews?.length) {
-          mergedOptions.mediaType.previews = defaults.mediaType.previews.filter(
-            (preview) => !mergedOptions.mediaType.previews.includes(preview)
-          ).concat(mergedOptions.mediaType.previews);
-        }
-        mergedOptions.mediaType.previews = (mergedOptions.mediaType.previews || []).map((preview) => preview.replace(/-preview/, ""));
-      }
-      return mergedOptions;
-    }
-    function addQueryParameters(url, parameters) {
-      const separator = /\?/.test(url) ? "&" : "?";
-      const names = Object.keys(parameters);
-      if (names.length === 0) {
-        return url;
-      }
-      return url + separator + names.map((name) => {
-        if (name === "q") {
-          return "q=" + parameters.q.split("+").map(encodeURIComponent).join("+");
-        }
-        return `${name}=${encodeURIComponent(parameters[name])}`;
-      }).join("&");
-    }
-    var urlVariableRegex = /\{[^{}}]+\}/g;
-    function removeNonChars(variableName) {
-      return variableName.replace(/(?:^\W+)|(?:(?<!\W)\W+$)/g, "").split(/,/);
-    }
-    function extractUrlVariableNames(url) {
-      const matches = url.match(urlVariableRegex);
-      if (!matches) {
-        return [];
-      }
-      return matches.map(removeNonChars).reduce((a, b) => a.concat(b), []);
-    }
-    function omit(object, keysToOmit) {
-      const result = { __proto__: null };
-      for (const key of Object.keys(object)) {
-        if (keysToOmit.indexOf(key) === -1) {
-          result[key] = object[key];
-        }
-      }
-      return result;
-    }
-    function encodeReserved(str) {
-      return str.split(/(%[0-9A-Fa-f]{2})/g).map(function(part) {
-        if (!/%[0-9A-Fa-f]/.test(part)) {
-          part = encodeURI(part).replace(/%5B/g, "[").replace(/%5D/g, "]");
-        }
-        return part;
-      }).join("");
-    }
-    function encodeUnreserved(str) {
-      return encodeURIComponent(str).replace(/[!'()*]/g, function(c) {
-        return "%" + c.charCodeAt(0).toString(16).toUpperCase();
-      });
-    }
-    function encodeValue(operator, value, key) {
-      value = operator === "+" || operator === "#" ? encodeReserved(value) : encodeUnreserved(value);
-      if (key) {
-        return encodeUnreserved(key) + "=" + value;
-      } else {
-        return value;
-      }
-    }
-    function isDefined(value) {
-      return value !== void 0 && value !== null;
-    }
-    function isKeyOperator(operator) {
-      return operator === ";" || operator === "&" || operator === "?";
-    }
-    function getValues(context, operator, key, modifier) {
-      var value = context[key], result = [];
-      if (isDefined(value) && value !== "") {
-        if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-          value = value.toString();
-          if (modifier && modifier !== "*") {
-            value = value.substring(0, parseInt(modifier, 10));
-          }
-          result.push(
-            encodeValue(operator, value, isKeyOperator(operator) ? key : "")
-          );
-        } else {
-          if (modifier === "*") {
-            if (Array.isArray(value)) {
-              value.filter(isDefined).forEach(function(value2) {
-                result.push(
-                  encodeValue(operator, value2, isKeyOperator(operator) ? key : "")
-                );
-              });
-            } else {
-              Object.keys(value).forEach(function(k) {
-                if (isDefined(value[k])) {
-                  result.push(encodeValue(operator, value[k], k));
-                }
-              });
-            }
-          } else {
-            const tmp = [];
-            if (Array.isArray(value)) {
-              value.filter(isDefined).forEach(function(value2) {
-                tmp.push(encodeValue(operator, value2));
-              });
-            } else {
-              Object.keys(value).forEach(function(k) {
-                if (isDefined(value[k])) {
-                  tmp.push(encodeUnreserved(k));
-                  tmp.push(encodeValue(operator, value[k].toString()));
-                }
-              });
-            }
-            if (isKeyOperator(operator)) {
-              result.push(encodeUnreserved(key) + "=" + tmp.join(","));
-            } else if (tmp.length !== 0) {
-              result.push(tmp.join(","));
-            }
-          }
-        }
-      } else {
-        if (operator === ";") {
-          if (isDefined(value)) {
-            result.push(encodeUnreserved(key));
-          }
-        } else if (value === "" && (operator === "&" || operator === "?")) {
-          result.push(encodeUnreserved(key) + "=");
-        } else if (value === "") {
-          result.push("");
-        }
-      }
-      return result;
-    }
-    function parseUrl(template) {
-      return {
-        expand: expand.bind(null, template)
-      };
-    }
-    function expand(template, context) {
-      var operators = ["+", "#", ".", "/", ";", "?", "&"];
-      template = template.replace(
-        /\{([^\{\}]+)\}|([^\{\}]+)/g,
-        function(_, expression, literal) {
-          if (expression) {
-            let operator = "";
-            const values = [];
-            if (operators.indexOf(expression.charAt(0)) !== -1) {
-              operator = expression.charAt(0);
-              expression = expression.substr(1);
-            }
-            expression.split(/,/g).forEach(function(variable) {
-              var tmp = /([^:\*]*)(?::(\d+)|(\*))?/.exec(variable);
-              values.push(getValues(context, operator, tmp[1], tmp[2] || tmp[3]));
-            });
-            if (operator && operator !== "+") {
-              var separator = ",";
-              if (operator === "?") {
-                separator = "&";
-              } else if (operator !== "#") {
-                separator = operator;
+        if (index < len && header.charCodeAt(index) === DQUOTE) {
+          const quotedStart = ++index;
+          let escaped = false;
+          while (index < len) {
+            const code2 = header.charCodeAt(index);
+            if (code2 === DQUOTE) {
+              if (parameters[key] === void 0) {
+                parameters[key] = escaped ? unescapeQuotedPairs(header, quotedStart, index) : header.slice(quotedStart, index);
               }
-              return (values.length !== 0 ? operator : "") + values.join(separator);
+              index++;
+              let stop2 = 0;
+              while (index < len) {
+                const code3 = header.charCodeAt(index);
+                const flags2 = CHAR_MAP[code3];
+                if ((flags2 & stopFlags) !== 0) {
+                  stop2 = flags2 & COMMA_FLAG;
+                  break;
+                }
+                index++;
+              }
+              if (stop2 !== 0)
+                break parameter;
+              continue parameter;
+            }
+            if (code2 === BSLASH && index + 1 < len) {
+              escaped = true;
+              index += 2;
+              continue;
+            }
+            index++;
+          }
+          continue parameter;
+        }
+        const valueStart = index;
+        let stop = 0;
+        let valueWhitespace = -1;
+        while (index < len) {
+          const code2 = header.charCodeAt(index);
+          const flags2 = CHAR_MAP[code2];
+          if ((flags2 & stopFlags) !== 0) {
+            stop = flags2 & COMMA_FLAG;
+            break;
+          }
+          if ((flags2 & OWS) !== 0) {
+            if (valueWhitespace === -1)
+              valueWhitespace = index;
+          } else {
+            valueWhitespace = -1;
+          }
+          index++;
+        }
+        if (parameters[key] === void 0) {
+          const valueEnd = valueWhitespace === -1 ? index : valueWhitespace;
+          parameters[key] = header.slice(valueStart, valueEnd);
+        }
+        if (stop !== 0)
+          break parameter;
+        continue parameter;
+      }
+      if ((flags & OWS) !== 0) {
+        if (keyWhitespace === -1)
+          keyWhitespace = index;
+      } else {
+        keyWhitespace = -1;
+      }
+      keyFlags |= code & NON_ASCII | flags;
+      index++;
+    }
+  }
+  return { type, index, parameters };
+}
+function unescapeQuotedPairs(str, start, end) {
+  let result = "";
+  for (let index = start; index < end; index++) {
+    if (str.charCodeAt(index) === BSLASH) {
+      result += str.slice(start, index);
+      start = ++index;
+    }
+  }
+  return result + str.slice(start, end);
+}
+var SP, HTAB, SEMI, EQ, DQUOTE, BSLASH, COMMA, LOWER_CASE, OWS, SEMI_FLAG, COMMA_FLAG, TOKEN_FLAG, NON_ASCII, CASE_FLAGS, CHAR_MAP, NullObject;
+var init_dist = __esm({
+  "node_modules/content-type/dist/index.js"() {
+    "use strict";
+    SP = 32;
+    HTAB = 9;
+    SEMI = 59;
+    EQ = 61;
+    DQUOTE = 34;
+    BSLASH = 92;
+    COMMA = 44;
+    LOWER_CASE = 1;
+    OWS = 2;
+    SEMI_FLAG = 4;
+    COMMA_FLAG = 8;
+    TOKEN_FLAG = 16;
+    NON_ASCII = 65280;
+    CASE_FLAGS = LOWER_CASE | NON_ASCII;
+    CHAR_MAP = new Uint8Array(256);
+    CHAR_MAP[HTAB] |= OWS;
+    CHAR_MAP[SP] |= OWS;
+    CHAR_MAP[SEMI] |= SEMI_FLAG;
+    CHAR_MAP[COMMA] |= COMMA_FLAG;
+    for (let code = 128; code <= 255; code++) {
+      CHAR_MAP[code] |= LOWER_CASE;
+    }
+    for (const char of "!#$%&'*+-.^_`|~") {
+      CHAR_MAP[char.charCodeAt(0)] |= TOKEN_FLAG;
+    }
+    for (let code = 48; code <= 57; code++) {
+      CHAR_MAP[code] |= TOKEN_FLAG;
+    }
+    for (let code = 65; code <= 90; code++) {
+      CHAR_MAP[code] |= LOWER_CASE | TOKEN_FLAG;
+    }
+    for (let code = 97; code <= 122; code++) {
+      CHAR_MAP[code] |= TOKEN_FLAG;
+    }
+    NullObject = /* @__PURE__ */ (() => {
+      const C = function() {
+      };
+      C.prototype = /* @__PURE__ */ Object.create(null);
+      return C;
+    })();
+  }
+});
+
+// node_modules/json-with-bigint/json-with-bigint.js
+var intRegex, noiseValue, originalStringify, originalParse, customFormat, bigIntsStringify, noiseStringify, isUnstringifiable, isRawJSON, stringifyIteratively, JSONStringify, featureCache, isContextSourceSupported, convertMarkedBigIntsReviver, JSONParseV2, MAX_INT, MAX_DIGITS, stringsOrLargeNumbers, noiseValueWithQuotes, applyReviverIteratively, serializeBigInts, JSONParse;
+var init_json_with_bigint = __esm({
+  "node_modules/json-with-bigint/json-with-bigint.js"() {
+    "use strict";
+    intRegex = /^-?\d+$/;
+    noiseValue = /^-?\d+n+$/;
+    originalStringify = JSON.stringify;
+    originalParse = JSON.parse;
+    customFormat = /^-?\d+n$/;
+    bigIntsStringify = /([\[:])?"(-?\d+)n"($|\s*[,\}\]])/g;
+    noiseStringify = /([\[:])?("-?\d+n+)n("$|"\s*[,\}\]])/g;
+    isUnstringifiable = (val) => val === void 0 || typeof val === "function" || typeof val === "symbol";
+    isRawJSON = (val) => val !== null && typeof val === "object" && val.constructor && val.constructor.name === "RawJSON";
+    stringifyIteratively = (rootValue, replacer, spaceParam) => {
+      let space = "";
+      if (typeof spaceParam === "number") {
+        space = " ".repeat(Math.min(10, Math.max(0, Math.floor(spaceParam))));
+      } else if (typeof spaceParam === "string") {
+        space = spaceParam.slice(0, 10);
+      }
+      const isFunctionReplacer = typeof replacer === "function";
+      const propertyList = Array.isArray(replacer) ? new Set(replacer.map(String)) : null;
+      const prepareVal = (parent, key, val) => {
+        const isObject = val !== null && typeof val === "object";
+        const hasToJSON = isObject && typeof val.toJSON === "function";
+        if (hasToJSON) {
+          val = val.toJSON(key);
+        }
+        const isNoise = typeof val === "string" && noiseValue.test(val);
+        if (isNoise) return val + "n";
+        const isBigInt = typeof val === "bigint";
+        if (isBigInt) {
+          const supportsRawJSON = "rawJSON" in JSON;
+          if (supportsRawJSON) return JSON.rawJSON(val.toString());
+          return val.toString() + "n";
+        }
+        if (isFunctionReplacer) {
+          val = replacer.call(parent, key, val);
+        }
+        const isPostReplacerObject = val !== null && typeof val === "object";
+        if (isPostReplacerObject) {
+          const isPrimitiveWrapper = val instanceof Number || val instanceof String || val instanceof Boolean;
+          if (isPrimitiveWrapper) {
+            val = val.valueOf();
+          }
+        }
+        return val;
+      };
+      const rootProcessed = prepareVal({ "": rootValue }, "", rootValue);
+      if (isUnstringifiable(rootProcessed)) {
+        return void 0;
+      }
+      const isRootPrimitive = rootProcessed === null || typeof rootProcessed !== "object";
+      const isRootNativeRawJSON = isRawJSON(rootProcessed);
+      if (isRootPrimitive || isRootNativeRawJSON) {
+        return originalStringify(rootProcessed);
+      }
+      const chunks = [];
+      let level = 0;
+      const stack = [
+        {
+          parent: { "": rootProcessed },
+          key: "",
+          val: rootProcessed,
+          isArray: Array.isArray(rootProcessed),
+          keys: Array.isArray(rootProcessed) ? null : Object.keys(rootProcessed),
+          index: 0,
+          first: true
+        }
+      ];
+      const visited = new WeakSet([rootProcessed]);
+      while (stack.length > 0) {
+        const node = stack[stack.length - 1];
+        if (node.index === 0) {
+          chunks.push(node.isArray ? "[" : "{");
+          level++;
+        }
+        let isDone = false;
+        if (node.isArray) {
+          if (node.index < node.val.length) {
+            if (!node.first) chunks.push(",");
+            if (space) chunks.push("\n" + space.repeat(level));
+            const childRaw = node.val[node.index];
+            const childVal = prepareVal(node.val, String(node.index), childRaw);
+            if (isUnstringifiable(childVal)) {
+              chunks.push("null");
+              node.first = false;
+              node.index++;
             } else {
-              return values.join(",");
+              const isComplexObject = childVal !== null && typeof childVal === "object";
+              const isNativeRaw = isRawJSON(childVal);
+              if (isComplexObject && !isNativeRaw) {
+                if (visited.has(childVal)) {
+                  throw new TypeError("Converting circular structure to JSON");
+                }
+                visited.add(childVal);
+                stack.push({
+                  parent: node.val,
+                  key: String(node.index),
+                  val: childVal,
+                  isArray: Array.isArray(childVal),
+                  keys: Array.isArray(childVal) ? null : Object.keys(childVal),
+                  index: 0,
+                  first: true
+                });
+                node.first = false;
+                node.index++;
+              } else {
+                chunks.push(originalStringify(childVal));
+                node.first = false;
+                node.index++;
+              }
             }
           } else {
-            return encodeReserved(literal);
+            isDone = true;
           }
-        }
-      );
-      if (template === "/") {
-        return template;
-      } else {
-        return template.replace(/\/$/, "");
-      }
-    }
-    function parse(options) {
-      let method = options.method.toUpperCase();
-      let url = (options.url || "/").replace(/:([a-z]\w+)/g, "{$1}");
-      let headers = Object.assign({}, options.headers);
-      let body;
-      let parameters = omit(options, [
-        "method",
-        "baseUrl",
-        "url",
-        "headers",
-        "request",
-        "mediaType"
-      ]);
-      const urlVariableNames = extractUrlVariableNames(url);
-      url = parseUrl(url).expand(parameters);
-      if (!/^http/.test(url)) {
-        url = options.baseUrl + url;
-      }
-      const omittedParameters = Object.keys(options).filter((option) => urlVariableNames.includes(option)).concat("baseUrl");
-      const remainingParameters = omit(parameters, omittedParameters);
-      const isBinaryRequest = /application\/octet-stream/i.test(headers.accept);
-      if (!isBinaryRequest) {
-        if (options.mediaType.format) {
-          headers.accept = headers.accept.split(/,/).map(
-            (format) => format.replace(
-              /application\/vnd(\.\w+)(\.v3)?(\.\w+)?(\+json)?$/,
-              `application/vnd$1$2.${options.mediaType.format}`
-            )
-          ).join(",");
-        }
-        if (url.endsWith("/graphql")) {
-          if (options.mediaType.previews?.length) {
-            const previewsFromAcceptHeader = headers.accept.match(/(?<![\w-])[\w-]+(?=-preview)/g) || [];
-            headers.accept = previewsFromAcceptHeader.concat(options.mediaType.previews).map((preview) => {
-              const format = options.mediaType.format ? `.${options.mediaType.format}` : "+json";
-              return `application/vnd.github.${preview}-preview${format}`;
-            }).join(",");
-          }
-        }
-      }
-      if (["GET", "HEAD"].includes(method)) {
-        url = addQueryParameters(url, remainingParameters);
-      } else {
-        if ("data" in remainingParameters) {
-          body = remainingParameters.data;
         } else {
-          if (Object.keys(remainingParameters).length) {
-            body = remainingParameters;
+          while (node.index < node.keys.length) {
+            const k = node.keys[node.index++];
+            const isFilteredOutByArray = propertyList && !propertyList.has(k);
+            if (isFilteredOutByArray) continue;
+            const childRaw = node.val[k];
+            const childVal = prepareVal(node.val, k, childRaw);
+            if (isUnstringifiable(childVal)) continue;
+            if (!node.first) chunks.push(",");
+            if (space) {
+              chunks.push("\n" + space.repeat(level) + originalStringify(k) + ": ");
+            } else {
+              chunks.push(originalStringify(k) + ":");
+            }
+            const isComplexObject = childVal !== null && typeof childVal === "object";
+            const isNativeRaw = isRawJSON(childVal);
+            if (isComplexObject && !isNativeRaw) {
+              if (visited.has(childVal)) {
+                throw new TypeError("Converting circular structure to JSON");
+              }
+              visited.add(childVal);
+              stack.push({
+                parent: node.val,
+                key: k,
+                val: childVal,
+                isArray: Array.isArray(childVal),
+                keys: Array.isArray(childVal) ? null : Object.keys(childVal),
+                index: 0,
+                first: true
+              });
+              node.first = false;
+              break;
+            } else {
+              chunks.push(originalStringify(childVal));
+              node.first = false;
+            }
+          }
+          const isNodeFullyProcessed = node.index >= node.keys.length && stack[stack.length - 1] === node;
+          if (isNodeFullyProcessed) {
+            isDone = true;
           }
         }
+        if (isDone) {
+          level--;
+          if (!node.first && space) chunks.push("\n" + space.repeat(level));
+          chunks.push(node.isArray ? "]" : "}");
+          visited.delete(node.val);
+          stack.pop();
+        }
       }
-      if (!headers["content-type"] && typeof body !== "undefined") {
-        headers["content-type"] = "application/json; charset=utf-8";
+      return chunks.join("");
+    };
+    JSONStringify = (value, replacer, space) => {
+      try {
+        const supportsRawJSON = "rawJSON" in JSON;
+        if (supportsRawJSON) {
+          return originalStringify(
+            value,
+            (key, val) => {
+              if (typeof val === "bigint") return JSON.rawJSON(val.toString());
+              const hasFunctionReplacer = typeof replacer === "function";
+              if (hasFunctionReplacer) return replacer(key, val);
+              const isKeyInArrayReplacer = Array.isArray(replacer) && replacer.includes(key);
+              if (isKeyInArrayReplacer) return val;
+              return val;
+            },
+            space
+          );
+        }
+        if (!value) return originalStringify(value, replacer, space);
+        const convertedToCustomJSON = originalStringify(
+          value,
+          (key, val) => {
+            const isNoise = typeof val === "string" && noiseValue.test(val);
+            if (isNoise) return val.toString() + "n";
+            if (typeof val === "bigint") return val.toString() + "n";
+            const hasFunctionReplacer = typeof replacer === "function";
+            if (hasFunctionReplacer) return replacer(key, val);
+            const isKeyInArrayReplacer = Array.isArray(replacer) && replacer.includes(key);
+            if (isKeyInArrayReplacer) return val;
+            return val;
+          },
+          space
+        );
+        const processedJSON = convertedToCustomJSON.replace(
+          bigIntsStringify,
+          "$1$2$3"
+        );
+        const denoisedJSON = processedJSON.replace(noiseStringify, "$1$2$3");
+        return denoisedJSON;
+      } catch (error) {
+        if (error instanceof RangeError) {
+          const convertedJSON = stringifyIteratively(value, replacer, space);
+          if (convertedJSON === void 0) return void 0;
+          const supportsRawJSON = "rawJSON" in JSON;
+          if (supportsRawJSON) return convertedJSON;
+          const processedJSON = convertedJSON.replace(bigIntsStringify, "$1$2$3");
+          return processedJSON.replace(noiseStringify, "$1$2$3");
+        }
+        throw error;
       }
-      if (["PATCH", "PUT"].includes(method) && typeof body === "undefined") {
-        body = "";
+    };
+    featureCache = /* @__PURE__ */ new Map();
+    isContextSourceSupported = () => {
+      const parseFingerprint = JSON.parse.toString();
+      if (featureCache.has(parseFingerprint)) {
+        return featureCache.get(parseFingerprint);
       }
-      return Object.assign(
-        { method, url, headers },
-        typeof body !== "undefined" ? { body } : null,
-        options.request ? { request: options.request } : null
+      try {
+        const result = JSON.parse(
+          "1",
+          (_, __, context) => !!context?.source && context.source === "1"
+        );
+        featureCache.set(parseFingerprint, result);
+        return result;
+      } catch {
+        featureCache.set(parseFingerprint, false);
+        return false;
+      }
+    };
+    convertMarkedBigIntsReviver = (key, value, context, userReviver) => {
+      const isCustomFormatBigInt = typeof value === "string" && customFormat.test(value);
+      if (isCustomFormatBigInt) return BigInt(value.slice(0, -1));
+      const isNoiseValue = typeof value === "string" && noiseValue.test(value);
+      if (isNoiseValue) return value.slice(0, -1);
+      const hasUserReviver = typeof userReviver === "function";
+      if (!hasUserReviver) return value;
+      return userReviver(key, value, context);
+    };
+    JSONParseV2 = (text, reviver) => {
+      return JSON.parse(text, (key, value, context) => {
+        const isNumber = typeof value === "number";
+        const isOutOfBounds = value > Number.MAX_SAFE_INTEGER || value < Number.MIN_SAFE_INTEGER;
+        const isBigNumber = isNumber && isOutOfBounds;
+        const isInt = context && intRegex.test(context.source);
+        const isBigInt = isBigNumber && isInt;
+        if (isBigInt) return BigInt(context.source);
+        const hasCustomReviver = typeof reviver === "function";
+        if (!hasCustomReviver) return value;
+        return reviver(key, value, context);
+      });
+    };
+    MAX_INT = Number.MAX_SAFE_INTEGER.toString();
+    MAX_DIGITS = MAX_INT.length;
+    stringsOrLargeNumbers = /"(?:[^"\\]|\\.)*"|-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?/g;
+    noiseValueWithQuotes = /^"-?\d+n+"$/;
+    applyReviverIteratively = (parsed, userReviver) => {
+      const rootHolder = { "": parsed };
+      const stack = [{ parent: rootHolder, key: "", visited: false }];
+      while (stack.length > 0) {
+        const node = stack[stack.length - 1];
+        if (!node.visited) {
+          node.visited = true;
+          const value = node.parent[node.key];
+          const isComplexObject = value !== null && typeof value === "object";
+          if (isComplexObject) {
+            const keys = Object.keys(value);
+            for (let i = keys.length - 1; i >= 0; i--) {
+              stack.push({ parent: value, key: keys[i], visited: false });
+            }
+          }
+        } else {
+          const { parent, key } = node;
+          let value = parent[key];
+          if (typeof value === "string") {
+            const isCustomFormatBigInt = customFormat.test(value);
+            if (isCustomFormatBigInt) {
+              value = BigInt(value.slice(0, -1));
+            } else {
+              const isNoise = noiseValue.test(value);
+              if (isNoise) value = value.slice(0, -1);
+            }
+          }
+          const hasUserReviver = typeof userReviver === "function";
+          if (hasUserReviver) {
+            value = userReviver.call(parent, key, value);
+          }
+          const isDeleted = value === void 0;
+          if (isDeleted) {
+            delete parent[key];
+          } else {
+            parent[key] = value;
+          }
+          stack.pop();
+        }
+      }
+      return rootHolder[""];
+    };
+    serializeBigInts = (text) => {
+      return text.replace(
+        stringsOrLargeNumbers,
+        (match, digits, fractional, exponential) => {
+          const isString = match[0] === '"';
+          const isNoise = isString && noiseValueWithQuotes.test(match);
+          if (isNoise) return match.substring(0, match.length - 1) + 'n"';
+          const hasFractionalOrExponential = fractional || exponential;
+          const isLessThanMaxSafeInt = digits && (digits.length < MAX_DIGITS || digits.length === MAX_DIGITS && digits <= MAX_INT);
+          const isStandardValue = isString || hasFractionalOrExponential || isLessThanMaxSafeInt;
+          if (isStandardValue) return match;
+          return '"' + match + 'n"';
+        }
       );
-    }
-    function endpointWithDefaults(defaults, route, options) {
-      return parse(merge(defaults, route, options));
-    }
-    function withDefaults(oldDefaults, newDefaults) {
-      const DEFAULTS2 = merge(oldDefaults, newDefaults);
-      const endpoint2 = endpointWithDefaults.bind(null, DEFAULTS2);
-      return Object.assign(endpoint2, {
-        DEFAULTS: DEFAULTS2,
-        defaults: withDefaults.bind(null, DEFAULTS2),
-        merge: merge.bind(null, DEFAULTS2),
-        parse
-      });
-    }
-    var endpoint = withDefaults(null, DEFAULTS);
-  }
-});
-
-// node_modules/deprecation/dist-node/index.js
-var require_dist_node3 = __commonJS({
-  "node_modules/deprecation/dist-node/index.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    var Deprecation = class extends Error {
-      constructor(message) {
-        super(message);
-        if (Error.captureStackTrace) {
-          Error.captureStackTrace(this, this.constructor);
+    };
+    JSONParse = (text, reviver) => {
+      if (!text) return originalParse(text, reviver);
+      try {
+        if (isContextSourceSupported()) return JSONParseV2(text, reviver);
+        const serializedData = serializeBigInts(text);
+        return originalParse(
+          serializedData,
+          (key, value, context) => convertMarkedBigIntsReviver(key, value, context, reviver)
+        );
+      } catch (error) {
+        if (error instanceof RangeError) {
+          const serializedData = serializeBigInts(text);
+          const parsed = originalParse(serializedData);
+          return applyReviverIteratively(parsed, reviver);
         }
-        this.name = "Deprecation";
+        throw error;
       }
     };
-    exports2.Deprecation = Deprecation;
   }
 });
 
-// node_modules/wrappy/wrappy.js
-var require_wrappy = __commonJS({
-  "node_modules/wrappy/wrappy.js"(exports2, module2) {
+// node_modules/@octokit/core/node_modules/@octokit/request-error/dist-src/index.js
+var RequestError;
+var init_dist_src = __esm({
+  "node_modules/@octokit/core/node_modules/@octokit/request-error/dist-src/index.js"() {
     "use strict";
-    module2.exports = wrappy;
-    function wrappy(fn, cb) {
-      if (fn && cb) return wrappy(fn)(cb);
-      if (typeof fn !== "function")
-        throw new TypeError("need wrapper function");
-      Object.keys(fn).forEach(function(k) {
-        wrapper[k] = fn[k];
-      });
-      return wrapper;
-      function wrapper() {
-        var args = new Array(arguments.length);
-        for (var i = 0; i < args.length; i++) {
-          args[i] = arguments[i];
-        }
-        var ret = fn.apply(this, args);
-        var cb2 = args[args.length - 1];
-        if (typeof ret === "function" && ret !== cb2) {
-          Object.keys(cb2).forEach(function(k) {
-            ret[k] = cb2[k];
-          });
-        }
-        return ret;
-      }
-    }
-  }
-});
-
-// node_modules/once/once.js
-var require_once = __commonJS({
-  "node_modules/once/once.js"(exports2, module2) {
-    "use strict";
-    var wrappy = require_wrappy();
-    module2.exports = wrappy(once);
-    module2.exports.strict = wrappy(onceStrict);
-    once.proto = once(function() {
-      Object.defineProperty(Function.prototype, "once", {
-        value: function() {
-          return once(this);
-        },
-        configurable: true
-      });
-      Object.defineProperty(Function.prototype, "onceStrict", {
-        value: function() {
-          return onceStrict(this);
-        },
-        configurable: true
-      });
-    });
-    function once(fn) {
-      var f = function() {
-        if (f.called) return f.value;
-        f.called = true;
-        return f.value = fn.apply(this, arguments);
-      };
-      f.called = false;
-      return f;
-    }
-    function onceStrict(fn) {
-      var f = function() {
-        if (f.called)
-          throw new Error(f.onceError);
-        f.called = true;
-        return f.value = fn.apply(this, arguments);
-      };
-      var name = fn.name || "Function wrapped with `once`";
-      f.onceError = name + " shouldn't be called more than once";
-      f.called = false;
-      return f;
-    }
-  }
-});
-
-// node_modules/@octokit/request-error/dist-node/index.js
-var require_dist_node4 = __commonJS({
-  "node_modules/@octokit/request-error/dist-node/index.js"(exports2, module2) {
-    "use strict";
-    var __create2 = Object.create;
-    var __defProp2 = Object.defineProperty;
-    var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
-    var __getOwnPropNames2 = Object.getOwnPropertyNames;
-    var __getProtoOf2 = Object.getPrototypeOf;
-    var __hasOwnProp2 = Object.prototype.hasOwnProperty;
-    var __export2 = (target, all) => {
-      for (var name in all)
-        __defProp2(target, name, { get: all[name], enumerable: true });
-    };
-    var __copyProps2 = (to, from, except, desc) => {
-      if (from && typeof from === "object" || typeof from === "function") {
-        for (let key of __getOwnPropNames2(from))
-          if (!__hasOwnProp2.call(to, key) && key !== except)
-            __defProp2(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc2(from, key)) || desc.enumerable });
-      }
-      return to;
-    };
-    var __toESM2 = (mod, isNodeMode, target) => (target = mod != null ? __create2(__getProtoOf2(mod)) : {}, __copyProps2(
-      // If the importer is in node compatibility mode or this is not an ESM
-      // file that has been converted to a CommonJS file using a Babel-
-      // compatible transform (i.e. "__esModule" has not been set), then set
-      // "default" to the CommonJS "module.exports" for node compatibility.
-      isNodeMode || !mod || !mod.__esModule ? __defProp2(target, "default", { value: mod, enumerable: true }) : target,
-      mod
-    ));
-    var __toCommonJS2 = (mod) => __copyProps2(__defProp2({}, "__esModule", { value: true }), mod);
-    var dist_src_exports = {};
-    __export2(dist_src_exports, {
-      RequestError: () => RequestError
-    });
-    module2.exports = __toCommonJS2(dist_src_exports);
-    var import_deprecation = require_dist_node3();
-    var import_once = __toESM2(require_once());
-    var logOnceCode = (0, import_once.default)((deprecation) => console.warn(deprecation));
-    var logOnceHeaders = (0, import_once.default)((deprecation) => console.warn(deprecation));
-    var RequestError = class extends Error {
+    RequestError = class extends Error {
+      name;
+      /**
+       * http status code
+       */
+      status;
+      /**
+       * Request options that lead to the error.
+       */
+      request;
+      /**
+       * Response object if a response was received
+       */
+      response;
       constructor(message, statusCode, options) {
-        super(message);
-        if (Error.captureStackTrace) {
-          Error.captureStackTrace(this, this.constructor);
-        }
+        super(message, { cause: options.cause });
         this.name = "HttpError";
-        this.status = statusCode;
-        let headers;
-        if ("headers" in options && typeof options.headers !== "undefined") {
-          headers = options.headers;
+        this.status = Number.parseInt(statusCode);
+        if (Number.isNaN(this.status)) {
+          this.status = 0;
         }
         if ("response" in options) {
           this.response = options.response;
-          headers = options.response.headers;
         }
         const requestCopy = Object.assign({}, options.request);
         if (options.request.headers.authorization) {
@@ -706,433 +1062,357 @@ var require_dist_node4 = __commonJS({
         }
         requestCopy.url = requestCopy.url.replace(/\bclient_secret=\w+/g, "client_secret=[REDACTED]").replace(/\baccess_token=\w+/g, "access_token=[REDACTED]");
         this.request = requestCopy;
-        Object.defineProperty(this, "code", {
-          get() {
-            logOnceCode(
-              new import_deprecation.Deprecation(
-                "[@octokit/request-error] `error.code` is deprecated, use `error.status`."
-              )
-            );
-            return statusCode;
-          }
-        });
-        Object.defineProperty(this, "headers", {
-          get() {
-            logOnceHeaders(
-              new import_deprecation.Deprecation(
-                "[@octokit/request-error] `error.headers` is deprecated, use `error.response.headers`."
-              )
-            );
-            return headers || {};
-          }
-        });
       }
     };
   }
 });
 
-// node_modules/@octokit/request/dist-node/index.js
-var require_dist_node5 = __commonJS({
-  "node_modules/@octokit/request/dist-node/index.js"(exports2, module2) {
-    "use strict";
-    var __defProp2 = Object.defineProperty;
-    var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
-    var __getOwnPropNames2 = Object.getOwnPropertyNames;
-    var __hasOwnProp2 = Object.prototype.hasOwnProperty;
-    var __export2 = (target, all) => {
-      for (var name in all)
-        __defProp2(target, name, { get: all[name], enumerable: true });
-    };
-    var __copyProps2 = (to, from, except, desc) => {
-      if (from && typeof from === "object" || typeof from === "function") {
-        for (let key of __getOwnPropNames2(from))
-          if (!__hasOwnProp2.call(to, key) && key !== except)
-            __defProp2(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc2(from, key)) || desc.enumerable });
-      }
-      return to;
-    };
-    var __toCommonJS2 = (mod) => __copyProps2(__defProp2({}, "__esModule", { value: true }), mod);
-    var dist_src_exports = {};
-    __export2(dist_src_exports, {
-      request: () => request
+// node_modules/@octokit/core/node_modules/@octokit/request/dist-bundle/index.js
+function isPlainObject2(value) {
+  if (typeof value !== "object" || value === null) return false;
+  if (Object.prototype.toString.call(value) !== "[object Object]") return false;
+  const proto = Object.getPrototypeOf(value);
+  if (proto === null) return true;
+  const Ctor = Object.prototype.hasOwnProperty.call(proto, "constructor") && proto.constructor;
+  return typeof Ctor === "function" && Ctor instanceof Ctor && Function.prototype.call(Ctor) === Function.prototype.call(value);
+}
+async function fetchWrapper(requestOptions) {
+  const fetch = requestOptions.request?.fetch || globalThis.fetch;
+  if (!fetch) {
+    throw new Error(
+      "fetch is not set. Please pass a fetch implementation as new Octokit({ request: { fetch }}). Learn more at https://github.com/octokit/octokit.js/#fetch-missing"
+    );
+  }
+  const log = requestOptions.request?.log || console;
+  const parseSuccessResponseBody = requestOptions.request?.parseSuccessResponseBody !== false;
+  const body = isPlainObject2(requestOptions.body) || Array.isArray(requestOptions.body) ? JSONStringify(requestOptions.body) : requestOptions.body;
+  const requestHeaders = Object.fromEntries(
+    Object.entries(requestOptions.headers).map(([name, value]) => [
+      name,
+      String(value)
+    ])
+  );
+  let fetchResponse;
+  try {
+    fetchResponse = await fetch(requestOptions.url, {
+      method: requestOptions.method,
+      body,
+      redirect: requestOptions.request?.redirect,
+      headers: requestHeaders,
+      signal: requestOptions.request?.signal,
+      // duplex must be set if request.body is ReadableStream or Async Iterables.
+      // See https://fetch.spec.whatwg.org/#dom-requestinit-duplex.
+      ...requestOptions.body && { duplex: "half" }
     });
-    module2.exports = __toCommonJS2(dist_src_exports);
-    var import_endpoint = require_dist_node2();
-    var import_universal_user_agent = require_dist_node();
-    var VERSION = "8.4.1";
-    function isPlainObject(value) {
-      if (typeof value !== "object" || value === null)
-        return false;
-      if (Object.prototype.toString.call(value) !== "[object Object]")
-        return false;
-      const proto = Object.getPrototypeOf(value);
-      if (proto === null)
-        return true;
-      const Ctor = Object.prototype.hasOwnProperty.call(proto, "constructor") && proto.constructor;
-      return typeof Ctor === "function" && Ctor instanceof Ctor && Function.prototype.call(Ctor) === Function.prototype.call(value);
+  } catch (error) {
+    let message = "Unknown Error";
+    if (error instanceof Error) {
+      if (error.name === "AbortError") {
+        error.status = 500;
+        throw error;
+      }
+      message = error.message;
+      if (error.name === "TypeError" && "cause" in error) {
+        if (error.cause instanceof Error) {
+          message = error.cause.message;
+        } else if (typeof error.cause === "string") {
+          message = error.cause;
+        }
+      }
     }
-    var import_request_error = require_dist_node4();
-    function getBufferResponse(response) {
-      return response.arrayBuffer();
+    const requestError = new RequestError(message, 500, {
+      request: requestOptions
+    });
+    requestError.cause = error;
+    throw requestError;
+  }
+  const status = fetchResponse.status;
+  const url = fetchResponse.url;
+  const responseHeaders = {};
+  for (const [key, value] of fetchResponse.headers) {
+    responseHeaders[key] = value;
+  }
+  const octokitResponse = {
+    url,
+    status,
+    headers: responseHeaders,
+    data: ""
+  };
+  if ("deprecation" in responseHeaders) {
+    const matches = responseHeaders.link && responseHeaders.link.match(/<([^<>]+)>; rel="deprecation"/);
+    const deprecationLink = matches && matches.pop();
+    log.warn(
+      `[@octokit/request] "${requestOptions.method} ${requestOptions.url}" is deprecated. It is scheduled to be removed on ${responseHeaders.sunset}${deprecationLink ? `. See ${deprecationLink}` : ""}`
+    );
+  }
+  if (status === 204 || status === 205) {
+    return octokitResponse;
+  }
+  if (requestOptions.method === "HEAD") {
+    if (status < 400) {
+      return octokitResponse;
     }
-    function fetchWrapper(requestOptions) {
-      var _a, _b, _c, _d;
-      const log = requestOptions.request && requestOptions.request.log ? requestOptions.request.log : console;
-      const parseSuccessResponseBody = ((_a = requestOptions.request) == null ? void 0 : _a.parseSuccessResponseBody) !== false;
-      if (isPlainObject(requestOptions.body) || Array.isArray(requestOptions.body)) {
-        requestOptions.body = JSON.stringify(requestOptions.body);
-      }
-      let headers = {};
-      let status;
-      let url;
-      let { fetch } = globalThis;
-      if ((_b = requestOptions.request) == null ? void 0 : _b.fetch) {
-        fetch = requestOptions.request.fetch;
-      }
-      if (!fetch) {
-        throw new Error(
-          "fetch is not set. Please pass a fetch implementation as new Octokit({ request: { fetch }}). Learn more at https://github.com/octokit/octokit.js/#fetch-missing"
-        );
-      }
-      return fetch(requestOptions.url, {
-        method: requestOptions.method,
-        body: requestOptions.body,
-        redirect: (_c = requestOptions.request) == null ? void 0 : _c.redirect,
-        headers: requestOptions.headers,
-        signal: (_d = requestOptions.request) == null ? void 0 : _d.signal,
-        // duplex must be set if request.body is ReadableStream or Async Iterables.
-        // See https://fetch.spec.whatwg.org/#dom-requestinit-duplex.
-        ...requestOptions.body && { duplex: "half" }
-      }).then(async (response) => {
-        url = response.url;
-        status = response.status;
-        for (const keyAndValue of response.headers) {
-          headers[keyAndValue[0]] = keyAndValue[1];
-        }
-        if ("deprecation" in headers) {
-          const matches = headers.link && headers.link.match(/<([^<>]+)>; rel="deprecation"/);
-          const deprecationLink = matches && matches.pop();
-          log.warn(
-            `[@octokit/request] "${requestOptions.method} ${requestOptions.url}" is deprecated. It is scheduled to be removed on ${headers.sunset}${deprecationLink ? `. See ${deprecationLink}` : ""}`
-          );
-        }
-        if (status === 204 || status === 205) {
-          return;
-        }
-        if (requestOptions.method === "HEAD") {
-          if (status < 400) {
-            return;
-          }
-          throw new import_request_error.RequestError(response.statusText, status, {
-            response: {
-              url,
-              status,
-              headers,
-              data: void 0
-            },
-            request: requestOptions
-          });
-        }
-        if (status === 304) {
-          throw new import_request_error.RequestError("Not modified", status, {
-            response: {
-              url,
-              status,
-              headers,
-              data: await getResponseData(response)
-            },
-            request: requestOptions
-          });
-        }
-        if (status >= 400) {
-          const data = await getResponseData(response);
-          const error = new import_request_error.RequestError(toErrorMessage(data), status, {
-            response: {
-              url,
-              status,
-              headers,
-              data
-            },
-            request: requestOptions
-          });
-          throw error;
-        }
-        return parseSuccessResponseBody ? await getResponseData(response) : response.body;
-      }).then((data) => {
-        return {
-          status,
-          url,
-          headers,
-          data
-        };
-      }).catch((error) => {
-        if (error instanceof import_request_error.RequestError)
-          throw error;
-        else if (error.name === "AbortError")
-          throw error;
-        let message = error.message;
-        if (error.name === "TypeError" && "cause" in error) {
-          if (error.cause instanceof Error) {
-            message = error.cause.message;
-          } else if (typeof error.cause === "string") {
-            message = error.cause;
-          }
-        }
-        throw new import_request_error.RequestError(message, 500, {
-          request: requestOptions
-        });
-      });
+    throw new RequestError(fetchResponse.statusText, status, {
+      response: octokitResponse,
+      request: requestOptions
+    });
+  }
+  if (status === 304) {
+    octokitResponse.data = await getResponseData(fetchResponse);
+    throw new RequestError("Not modified", status, {
+      response: octokitResponse,
+      request: requestOptions
+    });
+  }
+  if (status >= 400) {
+    octokitResponse.data = await getResponseData(fetchResponse);
+    throw new RequestError(toErrorMessage(octokitResponse.data), status, {
+      response: octokitResponse,
+      request: requestOptions
+    });
+  }
+  octokitResponse.data = parseSuccessResponseBody ? await getResponseData(fetchResponse) : fetchResponse.body;
+  return octokitResponse;
+}
+async function getResponseData(response) {
+  const contentType = response.headers.get("content-type");
+  if (!contentType) {
+    return response.text().catch(noop);
+  }
+  const mimetype = parse2(contentType);
+  if (isJSONResponse(mimetype)) {
+    let text = "";
+    try {
+      text = await response.text();
+      return JSONParse(text);
+    } catch (err) {
+      return text;
     }
-    async function getResponseData(response) {
-      const contentType = response.headers.get("content-type");
-      if (/application\/json/.test(contentType)) {
-        return response.json().catch(() => response.text()).catch(() => "");
-      }
-      if (!contentType || /^text\/|charset=utf-8$/.test(contentType)) {
-        return response.text();
-      }
-      return getBufferResponse(response);
+  } else if (mimetype.type.startsWith("text/") || // `application/octet-stream` is the canonical "arbitrary binary" type
+  // (RFC 2046) and must never be decoded as text, even when the response
+  // carries a (misleading) `charset=utf-8` parameter — see #751.
+  mimetype.parameters.charset?.toLowerCase() === "utf-8" && mimetype.type !== "application/octet-stream") {
+    return response.text().catch(noop);
+  } else {
+    return response.arrayBuffer().catch(
+      /* v8 ignore next -- @preserve */
+      () => new ArrayBuffer(0)
+    );
+  }
+}
+function isJSONResponse(mimetype) {
+  return mimetype.type === "application/json" || mimetype.type === "application/scim+json";
+}
+function toErrorMessage(data) {
+  if (typeof data === "string") {
+    return data;
+  }
+  if (data instanceof ArrayBuffer) {
+    return "Unknown error";
+  }
+  if (typeof data === "object" && data !== null && "message" in data) {
+    const objectData = data;
+    const suffix = "documentation_url" in objectData ? ` - ${objectData.documentation_url}` : "";
+    return Array.isArray(objectData.errors) ? `${objectData.message}: ${objectData.errors.map((v) => JSON.stringify(v)).join(", ")}${suffix}` : `${objectData.message}${suffix}`;
+  }
+  return `Unknown error: ${JSON.stringify(data)}`;
+}
+function withDefaults2(oldEndpoint, newDefaults) {
+  const endpoint2 = oldEndpoint.defaults(newDefaults);
+  const newApi = function(route, parameters) {
+    const endpointOptions = endpoint2.merge(route, parameters);
+    if (!endpointOptions.request || !endpointOptions.request.hook) {
+      return fetchWrapper(endpoint2.parse(endpointOptions));
     }
-    function toErrorMessage(data) {
-      if (typeof data === "string")
-        return data;
-      let suffix;
-      if ("documentation_url" in data) {
-        suffix = ` - ${data.documentation_url}`;
-      } else {
-        suffix = "";
-      }
-      if ("message" in data) {
-        if (Array.isArray(data.errors)) {
-          return `${data.message}: ${data.errors.map(JSON.stringify).join(", ")}${suffix}`;
-        }
-        return `${data.message}${suffix}`;
-      }
-      return `Unknown error: ${JSON.stringify(data)}`;
-    }
-    function withDefaults(oldEndpoint, newDefaults) {
-      const endpoint2 = oldEndpoint.defaults(newDefaults);
-      const newApi = function(route, parameters) {
-        const endpointOptions = endpoint2.merge(route, parameters);
-        if (!endpointOptions.request || !endpointOptions.request.hook) {
-          return fetchWrapper(endpoint2.parse(endpointOptions));
-        }
-        const request2 = (route2, parameters2) => {
-          return fetchWrapper(
-            endpoint2.parse(endpoint2.merge(route2, parameters2))
-          );
-        };
-        Object.assign(request2, {
-          endpoint: endpoint2,
-          defaults: withDefaults.bind(null, endpoint2)
-        });
-        return endpointOptions.request.hook(request2, endpointOptions);
-      };
-      return Object.assign(newApi, {
-        endpoint: endpoint2,
-        defaults: withDefaults.bind(null, endpoint2)
-      });
-    }
-    var request = withDefaults(import_endpoint.endpoint, {
+    const request2 = (route2, parameters2) => {
+      return fetchWrapper(
+        endpoint2.parse(endpoint2.merge(route2, parameters2))
+      );
+    };
+    Object.assign(request2, {
+      endpoint: endpoint2,
+      defaults: withDefaults2.bind(null, endpoint2)
+    });
+    return endpointOptions.request.hook(request2, endpointOptions);
+  };
+  return Object.assign(newApi, {
+    endpoint: endpoint2,
+    defaults: withDefaults2.bind(null, endpoint2)
+  });
+}
+var VERSION2, defaults_default, noop, request;
+var init_dist_bundle2 = __esm({
+  "node_modules/@octokit/core/node_modules/@octokit/request/dist-bundle/index.js"() {
+    "use strict";
+    init_dist_bundle();
+    init_universal_user_agent();
+    init_dist();
+    init_json_with_bigint();
+    init_dist_src();
+    VERSION2 = "10.0.16";
+    defaults_default = {
       headers: {
-        "user-agent": `octokit-request.js/${VERSION} ${(0, import_universal_user_agent.getUserAgent)()}`
+        "user-agent": `octokit-request.js/${VERSION2} ${getUserAgent()}`
       }
-    });
+    };
+    noop = () => "";
+    request = withDefaults2(endpoint, defaults_default);
   }
 });
 
-// node_modules/@octokit/graphql/dist-node/index.js
-var require_dist_node6 = __commonJS({
-  "node_modules/@octokit/graphql/dist-node/index.js"(exports2, module2) {
-    "use strict";
-    var __defProp2 = Object.defineProperty;
-    var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
-    var __getOwnPropNames2 = Object.getOwnPropertyNames;
-    var __hasOwnProp2 = Object.prototype.hasOwnProperty;
-    var __export2 = (target, all) => {
-      for (var name in all)
-        __defProp2(target, name, { get: all[name], enumerable: true });
-    };
-    var __copyProps2 = (to, from, except, desc) => {
-      if (from && typeof from === "object" || typeof from === "function") {
-        for (let key of __getOwnPropNames2(from))
-          if (!__hasOwnProp2.call(to, key) && key !== except)
-            __defProp2(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc2(from, key)) || desc.enumerable });
-      }
-      return to;
-    };
-    var __toCommonJS2 = (mod) => __copyProps2(__defProp2({}, "__esModule", { value: true }), mod);
-    var index_exports2 = {};
-    __export2(index_exports2, {
-      GraphqlResponseError: () => GraphqlResponseError,
-      graphql: () => graphql2,
-      withCustomRequest: () => withCustomRequest
-    });
-    module2.exports = __toCommonJS2(index_exports2);
-    var import_request3 = require_dist_node5();
-    var import_universal_user_agent = require_dist_node();
-    var VERSION = "7.1.1";
-    var import_request2 = require_dist_node5();
-    var import_request = require_dist_node5();
-    function _buildMessageForResponseErrors(data) {
-      return `Request failed due to following response errors:
+// node_modules/@octokit/core/node_modules/@octokit/graphql/dist-bundle/index.js
+function _buildMessageForResponseErrors(data) {
+  return `Request failed due to following response errors:
 ` + data.errors.map((e) => ` - ${e.message}`).join("\n");
+}
+function graphql(request2, query, options) {
+  if (options) {
+    if (typeof query === "string" && "query" in options) {
+      return Promise.reject(
+        new Error(`[@octokit/graphql] "query" cannot be used as variable name`)
+      );
     }
-    var GraphqlResponseError = class extends Error {
+    for (const key in options) {
+      if (!FORBIDDEN_VARIABLE_OPTIONS.includes(key)) continue;
+      return Promise.reject(
+        new Error(
+          `[@octokit/graphql] "${key}" cannot be used as variable name`
+        )
+      );
+    }
+  }
+  const parsedOptions = typeof query === "string" ? Object.assign({ query }, options) : query;
+  const requestOptions = Object.keys(
+    parsedOptions
+  ).reduce((result, key) => {
+    if (NON_VARIABLE_OPTIONS.includes(key)) {
+      result[key] = parsedOptions[key];
+      return result;
+    }
+    if (!result.variables) {
+      result.variables = {};
+    }
+    result.variables[key] = parsedOptions[key];
+    return result;
+  }, {});
+  const baseUrl = parsedOptions.baseUrl || request2.endpoint.DEFAULTS.baseUrl;
+  if (GHES_V3_SUFFIX_REGEX.test(baseUrl)) {
+    requestOptions.url = baseUrl.replace(GHES_V3_SUFFIX_REGEX, "/api/graphql");
+  }
+  return request2(requestOptions).then((response) => {
+    if (response.data.errors) {
+      const headers = {};
+      for (const key of Object.keys(response.headers)) {
+        headers[key] = response.headers[key];
+      }
+      throw new GraphqlResponseError(
+        requestOptions,
+        headers,
+        response.data
+      );
+    }
+    return response.data.data;
+  });
+}
+function withDefaults3(request2, newDefaults) {
+  const newRequest = request2.defaults(newDefaults);
+  const newApi = (query, options) => {
+    return graphql(newRequest, query, options);
+  };
+  return Object.assign(newApi, {
+    defaults: withDefaults3.bind(null, newRequest),
+    endpoint: newRequest.endpoint
+  });
+}
+function withCustomRequest(customRequest) {
+  return withDefaults3(customRequest, {
+    method: "POST",
+    url: "/graphql"
+  });
+}
+var VERSION3, GraphqlResponseError, NON_VARIABLE_OPTIONS, FORBIDDEN_VARIABLE_OPTIONS, GHES_V3_SUFFIX_REGEX, graphql2;
+var init_dist_bundle3 = __esm({
+  "node_modules/@octokit/core/node_modules/@octokit/graphql/dist-bundle/index.js"() {
+    "use strict";
+    init_dist_bundle2();
+    init_universal_user_agent();
+    VERSION3 = "0.0.0-development";
+    GraphqlResponseError = class extends Error {
       constructor(request2, headers, response) {
         super(_buildMessageForResponseErrors(response));
         this.request = request2;
         this.headers = headers;
         this.response = response;
-        this.name = "GraphqlResponseError";
         this.errors = response.errors;
         this.data = response.data;
         if (Error.captureStackTrace) {
           Error.captureStackTrace(this, this.constructor);
         }
       }
+      request;
+      headers;
+      response;
+      name = "GraphqlResponseError";
+      errors;
+      data;
     };
-    var NON_VARIABLE_OPTIONS = [
+    NON_VARIABLE_OPTIONS = [
       "method",
       "baseUrl",
       "url",
       "headers",
       "request",
       "query",
-      "mediaType"
+      "mediaType",
+      "operationName"
     ];
-    var FORBIDDEN_VARIABLE_OPTIONS = ["query", "method", "url"];
-    var GHES_V3_SUFFIX_REGEX = /\/api\/v3\/?$/;
-    function graphql(request2, query, options) {
-      if (options) {
-        if (typeof query === "string" && "query" in options) {
-          return Promise.reject(
-            new Error(`[@octokit/graphql] "query" cannot be used as variable name`)
-          );
-        }
-        for (const key in options) {
-          if (!FORBIDDEN_VARIABLE_OPTIONS.includes(key)) continue;
-          return Promise.reject(
-            new Error(
-              `[@octokit/graphql] "${key}" cannot be used as variable name`
-            )
-          );
-        }
-      }
-      const parsedOptions = typeof query === "string" ? Object.assign({ query }, options) : query;
-      const requestOptions = Object.keys(
-        parsedOptions
-      ).reduce((result, key) => {
-        if (NON_VARIABLE_OPTIONS.includes(key)) {
-          result[key] = parsedOptions[key];
-          return result;
-        }
-        if (!result.variables) {
-          result.variables = {};
-        }
-        result.variables[key] = parsedOptions[key];
-        return result;
-      }, {});
-      const baseUrl = parsedOptions.baseUrl || request2.endpoint.DEFAULTS.baseUrl;
-      if (GHES_V3_SUFFIX_REGEX.test(baseUrl)) {
-        requestOptions.url = baseUrl.replace(GHES_V3_SUFFIX_REGEX, "/api/graphql");
-      }
-      return request2(requestOptions).then((response) => {
-        if (response.data.errors) {
-          const headers = {};
-          for (const key of Object.keys(response.headers)) {
-            headers[key] = response.headers[key];
-          }
-          throw new GraphqlResponseError(
-            requestOptions,
-            headers,
-            response.data
-          );
-        }
-        return response.data.data;
-      });
-    }
-    function withDefaults(request2, newDefaults) {
-      const newRequest = request2.defaults(newDefaults);
-      const newApi = (query, options) => {
-        return graphql(newRequest, query, options);
-      };
-      return Object.assign(newApi, {
-        defaults: withDefaults.bind(null, newRequest),
-        endpoint: newRequest.endpoint
-      });
-    }
-    var graphql2 = withDefaults(import_request3.request, {
+    FORBIDDEN_VARIABLE_OPTIONS = ["query", "method", "url"];
+    GHES_V3_SUFFIX_REGEX = /\/api\/v3\/?$/;
+    graphql2 = withDefaults3(request, {
       headers: {
-        "user-agent": `octokit-graphql.js/${VERSION} ${(0, import_universal_user_agent.getUserAgent)()}`
+        "user-agent": `octokit-graphql.js/${VERSION3} ${getUserAgent()}`
       },
       method: "POST",
       url: "/graphql"
     });
-    function withCustomRequest(customRequest) {
-      return withDefaults(customRequest, {
-        method: "POST",
-        url: "/graphql"
-      });
-    }
   }
 });
 
-// node_modules/@octokit/auth-token/dist-node/index.js
-var require_dist_node7 = __commonJS({
-  "node_modules/@octokit/auth-token/dist-node/index.js"(exports2, module2) {
+// node_modules/@octokit/core/node_modules/@octokit/auth-token/dist-bundle/index.js
+async function auth(token) {
+  const isApp = isJWT(token);
+  const isInstallation = token.startsWith("v1.") || token.startsWith("ghs_");
+  const isUserToServer = token.startsWith("ghu_");
+  const tokenType = isApp ? "app" : isInstallation ? "installation" : isUserToServer ? "user-to-server" : "oauth";
+  return {
+    type: "token",
+    token,
+    tokenType
+  };
+}
+function withAuthorizationPrefix(token) {
+  if (token.split(/\./).length === 3) {
+    return `bearer ${token}`;
+  }
+  return `token ${token}`;
+}
+async function hook(token, request2, route, parameters) {
+  const endpoint2 = request2.endpoint.merge(
+    route,
+    parameters
+  );
+  endpoint2.headers.authorization = withAuthorizationPrefix(token);
+  return request2(endpoint2);
+}
+var b64url, sep, jwtRE, isJWT, createTokenAuth;
+var init_dist_bundle4 = __esm({
+  "node_modules/@octokit/core/node_modules/@octokit/auth-token/dist-bundle/index.js"() {
     "use strict";
-    var __defProp2 = Object.defineProperty;
-    var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
-    var __getOwnPropNames2 = Object.getOwnPropertyNames;
-    var __hasOwnProp2 = Object.prototype.hasOwnProperty;
-    var __export2 = (target, all) => {
-      for (var name in all)
-        __defProp2(target, name, { get: all[name], enumerable: true });
-    };
-    var __copyProps2 = (to, from, except, desc) => {
-      if (from && typeof from === "object" || typeof from === "function") {
-        for (let key of __getOwnPropNames2(from))
-          if (!__hasOwnProp2.call(to, key) && key !== except)
-            __defProp2(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc2(from, key)) || desc.enumerable });
-      }
-      return to;
-    };
-    var __toCommonJS2 = (mod) => __copyProps2(__defProp2({}, "__esModule", { value: true }), mod);
-    var dist_src_exports = {};
-    __export2(dist_src_exports, {
-      createTokenAuth: () => createTokenAuth
-    });
-    module2.exports = __toCommonJS2(dist_src_exports);
-    var REGEX_IS_INSTALLATION_LEGACY = /^v1\./;
-    var REGEX_IS_INSTALLATION = /^ghs_/;
-    var REGEX_IS_USER_TO_SERVER = /^ghu_/;
-    async function auth(token) {
-      const isApp = token.split(/\./).length === 3;
-      const isInstallation = REGEX_IS_INSTALLATION_LEGACY.test(token) || REGEX_IS_INSTALLATION.test(token);
-      const isUserToServer = REGEX_IS_USER_TO_SERVER.test(token);
-      const tokenType = isApp ? "app" : isInstallation ? "installation" : isUserToServer ? "user-to-server" : "oauth";
-      return {
-        type: "token",
-        token,
-        tokenType
-      };
-    }
-    function withAuthorizationPrefix(token) {
-      if (token.split(/\./).length === 3) {
-        return `bearer ${token}`;
-      }
-      return `token ${token}`;
-    }
-    async function hook(token, request, route, parameters) {
-      const endpoint = request.endpoint.merge(
-        route,
-        parameters
-      );
-      endpoint.headers.authorization = withAuthorizationPrefix(token);
-      return request(endpoint);
-    }
-    var createTokenAuth = function createTokenAuth2(token) {
+    b64url = "(?:[a-zA-Z0-9_-]+)";
+    sep = "\\.";
+    jwtRE = new RegExp(`^${b64url}${sep}${b64url}${sep}${b64url}$`);
+    isJWT = jwtRE.test.bind(jwtRE);
+    createTokenAuth = function createTokenAuth2(token) {
       if (!token) {
         throw new Error("[@octokit/auth-token] No token passed to createTokenAuth");
       }
@@ -1149,62 +1429,48 @@ var require_dist_node7 = __commonJS({
   }
 });
 
-// node_modules/@octokit/core/dist-node/index.js
-var require_dist_node8 = __commonJS({
-  "node_modules/@octokit/core/dist-node/index.js"(exports2, module2) {
+// node_modules/@octokit/core/dist-src/version.js
+var VERSION4;
+var init_version = __esm({
+  "node_modules/@octokit/core/dist-src/version.js"() {
     "use strict";
-    var __defProp2 = Object.defineProperty;
-    var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
-    var __getOwnPropNames2 = Object.getOwnPropertyNames;
-    var __hasOwnProp2 = Object.prototype.hasOwnProperty;
-    var __export2 = (target, all) => {
-      for (var name in all)
-        __defProp2(target, name, { get: all[name], enumerable: true });
+    VERSION4 = "7.0.8";
+  }
+});
+
+// node_modules/@octokit/core/dist-src/index.js
+function createLogger(logger = {}) {
+  if (typeof logger.debug !== "function") {
+    logger.debug = noop2;
+  }
+  if (typeof logger.info !== "function") {
+    logger.info = noop2;
+  }
+  if (typeof logger.warn !== "function") {
+    logger.warn = consoleWarn;
+  }
+  if (typeof logger.error !== "function") {
+    logger.error = consoleError;
+  }
+  return logger;
+}
+var noop2, consoleWarn, consoleError, userAgentTrail, Octokit;
+var init_dist_src2 = __esm({
+  "node_modules/@octokit/core/dist-src/index.js"() {
+    "use strict";
+    init_universal_user_agent();
+    init_before_after_hook();
+    init_dist_bundle2();
+    init_dist_bundle3();
+    init_dist_bundle4();
+    init_version();
+    noop2 = () => {
     };
-    var __copyProps2 = (to, from, except, desc) => {
-      if (from && typeof from === "object" || typeof from === "function") {
-        for (let key of __getOwnPropNames2(from))
-          if (!__hasOwnProp2.call(to, key) && key !== except)
-            __defProp2(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc2(from, key)) || desc.enumerable });
-      }
-      return to;
-    };
-    var __toCommonJS2 = (mod) => __copyProps2(__defProp2({}, "__esModule", { value: true }), mod);
-    var index_exports2 = {};
-    __export2(index_exports2, {
-      Octokit: () => Octokit
-    });
-    module2.exports = __toCommonJS2(index_exports2);
-    var import_universal_user_agent = require_dist_node();
-    var import_before_after_hook = require_before_after_hook();
-    var import_request = require_dist_node5();
-    var import_graphql = require_dist_node6();
-    var import_auth_token = require_dist_node7();
-    var VERSION = "5.2.2";
-    var noop = () => {
-    };
-    var consoleWarn = console.warn.bind(console);
-    var consoleError = console.error.bind(console);
-    function createLogger(logger = {}) {
-      if (typeof logger.debug !== "function") {
-        logger.debug = noop;
-      }
-      if (typeof logger.info !== "function") {
-        logger.info = noop;
-      }
-      if (typeof logger.warn !== "function") {
-        logger.warn = consoleWarn;
-      }
-      if (typeof logger.error !== "function") {
-        logger.error = consoleError;
-      }
-      return logger;
-    }
-    var userAgentTrail = `octokit-core.js/${VERSION} ${(0, import_universal_user_agent.getUserAgent)()}`;
-    var Octokit = class {
-      static {
-        this.VERSION = VERSION;
-      }
+    consoleWarn = console.warn.bind(console);
+    consoleError = console.error.bind(console);
+    userAgentTrail = `octokit-core.js/${VERSION4} ${getUserAgent()}`;
+    Octokit = class {
+      static VERSION = VERSION4;
       static defaults(defaults) {
         const OctokitWithDefaults = class extends this {
           constructor(...args) {
@@ -1227,9 +1493,7 @@ var require_dist_node8 = __commonJS({
         };
         return OctokitWithDefaults;
       }
-      static {
-        this.plugins = [];
-      }
+      static plugins = [];
       /**
        * Attach a plugin (or many) to your Octokit instance.
        *
@@ -1239,22 +1503,20 @@ var require_dist_node8 = __commonJS({
       static plugin(...newPlugins) {
         const currentPlugins = this.plugins;
         const NewOctokit = class extends this {
-          static {
-            this.plugins = currentPlugins.concat(
-              newPlugins.filter((plugin) => !currentPlugins.includes(plugin))
-            );
-          }
+          static plugins = currentPlugins.concat(
+            newPlugins.filter((plugin) => !currentPlugins.includes(plugin))
+          );
         };
         return NewOctokit;
       }
       constructor(options = {}) {
-        const hook = new import_before_after_hook.Collection();
+        const hook2 = new before_after_hook_default.Collection();
         const requestDefaults = {
-          baseUrl: import_request.request.endpoint.DEFAULTS.baseUrl,
+          baseUrl: request.endpoint.DEFAULTS.baseUrl,
           headers: {},
           request: Object.assign({}, options.request, {
             // @ts-ignore internal usage only, no need to type
-            hook: hook.bind(null, "request")
+            hook: hook2.bind(null, "request")
           }),
           mediaType: {
             previews: [],
@@ -1271,23 +1533,23 @@ var require_dist_node8 = __commonJS({
         if (options.timeZone) {
           requestDefaults.headers["time-zone"] = options.timeZone;
         }
-        this.request = import_request.request.defaults(requestDefaults);
-        this.graphql = (0, import_graphql.withCustomRequest)(this.request).defaults(requestDefaults);
+        this.request = request.defaults(requestDefaults);
+        this.graphql = withCustomRequest(this.request).defaults(requestDefaults);
         this.log = createLogger(options.log);
-        this.hook = hook;
+        this.hook = hook2;
         if (!options.authStrategy) {
           if (!options.auth) {
             this.auth = async () => ({
               type: "unauthenticated"
             });
           } else {
-            const auth = (0, import_auth_token.createTokenAuth)(options.auth);
-            hook.wrap("request", auth.hook);
-            this.auth = auth;
+            const auth2 = createTokenAuth(options.auth);
+            hook2.wrap("request", auth2.hook);
+            this.auth = auth2;
           }
         } else {
           const { authStrategy, ...otherOptions } = options;
-          const auth = authStrategy(
+          const auth2 = authStrategy(
             Object.assign(
               {
                 request: this.request,
@@ -1303,492 +1565,201 @@ var require_dist_node8 = __commonJS({
               options.auth
             )
           );
-          hook.wrap("request", auth.hook);
-          this.auth = auth;
+          hook2.wrap("request", auth2.hook);
+          this.auth = auth2;
         }
         const classConstructor = this.constructor;
         for (let i = 0; i < classConstructor.plugins.length; ++i) {
           Object.assign(this, classConstructor.plugins[i](this, options));
         }
       }
+      // assigned during constructor
+      request;
+      graphql;
+      log;
+      hook;
+      // TODO: type `octokit.auth` based on passed options.authStrategy
+      auth;
     };
   }
 });
 
-// node_modules/@octokit/plugin-request-log/dist-node/index.js
-var require_dist_node9 = __commonJS({
-  "node_modules/@octokit/plugin-request-log/dist-node/index.js"(exports2, module2) {
+// node_modules/@octokit/plugin-request-log/dist-src/version.js
+var VERSION5;
+var init_version2 = __esm({
+  "node_modules/@octokit/plugin-request-log/dist-src/version.js"() {
     "use strict";
-    var __defProp2 = Object.defineProperty;
-    var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
-    var __getOwnPropNames2 = Object.getOwnPropertyNames;
-    var __hasOwnProp2 = Object.prototype.hasOwnProperty;
-    var __export2 = (target, all) => {
-      for (var name in all)
-        __defProp2(target, name, { get: all[name], enumerable: true });
-    };
-    var __copyProps2 = (to, from, except, desc) => {
-      if (from && typeof from === "object" || typeof from === "function") {
-        for (let key of __getOwnPropNames2(from))
-          if (!__hasOwnProp2.call(to, key) && key !== except)
-            __defProp2(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc2(from, key)) || desc.enumerable });
-      }
-      return to;
-    };
-    var __toCommonJS2 = (mod) => __copyProps2(__defProp2({}, "__esModule", { value: true }), mod);
-    var dist_src_exports = {};
-    __export2(dist_src_exports, {
-      requestLog: () => requestLog
-    });
-    module2.exports = __toCommonJS2(dist_src_exports);
-    var VERSION = "4.0.1";
-    function requestLog(octokit) {
-      octokit.hook.wrap("request", (request, options) => {
-        octokit.log.debug("request", options);
-        const start = Date.now();
-        const requestOptions = octokit.request.endpoint.parse(options);
-        const path = requestOptions.url.replace(options.baseUrl, "");
-        return request(options).then((response) => {
-          octokit.log.info(
-            `${requestOptions.method} ${path} - ${response.status} in ${Date.now() - start}ms`
-          );
-          return response;
-        }).catch((error) => {
-          octokit.log.info(
-            `${requestOptions.method} ${path} - ${error.status} in ${Date.now() - start}ms`
-          );
-          throw error;
-        });
-      });
-    }
-    requestLog.VERSION = VERSION;
+    VERSION5 = "6.0.0";
   }
 });
 
-// node_modules/@octokit/rest/node_modules/@octokit/plugin-paginate-rest/dist-node/index.js
-var require_dist_node10 = __commonJS({
-  "node_modules/@octokit/rest/node_modules/@octokit/plugin-paginate-rest/dist-node/index.js"(exports2, module2) {
-    "use strict";
-    var __defProp2 = Object.defineProperty;
-    var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
-    var __getOwnPropNames2 = Object.getOwnPropertyNames;
-    var __hasOwnProp2 = Object.prototype.hasOwnProperty;
-    var __export2 = (target, all) => {
-      for (var name in all)
-        __defProp2(target, name, { get: all[name], enumerable: true });
-    };
-    var __copyProps2 = (to, from, except, desc) => {
-      if (from && typeof from === "object" || typeof from === "function") {
-        for (let key of __getOwnPropNames2(from))
-          if (!__hasOwnProp2.call(to, key) && key !== except)
-            __defProp2(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc2(from, key)) || desc.enumerable });
-      }
-      return to;
-    };
-    var __toCommonJS2 = (mod) => __copyProps2(__defProp2({}, "__esModule", { value: true }), mod);
-    var index_exports2 = {};
-    __export2(index_exports2, {
-      composePaginateRest: () => composePaginateRest,
-      isPaginatingEndpoint: () => isPaginatingEndpoint,
-      paginateRest: () => paginateRest,
-      paginatingEndpoints: () => paginatingEndpoints
-    });
-    module2.exports = __toCommonJS2(index_exports2);
-    var VERSION = "11.4.4-cjs.2";
-    function normalizePaginatedListResponse(response) {
-      if (!response.data) {
-        return {
-          ...response,
-          data: []
-        };
-      }
-      const responseNeedsNormalization = "total_count" in response.data && !("url" in response.data);
-      if (!responseNeedsNormalization) return response;
-      const incompleteResults = response.data.incomplete_results;
-      const repositorySelection = response.data.repository_selection;
-      const totalCount = response.data.total_count;
-      delete response.data.incomplete_results;
-      delete response.data.repository_selection;
-      delete response.data.total_count;
-      const namespaceKey = Object.keys(response.data)[0];
-      const data = response.data[namespaceKey];
-      response.data = data;
-      if (typeof incompleteResults !== "undefined") {
-        response.data.incomplete_results = incompleteResults;
-      }
-      if (typeof repositorySelection !== "undefined") {
-        response.data.repository_selection = repositorySelection;
-      }
-      response.data.total_count = totalCount;
+// node_modules/@octokit/plugin-request-log/dist-src/index.js
+function requestLog(octokit) {
+  octokit.hook.wrap("request", (request2, options) => {
+    octokit.log.debug("request", options);
+    const start = Date.now();
+    const requestOptions = octokit.request.endpoint.parse(options);
+    const path = requestOptions.url.replace(options.baseUrl, "");
+    return request2(options).then((response) => {
+      const requestId = response.headers["x-github-request-id"];
+      octokit.log.info(
+        `${requestOptions.method} ${path} - ${response.status} with id ${requestId} in ${Date.now() - start}ms`
+      );
       return response;
-    }
-    function iterator(octokit, route, parameters) {
-      const options = typeof route === "function" ? route.endpoint(parameters) : octokit.request.endpoint(route, parameters);
-      const requestMethod = typeof route === "function" ? route : octokit.request;
-      const method = options.method;
-      const headers = options.headers;
-      let url = options.url;
-      return {
-        [Symbol.asyncIterator]: () => ({
-          async next() {
-            if (!url) return { done: true };
-            try {
-              const response = await requestMethod({ method, url, headers });
-              const normalizedResponse = normalizePaginatedListResponse(response);
-              url = ((normalizedResponse.headers.link || "").match(
-                /<([^<>]+)>;\s*rel="next"/
-              ) || [])[1];
-              return { value: normalizedResponse };
-            } catch (error) {
-              if (error.status !== 409) throw error;
-              url = "";
-              return {
-                value: {
-                  status: 200,
-                  headers: {},
-                  data: []
-                }
-              };
+    }).catch((error) => {
+      const requestId = error.response?.headers["x-github-request-id"] || "UNKNOWN";
+      octokit.log.error(
+        `${requestOptions.method} ${path} - ${error.status} with id ${requestId} in ${Date.now() - start}ms`
+      );
+      throw error;
+    });
+  });
+}
+var init_dist_src3 = __esm({
+  "node_modules/@octokit/plugin-request-log/dist-src/index.js"() {
+    "use strict";
+    init_version2();
+    requestLog.VERSION = VERSION5;
+  }
+});
+
+// node_modules/@octokit/plugin-paginate-rest/dist-bundle/index.js
+function normalizePaginatedListResponse(response) {
+  if (!response.data) {
+    return {
+      ...response,
+      data: []
+    };
+  }
+  const responseNeedsNormalization = ("total_count" in response.data || "total_commits" in response.data) && !("url" in response.data);
+  if (!responseNeedsNormalization) return response;
+  const incompleteResults = response.data.incomplete_results;
+  const repositorySelection = response.data.repository_selection;
+  const totalCount = response.data.total_count;
+  const totalCommits = response.data.total_commits;
+  delete response.data.incomplete_results;
+  delete response.data.repository_selection;
+  delete response.data.total_count;
+  delete response.data.total_commits;
+  const namespaceKey = Object.keys(response.data)[0];
+  const data = response.data[namespaceKey];
+  response.data = data;
+  if (typeof incompleteResults !== "undefined") {
+    response.data.incomplete_results = incompleteResults;
+  }
+  if (typeof repositorySelection !== "undefined") {
+    response.data.repository_selection = repositorySelection;
+  }
+  response.data.total_count = totalCount;
+  response.data.total_commits = totalCommits;
+  return response;
+}
+function iterator(octokit, route, parameters) {
+  const options = typeof route === "function" ? route.endpoint(parameters) : octokit.request.endpoint(route, parameters);
+  const requestMethod = typeof route === "function" ? route : octokit.request;
+  const method = options.method;
+  const headers = options.headers;
+  let url = options.url;
+  return {
+    [Symbol.asyncIterator]: () => ({
+      async next() {
+        if (!url) return { done: true };
+        try {
+          const response = await requestMethod({ method, url, headers });
+          const normalizedResponse = normalizePaginatedListResponse(response);
+          url = ((normalizedResponse.headers.link || "").match(
+            /<([^<>]+)>;\s*rel="next"/
+          ) || [])[1];
+          if (!url && "total_commits" in normalizedResponse.data) {
+            const parsedUrl = new URL(normalizedResponse.url);
+            const params = parsedUrl.searchParams;
+            const page = parseInt(params.get("page") || "1", 10);
+            const per_page = parseInt(params.get("per_page") || "250", 10);
+            if (page * per_page < normalizedResponse.data.total_commits) {
+              params.set("page", String(page + 1));
+              url = parsedUrl.toString();
             }
           }
-        })
-      };
-    }
-    function paginate(octokit, route, parameters, mapFn) {
-      if (typeof parameters === "function") {
-        mapFn = parameters;
-        parameters = void 0;
+          return { value: normalizedResponse };
+        } catch (error) {
+          if (error.status !== 409) throw error;
+          url = "";
+          return {
+            value: {
+              status: 200,
+              headers: {},
+              data: []
+            }
+          };
+        }
       }
-      return gather(
-        octokit,
-        [],
-        iterator(octokit, route, parameters)[Symbol.asyncIterator](),
-        mapFn
-      );
+    })
+  };
+}
+function paginate(octokit, route, parameters, mapFn) {
+  if (typeof parameters === "function") {
+    mapFn = parameters;
+    parameters = void 0;
+  }
+  return gather(
+    octokit,
+    [],
+    iterator(octokit, route, parameters)[Symbol.asyncIterator](),
+    mapFn
+  );
+}
+function gather(octokit, results, iterator2, mapFn) {
+  return iterator2.next().then((result) => {
+    if (result.done) {
+      return results;
     }
-    function gather(octokit, results, iterator2, mapFn) {
-      return iterator2.next().then((result) => {
-        if (result.done) {
-          return results;
-        }
-        let earlyExit = false;
-        function done() {
-          earlyExit = true;
-        }
-        results = results.concat(
-          mapFn ? mapFn(result.value, done) : result.value.data
-        );
-        if (earlyExit) {
-          return results;
-        }
-        return gather(octokit, results, iterator2, mapFn);
-      });
+    let earlyExit = false;
+    function done() {
+      earlyExit = true;
     }
-    var composePaginateRest = Object.assign(paginate, {
+    results = results.concat(
+      mapFn ? mapFn(result.value, done) : result.value.data
+    );
+    if (earlyExit) {
+      return results;
+    }
+    return gather(octokit, results, iterator2, mapFn);
+  });
+}
+function paginateRest(octokit) {
+  return {
+    paginate: Object.assign(paginate.bind(null, octokit), {
+      iterator: iterator.bind(null, octokit)
+    })
+  };
+}
+var VERSION6, composePaginateRest;
+var init_dist_bundle5 = __esm({
+  "node_modules/@octokit/plugin-paginate-rest/dist-bundle/index.js"() {
+    "use strict";
+    VERSION6 = "0.0.0-development";
+    composePaginateRest = Object.assign(paginate, {
       iterator
     });
-    var paginatingEndpoints = [
-      "GET /advisories",
-      "GET /app/hook/deliveries",
-      "GET /app/installation-requests",
-      "GET /app/installations",
-      "GET /assignments/{assignment_id}/accepted_assignments",
-      "GET /classrooms",
-      "GET /classrooms/{classroom_id}/assignments",
-      "GET /enterprises/{enterprise}/code-security/configurations",
-      "GET /enterprises/{enterprise}/code-security/configurations/{configuration_id}/repositories",
-      "GET /enterprises/{enterprise}/dependabot/alerts",
-      "GET /enterprises/{enterprise}/secret-scanning/alerts",
-      "GET /events",
-      "GET /gists",
-      "GET /gists/public",
-      "GET /gists/starred",
-      "GET /gists/{gist_id}/comments",
-      "GET /gists/{gist_id}/commits",
-      "GET /gists/{gist_id}/forks",
-      "GET /installation/repositories",
-      "GET /issues",
-      "GET /licenses",
-      "GET /marketplace_listing/plans",
-      "GET /marketplace_listing/plans/{plan_id}/accounts",
-      "GET /marketplace_listing/stubbed/plans",
-      "GET /marketplace_listing/stubbed/plans/{plan_id}/accounts",
-      "GET /networks/{owner}/{repo}/events",
-      "GET /notifications",
-      "GET /organizations",
-      "GET /orgs/{org}/actions/cache/usage-by-repository",
-      "GET /orgs/{org}/actions/permissions/repositories",
-      "GET /orgs/{org}/actions/runner-groups",
-      "GET /orgs/{org}/actions/runner-groups/{runner_group_id}/repositories",
-      "GET /orgs/{org}/actions/runner-groups/{runner_group_id}/runners",
-      "GET /orgs/{org}/actions/runners",
-      "GET /orgs/{org}/actions/secrets",
-      "GET /orgs/{org}/actions/secrets/{secret_name}/repositories",
-      "GET /orgs/{org}/actions/variables",
-      "GET /orgs/{org}/actions/variables/{name}/repositories",
-      "GET /orgs/{org}/attestations/{subject_digest}",
-      "GET /orgs/{org}/blocks",
-      "GET /orgs/{org}/code-scanning/alerts",
-      "GET /orgs/{org}/code-security/configurations",
-      "GET /orgs/{org}/code-security/configurations/{configuration_id}/repositories",
-      "GET /orgs/{org}/codespaces",
-      "GET /orgs/{org}/codespaces/secrets",
-      "GET /orgs/{org}/codespaces/secrets/{secret_name}/repositories",
-      "GET /orgs/{org}/copilot/billing/seats",
-      "GET /orgs/{org}/copilot/metrics",
-      "GET /orgs/{org}/copilot/usage",
-      "GET /orgs/{org}/dependabot/alerts",
-      "GET /orgs/{org}/dependabot/secrets",
-      "GET /orgs/{org}/dependabot/secrets/{secret_name}/repositories",
-      "GET /orgs/{org}/events",
-      "GET /orgs/{org}/failed_invitations",
-      "GET /orgs/{org}/hooks",
-      "GET /orgs/{org}/hooks/{hook_id}/deliveries",
-      "GET /orgs/{org}/insights/api/route-stats/{actor_type}/{actor_id}",
-      "GET /orgs/{org}/insights/api/subject-stats",
-      "GET /orgs/{org}/insights/api/user-stats/{user_id}",
-      "GET /orgs/{org}/installations",
-      "GET /orgs/{org}/invitations",
-      "GET /orgs/{org}/invitations/{invitation_id}/teams",
-      "GET /orgs/{org}/issues",
-      "GET /orgs/{org}/members",
-      "GET /orgs/{org}/members/{username}/codespaces",
-      "GET /orgs/{org}/migrations",
-      "GET /orgs/{org}/migrations/{migration_id}/repositories",
-      "GET /orgs/{org}/organization-roles/{role_id}/teams",
-      "GET /orgs/{org}/organization-roles/{role_id}/users",
-      "GET /orgs/{org}/outside_collaborators",
-      "GET /orgs/{org}/packages",
-      "GET /orgs/{org}/packages/{package_type}/{package_name}/versions",
-      "GET /orgs/{org}/personal-access-token-requests",
-      "GET /orgs/{org}/personal-access-token-requests/{pat_request_id}/repositories",
-      "GET /orgs/{org}/personal-access-tokens",
-      "GET /orgs/{org}/personal-access-tokens/{pat_id}/repositories",
-      "GET /orgs/{org}/private-registries",
-      "GET /orgs/{org}/projects",
-      "GET /orgs/{org}/properties/values",
-      "GET /orgs/{org}/public_members",
-      "GET /orgs/{org}/repos",
-      "GET /orgs/{org}/rulesets",
-      "GET /orgs/{org}/rulesets/rule-suites",
-      "GET /orgs/{org}/secret-scanning/alerts",
-      "GET /orgs/{org}/security-advisories",
-      "GET /orgs/{org}/team/{team_slug}/copilot/metrics",
-      "GET /orgs/{org}/team/{team_slug}/copilot/usage",
-      "GET /orgs/{org}/teams",
-      "GET /orgs/{org}/teams/{team_slug}/discussions",
-      "GET /orgs/{org}/teams/{team_slug}/discussions/{discussion_number}/comments",
-      "GET /orgs/{org}/teams/{team_slug}/discussions/{discussion_number}/comments/{comment_number}/reactions",
-      "GET /orgs/{org}/teams/{team_slug}/discussions/{discussion_number}/reactions",
-      "GET /orgs/{org}/teams/{team_slug}/invitations",
-      "GET /orgs/{org}/teams/{team_slug}/members",
-      "GET /orgs/{org}/teams/{team_slug}/projects",
-      "GET /orgs/{org}/teams/{team_slug}/repos",
-      "GET /orgs/{org}/teams/{team_slug}/teams",
-      "GET /projects/columns/{column_id}/cards",
-      "GET /projects/{project_id}/collaborators",
-      "GET /projects/{project_id}/columns",
-      "GET /repos/{owner}/{repo}/actions/artifacts",
-      "GET /repos/{owner}/{repo}/actions/caches",
-      "GET /repos/{owner}/{repo}/actions/organization-secrets",
-      "GET /repos/{owner}/{repo}/actions/organization-variables",
-      "GET /repos/{owner}/{repo}/actions/runners",
-      "GET /repos/{owner}/{repo}/actions/runs",
-      "GET /repos/{owner}/{repo}/actions/runs/{run_id}/artifacts",
-      "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
-      "GET /repos/{owner}/{repo}/actions/runs/{run_id}/jobs",
-      "GET /repos/{owner}/{repo}/actions/secrets",
-      "GET /repos/{owner}/{repo}/actions/variables",
-      "GET /repos/{owner}/{repo}/actions/workflows",
-      "GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs",
-      "GET /repos/{owner}/{repo}/activity",
-      "GET /repos/{owner}/{repo}/assignees",
-      "GET /repos/{owner}/{repo}/attestations/{subject_digest}",
-      "GET /repos/{owner}/{repo}/branches",
-      "GET /repos/{owner}/{repo}/check-runs/{check_run_id}/annotations",
-      "GET /repos/{owner}/{repo}/check-suites/{check_suite_id}/check-runs",
-      "GET /repos/{owner}/{repo}/code-scanning/alerts",
-      "GET /repos/{owner}/{repo}/code-scanning/alerts/{alert_number}/instances",
-      "GET /repos/{owner}/{repo}/code-scanning/analyses",
-      "GET /repos/{owner}/{repo}/codespaces",
-      "GET /repos/{owner}/{repo}/codespaces/devcontainers",
-      "GET /repos/{owner}/{repo}/codespaces/secrets",
-      "GET /repos/{owner}/{repo}/collaborators",
-      "GET /repos/{owner}/{repo}/comments",
-      "GET /repos/{owner}/{repo}/comments/{comment_id}/reactions",
-      "GET /repos/{owner}/{repo}/commits",
-      "GET /repos/{owner}/{repo}/commits/{commit_sha}/comments",
-      "GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls",
-      "GET /repos/{owner}/{repo}/commits/{ref}/check-runs",
-      "GET /repos/{owner}/{repo}/commits/{ref}/check-suites",
-      "GET /repos/{owner}/{repo}/commits/{ref}/status",
-      "GET /repos/{owner}/{repo}/commits/{ref}/statuses",
-      "GET /repos/{owner}/{repo}/contributors",
-      "GET /repos/{owner}/{repo}/dependabot/alerts",
-      "GET /repos/{owner}/{repo}/dependabot/secrets",
-      "GET /repos/{owner}/{repo}/deployments",
-      "GET /repos/{owner}/{repo}/deployments/{deployment_id}/statuses",
-      "GET /repos/{owner}/{repo}/environments",
-      "GET /repos/{owner}/{repo}/environments/{environment_name}/deployment-branch-policies",
-      "GET /repos/{owner}/{repo}/environments/{environment_name}/deployment_protection_rules/apps",
-      "GET /repos/{owner}/{repo}/environments/{environment_name}/secrets",
-      "GET /repos/{owner}/{repo}/environments/{environment_name}/variables",
-      "GET /repos/{owner}/{repo}/events",
-      "GET /repos/{owner}/{repo}/forks",
-      "GET /repos/{owner}/{repo}/hooks",
-      "GET /repos/{owner}/{repo}/hooks/{hook_id}/deliveries",
-      "GET /repos/{owner}/{repo}/invitations",
-      "GET /repos/{owner}/{repo}/issues",
-      "GET /repos/{owner}/{repo}/issues/comments",
-      "GET /repos/{owner}/{repo}/issues/comments/{comment_id}/reactions",
-      "GET /repos/{owner}/{repo}/issues/events",
-      "GET /repos/{owner}/{repo}/issues/{issue_number}/comments",
-      "GET /repos/{owner}/{repo}/issues/{issue_number}/events",
-      "GET /repos/{owner}/{repo}/issues/{issue_number}/labels",
-      "GET /repos/{owner}/{repo}/issues/{issue_number}/reactions",
-      "GET /repos/{owner}/{repo}/issues/{issue_number}/sub_issues",
-      "GET /repos/{owner}/{repo}/issues/{issue_number}/timeline",
-      "GET /repos/{owner}/{repo}/keys",
-      "GET /repos/{owner}/{repo}/labels",
-      "GET /repos/{owner}/{repo}/milestones",
-      "GET /repos/{owner}/{repo}/milestones/{milestone_number}/labels",
-      "GET /repos/{owner}/{repo}/notifications",
-      "GET /repos/{owner}/{repo}/pages/builds",
-      "GET /repos/{owner}/{repo}/projects",
-      "GET /repos/{owner}/{repo}/pulls",
-      "GET /repos/{owner}/{repo}/pulls/comments",
-      "GET /repos/{owner}/{repo}/pulls/comments/{comment_id}/reactions",
-      "GET /repos/{owner}/{repo}/pulls/{pull_number}/comments",
-      "GET /repos/{owner}/{repo}/pulls/{pull_number}/commits",
-      "GET /repos/{owner}/{repo}/pulls/{pull_number}/files",
-      "GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
-      "GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews/{review_id}/comments",
-      "GET /repos/{owner}/{repo}/releases",
-      "GET /repos/{owner}/{repo}/releases/{release_id}/assets",
-      "GET /repos/{owner}/{repo}/releases/{release_id}/reactions",
-      "GET /repos/{owner}/{repo}/rules/branches/{branch}",
-      "GET /repos/{owner}/{repo}/rulesets",
-      "GET /repos/{owner}/{repo}/rulesets/rule-suites",
-      "GET /repos/{owner}/{repo}/secret-scanning/alerts",
-      "GET /repos/{owner}/{repo}/secret-scanning/alerts/{alert_number}/locations",
-      "GET /repos/{owner}/{repo}/security-advisories",
-      "GET /repos/{owner}/{repo}/stargazers",
-      "GET /repos/{owner}/{repo}/subscribers",
-      "GET /repos/{owner}/{repo}/tags",
-      "GET /repos/{owner}/{repo}/teams",
-      "GET /repos/{owner}/{repo}/topics",
-      "GET /repositories",
-      "GET /search/code",
-      "GET /search/commits",
-      "GET /search/issues",
-      "GET /search/labels",
-      "GET /search/repositories",
-      "GET /search/topics",
-      "GET /search/users",
-      "GET /teams/{team_id}/discussions",
-      "GET /teams/{team_id}/discussions/{discussion_number}/comments",
-      "GET /teams/{team_id}/discussions/{discussion_number}/comments/{comment_number}/reactions",
-      "GET /teams/{team_id}/discussions/{discussion_number}/reactions",
-      "GET /teams/{team_id}/invitations",
-      "GET /teams/{team_id}/members",
-      "GET /teams/{team_id}/projects",
-      "GET /teams/{team_id}/repos",
-      "GET /teams/{team_id}/teams",
-      "GET /user/blocks",
-      "GET /user/codespaces",
-      "GET /user/codespaces/secrets",
-      "GET /user/emails",
-      "GET /user/followers",
-      "GET /user/following",
-      "GET /user/gpg_keys",
-      "GET /user/installations",
-      "GET /user/installations/{installation_id}/repositories",
-      "GET /user/issues",
-      "GET /user/keys",
-      "GET /user/marketplace_purchases",
-      "GET /user/marketplace_purchases/stubbed",
-      "GET /user/memberships/orgs",
-      "GET /user/migrations",
-      "GET /user/migrations/{migration_id}/repositories",
-      "GET /user/orgs",
-      "GET /user/packages",
-      "GET /user/packages/{package_type}/{package_name}/versions",
-      "GET /user/public_emails",
-      "GET /user/repos",
-      "GET /user/repository_invitations",
-      "GET /user/social_accounts",
-      "GET /user/ssh_signing_keys",
-      "GET /user/starred",
-      "GET /user/subscriptions",
-      "GET /user/teams",
-      "GET /users",
-      "GET /users/{username}/attestations/{subject_digest}",
-      "GET /users/{username}/events",
-      "GET /users/{username}/events/orgs/{org}",
-      "GET /users/{username}/events/public",
-      "GET /users/{username}/followers",
-      "GET /users/{username}/following",
-      "GET /users/{username}/gists",
-      "GET /users/{username}/gpg_keys",
-      "GET /users/{username}/keys",
-      "GET /users/{username}/orgs",
-      "GET /users/{username}/packages",
-      "GET /users/{username}/projects",
-      "GET /users/{username}/received_events",
-      "GET /users/{username}/received_events/public",
-      "GET /users/{username}/repos",
-      "GET /users/{username}/social_accounts",
-      "GET /users/{username}/ssh_signing_keys",
-      "GET /users/{username}/starred",
-      "GET /users/{username}/subscriptions"
-    ];
-    function isPaginatingEndpoint(arg) {
-      if (typeof arg === "string") {
-        return paginatingEndpoints.includes(arg);
-      } else {
-        return false;
-      }
-    }
-    function paginateRest(octokit) {
-      return {
-        paginate: Object.assign(paginate.bind(null, octokit), {
-          iterator: iterator.bind(null, octokit)
-        })
-      };
-    }
-    paginateRest.VERSION = VERSION;
+    paginateRest.VERSION = VERSION6;
   }
 });
 
-// node_modules/@octokit/rest/node_modules/@octokit/plugin-rest-endpoint-methods/dist-node/index.js
-var require_dist_node11 = __commonJS({
-  "node_modules/@octokit/rest/node_modules/@octokit/plugin-rest-endpoint-methods/dist-node/index.js"(exports2, module2) {
+// node_modules/@octokit/plugin-rest-endpoint-methods/dist-src/version.js
+var VERSION7;
+var init_version3 = __esm({
+  "node_modules/@octokit/plugin-rest-endpoint-methods/dist-src/version.js"() {
     "use strict";
-    var __defProp2 = Object.defineProperty;
-    var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
-    var __getOwnPropNames2 = Object.getOwnPropertyNames;
-    var __hasOwnProp2 = Object.prototype.hasOwnProperty;
-    var __export2 = (target, all) => {
-      for (var name in all)
-        __defProp2(target, name, { get: all[name], enumerable: true });
-    };
-    var __copyProps2 = (to, from, except, desc) => {
-      if (from && typeof from === "object" || typeof from === "function") {
-        for (let key of __getOwnPropNames2(from))
-          if (!__hasOwnProp2.call(to, key) && key !== except)
-            __defProp2(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc2(from, key)) || desc.enumerable });
-      }
-      return to;
-    };
-    var __toCommonJS2 = (mod) => __copyProps2(__defProp2({}, "__esModule", { value: true }), mod);
-    var index_exports2 = {};
-    __export2(index_exports2, {
-      legacyRestEndpointMethods: () => legacyRestEndpointMethods,
-      restEndpointMethods: () => restEndpointMethods
-    });
-    module2.exports = __toCommonJS2(index_exports2);
-    var VERSION = "13.3.2-cjs.1";
-    var Endpoints = {
+    VERSION7 = "17.0.0";
+  }
+});
+
+// node_modules/@octokit/plugin-rest-endpoint-methods/dist-src/generated/endpoints.js
+var Endpoints, endpoints_default;
+var init_endpoints = __esm({
+  "node_modules/@octokit/plugin-rest-endpoint-methods/dist-src/generated/endpoints.js"() {
+    "use strict";
+    Endpoints = {
       actions: {
         addCustomLabelsToSelfHostedRunnerForOrg: [
           "POST /orgs/{org}/actions/runners/{runner_id}/labels"
@@ -1814,6 +1785,7 @@ var require_dist_node11 = __commonJS({
         createEnvironmentVariable: [
           "POST /repos/{owner}/{repo}/environments/{environment_name}/variables"
         ],
+        createHostedRunnerForOrg: ["POST /orgs/{org}/actions/hosted-runners"],
         createOrUpdateEnvironmentSecret: [
           "PUT /repos/{owner}/{repo}/environments/{environment_name}/secrets/{secret_name}"
         ],
@@ -1845,11 +1817,20 @@ var require_dist_node11 = __commonJS({
         deleteArtifact: [
           "DELETE /repos/{owner}/{repo}/actions/artifacts/{artifact_id}"
         ],
+        deleteCustomImageFromOrg: [
+          "DELETE /orgs/{org}/actions/hosted-runners/images/custom/{image_definition_id}"
+        ],
+        deleteCustomImageVersionFromOrg: [
+          "DELETE /orgs/{org}/actions/hosted-runners/images/custom/{image_definition_id}/versions/{version}"
+        ],
         deleteEnvironmentSecret: [
           "DELETE /repos/{owner}/{repo}/environments/{environment_name}/secrets/{secret_name}"
         ],
         deleteEnvironmentVariable: [
           "DELETE /repos/{owner}/{repo}/environments/{environment_name}/variables/{name}"
+        ],
+        deleteHostedRunnerForOrg: [
+          "DELETE /orgs/{org}/actions/hosted-runners/{hosted_runner_id}"
         ],
         deleteOrgSecret: ["DELETE /orgs/{org}/actions/secrets/{secret_name}"],
         deleteOrgVariable: ["DELETE /orgs/{org}/actions/variables/{name}"],
@@ -1915,6 +1896,12 @@ var require_dist_node11 = __commonJS({
           "GET /repos/{owner}/{repo}/actions/permissions/selected-actions"
         ],
         getArtifact: ["GET /repos/{owner}/{repo}/actions/artifacts/{artifact_id}"],
+        getCustomImageForOrg: [
+          "GET /orgs/{org}/actions/hosted-runners/images/custom/{image_definition_id}"
+        ],
+        getCustomImageVersionForOrg: [
+          "GET /orgs/{org}/actions/hosted-runners/images/custom/{image_definition_id}/versions/{version}"
+        ],
         getCustomOidcSubClaimForRepo: [
           "GET /repos/{owner}/{repo}/actions/oidc/customization/sub"
         ],
@@ -1938,6 +1925,24 @@ var require_dist_node11 = __commonJS({
         ],
         getGithubActionsPermissionsRepository: [
           "GET /repos/{owner}/{repo}/actions/permissions"
+        ],
+        getHostedRunnerForOrg: [
+          "GET /orgs/{org}/actions/hosted-runners/{hosted_runner_id}"
+        ],
+        getHostedRunnersGithubOwnedImagesForOrg: [
+          "GET /orgs/{org}/actions/hosted-runners/images/github-owned"
+        ],
+        getHostedRunnersLimitsForOrg: [
+          "GET /orgs/{org}/actions/hosted-runners/limits"
+        ],
+        getHostedRunnersMachineSpecsForOrg: [
+          "GET /orgs/{org}/actions/hosted-runners/machine-sizes"
+        ],
+        getHostedRunnersPartnerImagesForOrg: [
+          "GET /orgs/{org}/actions/hosted-runners/images/partner"
+        ],
+        getHostedRunnersPlatformsForOrg: [
+          "GET /orgs/{org}/actions/hosted-runners/platforms"
         ],
         getJobForWorkflowRun: ["GET /repos/{owner}/{repo}/actions/jobs/{job_id}"],
         getOrgPublicKey: ["GET /orgs/{org}/actions/secrets/public-key"],
@@ -1976,12 +1981,22 @@ var require_dist_node11 = __commonJS({
           "GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}/timing"
         ],
         listArtifactsForRepo: ["GET /repos/{owner}/{repo}/actions/artifacts"],
+        listCustomImageVersionsForOrg: [
+          "GET /orgs/{org}/actions/hosted-runners/images/custom/{image_definition_id}/versions"
+        ],
+        listCustomImagesForOrg: [
+          "GET /orgs/{org}/actions/hosted-runners/images/custom"
+        ],
         listEnvironmentSecrets: [
           "GET /repos/{owner}/{repo}/environments/{environment_name}/secrets"
         ],
         listEnvironmentVariables: [
           "GET /repos/{owner}/{repo}/environments/{environment_name}/variables"
         ],
+        listGithubHostedRunnersInGroupForOrg: [
+          "GET /orgs/{org}/actions/runner-groups/{runner_group_id}/hosted-runners"
+        ],
+        listHostedRunnersForOrg: ["GET /orgs/{org}/actions/hosted-runners"],
         listJobsForWorkflowRun: [
           "GET /repos/{owner}/{repo}/actions/runs/{run_id}/jobs"
         ],
@@ -2099,6 +2114,9 @@ var require_dist_node11 = __commonJS({
         ],
         updateEnvironmentVariable: [
           "PATCH /repos/{owner}/{repo}/environments/{environment_name}/variables/{name}"
+        ],
+        updateHostedRunnerForOrg: [
+          "PATCH /orgs/{org}/actions/hosted-runners/{hosted_runner_id}"
         ],
         updateOrgVariable: ["PATCH /orgs/{org}/actions/variables/{name}"],
         updateRepoVariable: [
@@ -2227,8 +2245,17 @@ var require_dist_node11 = __commonJS({
         getGithubActionsBillingUser: [
           "GET /users/{username}/settings/billing/actions"
         ],
+        getGithubBillingPremiumRequestUsageReportOrg: [
+          "GET /organizations/{org}/settings/billing/premium_request/usage"
+        ],
+        getGithubBillingPremiumRequestUsageReportUser: [
+          "GET /users/{username}/settings/billing/premium_request/usage"
+        ],
         getGithubBillingUsageReportOrg: [
           "GET /organizations/{org}/settings/billing/usage"
+        ],
+        getGithubBillingUsageReportUser: [
+          "GET /users/{username}/settings/billing/usage"
         ],
         getGithubPackagesBillingOrg: ["GET /orgs/{org}/settings/billing/packages"],
         getGithubPackagesBillingUser: [
@@ -2240,6 +2267,13 @@ var require_dist_node11 = __commonJS({
         getSharedStorageBillingUser: [
           "GET /users/{username}/settings/billing/shared-storage"
         ]
+      },
+      campaigns: {
+        createCampaign: ["POST /orgs/{org}/campaigns"],
+        deleteCampaign: ["DELETE /orgs/{org}/campaigns/{campaign_number}"],
+        getCampaignSummary: ["GET /orgs/{org}/campaigns/{campaign_number}"],
+        listOrgCampaigns: ["GET /orgs/{org}/campaigns"],
+        updateCampaign: ["PATCH /orgs/{org}/campaigns/{campaign_number}"]
       },
       checks: {
         create: ["POST /repos/{owner}/{repo}/check-runs"],
@@ -2519,10 +2553,9 @@ var require_dist_node11 = __commonJS({
         getCopilotSeatDetailsForUser: [
           "GET /orgs/{org}/members/{username}/copilot"
         ],
-        listCopilotSeats: ["GET /orgs/{org}/copilot/billing/seats"],
-        usageMetricsForOrg: ["GET /orgs/{org}/copilot/usage"],
-        usageMetricsForTeam: ["GET /orgs/{org}/team/{team_slug}/copilot/usage"]
+        listCopilotSeats: ["GET /orgs/{org}/copilot/billing/seats"]
       },
+      credentials: { revoke: ["POST /credentials/revoke"] },
       dependabot: {
         addSelectedRepoToOrgSecret: [
           "PUT /orgs/{org}/dependabot/secrets/{secret_name}/repositories/{repository_id}"
@@ -2559,11 +2592,20 @@ var require_dist_node11 = __commonJS({
         removeSelectedRepoFromOrgSecret: [
           "DELETE /orgs/{org}/dependabot/secrets/{secret_name}/repositories/{repository_id}"
         ],
+        repositoryAccessForOrg: [
+          "GET /organizations/{org}/dependabot/repository-access"
+        ],
+        setRepositoryAccessDefaultLevel: [
+          "PUT /organizations/{org}/dependabot/repository-access/default-level"
+        ],
         setSelectedReposForOrgSecret: [
           "PUT /orgs/{org}/dependabot/secrets/{secret_name}/repositories"
         ],
         updateAlert: [
           "PATCH /repos/{owner}/{repo}/dependabot/alerts/{alert_number}"
+        ],
+        updateRepositoryAccessForOrg: [
+          "PATCH /organizations/{org}/dependabot/repository-access"
         ]
       },
       dependencyGraph: {
@@ -2576,6 +2618,51 @@ var require_dist_node11 = __commonJS({
         exportSbom: ["GET /repos/{owner}/{repo}/dependency-graph/sbom"]
       },
       emojis: { get: ["GET /emojis"] },
+      enterpriseTeamMemberships: {
+        add: [
+          "PUT /enterprises/{enterprise}/teams/{enterprise-team}/memberships/{username}"
+        ],
+        bulkAdd: [
+          "POST /enterprises/{enterprise}/teams/{enterprise-team}/memberships/add"
+        ],
+        bulkRemove: [
+          "POST /enterprises/{enterprise}/teams/{enterprise-team}/memberships/remove"
+        ],
+        get: [
+          "GET /enterprises/{enterprise}/teams/{enterprise-team}/memberships/{username}"
+        ],
+        list: ["GET /enterprises/{enterprise}/teams/{enterprise-team}/memberships"],
+        remove: [
+          "DELETE /enterprises/{enterprise}/teams/{enterprise-team}/memberships/{username}"
+        ]
+      },
+      enterpriseTeamOrganizations: {
+        add: [
+          "PUT /enterprises/{enterprise}/teams/{enterprise-team}/organizations/{org}"
+        ],
+        bulkAdd: [
+          "POST /enterprises/{enterprise}/teams/{enterprise-team}/organizations/add"
+        ],
+        bulkRemove: [
+          "POST /enterprises/{enterprise}/teams/{enterprise-team}/organizations/remove"
+        ],
+        delete: [
+          "DELETE /enterprises/{enterprise}/teams/{enterprise-team}/organizations/{org}"
+        ],
+        getAssignment: [
+          "GET /enterprises/{enterprise}/teams/{enterprise-team}/organizations/{org}"
+        ],
+        getAssignments: [
+          "GET /enterprises/{enterprise}/teams/{enterprise-team}/organizations"
+        ]
+      },
+      enterpriseTeams: {
+        create: ["POST /enterprises/{enterprise}/teams"],
+        delete: ["DELETE /enterprises/{enterprise}/teams/{team_slug}"],
+        get: ["GET /enterprises/{enterprise}/teams/{team_slug}"],
+        list: ["GET /enterprises/{enterprise}/teams"],
+        update: ["PATCH /enterprises/{enterprise}/teams/{team_slug}"]
+      },
       gists: {
         checkIsStarred: ["GET /gists/{gist_id}/star"],
         create: ["POST /gists"],
@@ -2617,6 +2704,26 @@ var require_dist_node11 = __commonJS({
         getAllTemplates: ["GET /gitignore/templates"],
         getTemplate: ["GET /gitignore/templates/{name}"]
       },
+      hostedCompute: {
+        createNetworkConfigurationForOrg: [
+          "POST /orgs/{org}/settings/network-configurations"
+        ],
+        deleteNetworkConfigurationFromOrg: [
+          "DELETE /orgs/{org}/settings/network-configurations/{network_configuration_id}"
+        ],
+        getNetworkConfigurationForOrg: [
+          "GET /orgs/{org}/settings/network-configurations/{network_configuration_id}"
+        ],
+        getNetworkSettingsForOrg: [
+          "GET /orgs/{org}/settings/network-settings/{network_settings_id}"
+        ],
+        listNetworkConfigurationsForOrg: [
+          "GET /orgs/{org}/settings/network-configurations"
+        ],
+        updateNetworkConfigurationForOrg: [
+          "PATCH /orgs/{org}/settings/network-configurations/{network_configuration_id}"
+        ]
+      },
       interactions: {
         getRestrictionsForAuthenticatedUser: ["GET /user/interaction-limits"],
         getRestrictionsForOrg: ["GET /orgs/{org}/interaction-limits"],
@@ -2649,6 +2756,9 @@ var require_dist_node11 = __commonJS({
         addAssignees: [
           "POST /repos/{owner}/{repo}/issues/{issue_number}/assignees"
         ],
+        addBlockedByDependency: [
+          "POST /repos/{owner}/{repo}/issues/{issue_number}/dependencies/blocked_by"
+        ],
         addLabels: ["POST /repos/{owner}/{repo}/issues/{issue_number}/labels"],
         addSubIssue: [
           "POST /repos/{owner}/{repo}/issues/{issue_number}/sub_issues"
@@ -2675,10 +2785,17 @@ var require_dist_node11 = __commonJS({
         getEvent: ["GET /repos/{owner}/{repo}/issues/events/{event_id}"],
         getLabel: ["GET /repos/{owner}/{repo}/labels/{name}"],
         getMilestone: ["GET /repos/{owner}/{repo}/milestones/{milestone_number}"],
+        getParent: ["GET /repos/{owner}/{repo}/issues/{issue_number}/parent"],
         list: ["GET /issues"],
         listAssignees: ["GET /repos/{owner}/{repo}/assignees"],
         listComments: ["GET /repos/{owner}/{repo}/issues/{issue_number}/comments"],
         listCommentsForRepo: ["GET /repos/{owner}/{repo}/issues/comments"],
+        listDependenciesBlockedBy: [
+          "GET /repos/{owner}/{repo}/issues/{issue_number}/dependencies/blocked_by"
+        ],
+        listDependenciesBlocking: [
+          "GET /repos/{owner}/{repo}/issues/{issue_number}/dependencies/blocking"
+        ],
         listEvents: ["GET /repos/{owner}/{repo}/issues/{issue_number}/events"],
         listEventsForRepo: ["GET /repos/{owner}/{repo}/issues/events"],
         listEventsForTimeline: [
@@ -2704,6 +2821,9 @@ var require_dist_node11 = __commonJS({
         ],
         removeAssignees: [
           "DELETE /repos/{owner}/{repo}/issues/{issue_number}/assignees"
+        ],
+        removeDependencyBlockedBy: [
+          "DELETE /repos/{owner}/{repo}/issues/{issue_number}/dependencies/blocked_by/{issue_id}"
         ],
         removeLabel: [
           "DELETE /repos/{owner}/{repo}/issues/{issue_number}/labels/{name}"
@@ -2807,32 +2927,69 @@ var require_dist_node11 = __commonJS({
         convertMemberToOutsideCollaborator: [
           "PUT /orgs/{org}/outside_collaborators/{username}"
         ],
-        createInvitation: ["POST /orgs/{org}/invitations"],
-        createOrUpdateCustomProperties: ["PATCH /orgs/{org}/properties/schema"],
-        createOrUpdateCustomPropertiesValuesForRepos: [
-          "PATCH /orgs/{org}/properties/values"
+        createArtifactStorageRecord: [
+          "POST /orgs/{org}/artifacts/metadata/storage-record"
         ],
-        createOrUpdateCustomProperty: [
+        createInvitation: ["POST /orgs/{org}/invitations"],
+        createIssueType: ["POST /orgs/{org}/issue-types"],
+        createWebhook: ["POST /orgs/{org}/hooks"],
+        customPropertiesForOrgsCreateOrUpdateOrganizationValues: [
+          "PATCH /organizations/{org}/org-properties/values"
+        ],
+        customPropertiesForOrgsGetOrganizationValues: [
+          "GET /organizations/{org}/org-properties/values"
+        ],
+        customPropertiesForReposCreateOrUpdateOrganizationDefinition: [
           "PUT /orgs/{org}/properties/schema/{custom_property_name}"
         ],
-        createWebhook: ["POST /orgs/{org}/hooks"],
+        customPropertiesForReposCreateOrUpdateOrganizationDefinitions: [
+          "PATCH /orgs/{org}/properties/schema"
+        ],
+        customPropertiesForReposCreateOrUpdateOrganizationValues: [
+          "PATCH /orgs/{org}/properties/values"
+        ],
+        customPropertiesForReposDeleteOrganizationDefinition: [
+          "DELETE /orgs/{org}/properties/schema/{custom_property_name}"
+        ],
+        customPropertiesForReposGetOrganizationDefinition: [
+          "GET /orgs/{org}/properties/schema/{custom_property_name}"
+        ],
+        customPropertiesForReposGetOrganizationDefinitions: [
+          "GET /orgs/{org}/properties/schema"
+        ],
+        customPropertiesForReposGetOrganizationValues: [
+          "GET /orgs/{org}/properties/values"
+        ],
         delete: ["DELETE /orgs/{org}"],
+        deleteAttestationsBulk: ["POST /orgs/{org}/attestations/delete-request"],
+        deleteAttestationsById: [
+          "DELETE /orgs/{org}/attestations/{attestation_id}"
+        ],
+        deleteAttestationsBySubjectDigest: [
+          "DELETE /orgs/{org}/attestations/digest/{subject_digest}"
+        ],
+        deleteIssueType: ["DELETE /orgs/{org}/issue-types/{issue_type_id}"],
         deleteWebhook: ["DELETE /orgs/{org}/hooks/{hook_id}"],
-        enableOrDisableSecurityProductOnAllOrgRepos: [
-          "POST /orgs/{org}/{security_product}/{enablement}",
-          {},
-          {
-            deprecated: "octokit.rest.orgs.enableOrDisableSecurityProductOnAllOrgRepos() is deprecated, see https://docs.github.com/rest/orgs/orgs#enable-or-disable-a-security-feature-for-an-organization"
-          }
+        disableSelectedRepositoryImmutableReleasesOrganization: [
+          "DELETE /orgs/{org}/settings/immutable-releases/repositories/{repository_id}"
+        ],
+        enableSelectedRepositoryImmutableReleasesOrganization: [
+          "PUT /orgs/{org}/settings/immutable-releases/repositories/{repository_id}"
         ],
         get: ["GET /orgs/{org}"],
-        getAllCustomProperties: ["GET /orgs/{org}/properties/schema"],
-        getCustomProperty: [
-          "GET /orgs/{org}/properties/schema/{custom_property_name}"
+        getImmutableReleasesSettings: [
+          "GET /orgs/{org}/settings/immutable-releases"
+        ],
+        getImmutableReleasesSettingsRepositories: [
+          "GET /orgs/{org}/settings/immutable-releases/repositories"
         ],
         getMembershipForAuthenticatedUser: ["GET /user/memberships/orgs/{org}"],
         getMembershipForUser: ["GET /orgs/{org}/memberships/{username}"],
         getOrgRole: ["GET /orgs/{org}/organization-roles/{role_id}"],
+        getOrgRulesetHistory: ["GET /orgs/{org}/rulesets/{ruleset_id}/history"],
+        getOrgRulesetVersion: [
+          "GET /orgs/{org}/rulesets/{ruleset_id}/history/{version_id}"
+        ],
         getWebhook: ["GET /orgs/{org}/hooks/{hook_id}"],
         getWebhookConfigForOrg: ["GET /orgs/{org}/hooks/{hook_id}/config"],
         getWebhookDelivery: [
@@ -2840,13 +2997,20 @@ var require_dist_node11 = __commonJS({
         ],
         list: ["GET /organizations"],
         listAppInstallations: ["GET /orgs/{org}/installations"],
+        listArtifactStorageRecords: [
+          "GET /orgs/{org}/artifacts/{subject_digest}/metadata/storage-records"
+        ],
+        listAttestationRepositories: ["GET /orgs/{org}/attestations/repositories"],
         listAttestations: ["GET /orgs/{org}/attestations/{subject_digest}"],
+        listAttestationsBulk: [
+          "POST /orgs/{org}/attestations/bulk-list{?per_page,before,after}"
+        ],
         listBlockedUsers: ["GET /orgs/{org}/blocks"],
-        listCustomPropertiesValuesForRepos: ["GET /orgs/{org}/properties/values"],
         listFailedInvitations: ["GET /orgs/{org}/failed_invitations"],
         listForAuthenticatedUser: ["GET /user/orgs"],
         listForUser: ["GET /users/{username}/orgs"],
         listInvitationTeams: ["GET /orgs/{org}/invitations/{invitation_id}/teams"],
+        listIssueTypes: ["GET /orgs/{org}/issue-types"],
         listMembers: ["GET /orgs/{org}/members"],
         listMembershipsForAuthenticatedUser: ["GET /user/memberships/orgs"],
         listOrgRoleTeams: ["GET /orgs/{org}/organization-roles/{role_id}/teams"],
@@ -2878,9 +3042,6 @@ var require_dist_node11 = __commonJS({
         pingWebhook: ["POST /orgs/{org}/hooks/{hook_id}/pings"],
         redeliverWebhookDelivery: [
           "POST /orgs/{org}/hooks/{hook_id}/deliveries/{delivery_id}/attempts"
-        ],
-        removeCustomProperty: [
-          "DELETE /orgs/{org}/properties/schema/{custom_property_name}"
         ],
         removeMember: ["DELETE /orgs/{org}/members/{username}"],
         removeMembershipForUser: ["DELETE /orgs/{org}/memberships/{username}"],
@@ -2915,12 +3076,19 @@ var require_dist_node11 = __commonJS({
         revokeOrgRoleUser: [
           "DELETE /orgs/{org}/organization-roles/users/{username}/{role_id}"
         ],
+        setImmutableReleasesSettings: [
+          "PUT /orgs/{org}/settings/immutable-releases"
+        ],
+        setImmutableReleasesSettingsRepositories: [
+          "PUT /orgs/{org}/settings/immutable-releases/repositories"
+        ],
         setMembershipForUser: ["PUT /orgs/{org}/memberships/{username}"],
         setPublicMembershipForAuthenticatedUser: [
           "PUT /orgs/{org}/public_members/{username}"
         ],
         unblockUser: ["DELETE /orgs/{org}/blocks/{username}"],
         update: ["PATCH /orgs/{org}"],
+        updateIssueType: ["PUT /orgs/{org}/issue-types/{issue_type_id}"],
         updateMembershipForAuthenticatedUser: [
           "PATCH /user/memberships/orgs/{org}"
         ],
@@ -3034,35 +3202,44 @@ var require_dist_node11 = __commonJS({
         ]
       },
       projects: {
-        addCollaborator: ["PUT /projects/{project_id}/collaborators/{username}"],
-        createCard: ["POST /projects/columns/{column_id}/cards"],
-        createColumn: ["POST /projects/{project_id}/columns"],
-        createForAuthenticatedUser: ["POST /user/projects"],
-        createForOrg: ["POST /orgs/{org}/projects"],
-        createForRepo: ["POST /repos/{owner}/{repo}/projects"],
-        delete: ["DELETE /projects/{project_id}"],
-        deleteCard: ["DELETE /projects/columns/cards/{card_id}"],
-        deleteColumn: ["DELETE /projects/columns/{column_id}"],
-        get: ["GET /projects/{project_id}"],
-        getCard: ["GET /projects/columns/cards/{card_id}"],
-        getColumn: ["GET /projects/columns/{column_id}"],
-        getPermissionForUser: [
-          "GET /projects/{project_id}/collaborators/{username}/permission"
+        addItemForOrg: ["POST /orgs/{org}/projectsV2/{project_number}/items"],
+        addItemForUser: [
+          "POST /users/{username}/projectsV2/{project_number}/items"
         ],
-        listCards: ["GET /projects/columns/{column_id}/cards"],
-        listCollaborators: ["GET /projects/{project_id}/collaborators"],
-        listColumns: ["GET /projects/{project_id}/columns"],
-        listForOrg: ["GET /orgs/{org}/projects"],
-        listForRepo: ["GET /repos/{owner}/{repo}/projects"],
-        listForUser: ["GET /users/{username}/projects"],
-        moveCard: ["POST /projects/columns/cards/{card_id}/moves"],
-        moveColumn: ["POST /projects/columns/{column_id}/moves"],
-        removeCollaborator: [
-          "DELETE /projects/{project_id}/collaborators/{username}"
+        deleteItemForOrg: [
+          "DELETE /orgs/{org}/projectsV2/{project_number}/items/{item_id}"
         ],
-        update: ["PATCH /projects/{project_id}"],
-        updateCard: ["PATCH /projects/columns/cards/{card_id}"],
-        updateColumn: ["PATCH /projects/columns/{column_id}"]
+        deleteItemForUser: [
+          "DELETE /users/{username}/projectsV2/{project_number}/items/{item_id}"
+        ],
+        getFieldForOrg: [
+          "GET /orgs/{org}/projectsV2/{project_number}/fields/{field_id}"
+        ],
+        getFieldForUser: [
+          "GET /users/{username}/projectsV2/{project_number}/fields/{field_id}"
+        ],
+        getForOrg: ["GET /orgs/{org}/projectsV2/{project_number}"],
+        getForUser: ["GET /users/{username}/projectsV2/{project_number}"],
+        getOrgItem: ["GET /orgs/{org}/projectsV2/{project_number}/items/{item_id}"],
+        getUserItem: [
+          "GET /users/{username}/projectsV2/{project_number}/items/{item_id}"
+        ],
+        listFieldsForOrg: ["GET /orgs/{org}/projectsV2/{project_number}/fields"],
+        listFieldsForUser: [
+          "GET /users/{username}/projectsV2/{project_number}/fields"
+        ],
+        listForOrg: ["GET /orgs/{org}/projectsV2"],
+        listForUser: ["GET /users/{username}/projectsV2"],
+        listItemsForOrg: ["GET /orgs/{org}/projectsV2/{project_number}/items"],
+        listItemsForUser: [
+          "GET /users/{username}/projectsV2/{project_number}/items"
+        ],
+        updateItemForOrg: [
+          "PATCH /orgs/{org}/projectsV2/{project_number}/items/{item_id}"
+        ],
+        updateItemForUser: [
+          "PATCH /users/{username}/projectsV2/{project_number}/items/{item_id}"
+        ]
       },
       pulls: {
         checkIfMerged: ["GET /repos/{owner}/{repo}/pulls/{pull_number}/merge"],
@@ -3224,6 +3401,7 @@ var require_dist_node11 = __commonJS({
           "GET /repos/{owner}/{repo}/automated-security-fixes"
         ],
         checkCollaborator: ["GET /repos/{owner}/{repo}/collaborators/{username}"],
+        checkImmutableReleases: ["GET /repos/{owner}/{repo}/immutable-releases"],
         checkPrivateVulnerabilityReporting: [
           "GET /repos/{owner}/{repo}/private-vulnerability-reporting"
         ],
@@ -3259,9 +3437,6 @@ var require_dist_node11 = __commonJS({
         createForAuthenticatedUser: ["POST /user/repos"],
         createFork: ["POST /repos/{owner}/{repo}/forks"],
         createInOrg: ["POST /orgs/{org}/repos"],
-        createOrUpdateCustomPropertiesValues: [
-          "PATCH /repos/{owner}/{repo}/properties/values"
-        ],
         createOrUpdateEnvironment: [
           "PUT /repos/{owner}/{repo}/environments/{environment_name}"
         ],
@@ -3275,6 +3450,12 @@ var require_dist_node11 = __commonJS({
           "POST /repos/{template_owner}/{template_repo}/generate"
         ],
         createWebhook: ["POST /repos/{owner}/{repo}/hooks"],
+        customPropertiesForReposCreateOrUpdateRepositoryValues: [
+          "PATCH /repos/{owner}/{repo}/properties/values"
+        ],
+        customPropertiesForReposGetRepositoryValues: [
+          "GET /repos/{owner}/{repo}/properties/values"
+        ],
         declineInvitation: [
           "DELETE /user/repository_invitations/{invitation_id}",
           {},
@@ -3329,6 +3510,9 @@ var require_dist_node11 = __commonJS({
         disableDeploymentProtectionRule: [
           "DELETE /repos/{owner}/{repo}/environments/{environment_name}/deployment_protection_rules/{protection_rule_id}"
         ],
+        disableImmutableReleases: [
+          "DELETE /repos/{owner}/{repo}/immutable-releases"
+        ],
         disablePrivateVulnerabilityReporting: [
           "DELETE /repos/{owner}/{repo}/private-vulnerability-reporting"
         ],
@@ -3345,6 +3529,7 @@ var require_dist_node11 = __commonJS({
         enableAutomatedSecurityFixes: [
           "PUT /repos/{owner}/{repo}/automated-security-fixes"
         ],
+        enableImmutableReleases: ["PUT /repos/{owner}/{repo}/immutable-releases"],
         enablePrivateVulnerabilityReporting: [
           "PUT /repos/{owner}/{repo}/private-vulnerability-reporting"
         ],
@@ -3396,7 +3581,6 @@ var require_dist_node11 = __commonJS({
         getCustomDeploymentProtectionRule: [
           "GET /repos/{owner}/{repo}/environments/{environment_name}/deployment_protection_rules/{protection_rule_id}"
         ],
-        getCustomPropertiesValues: ["GET /repos/{owner}/{repo}/properties/values"],
         getDeployKey: ["GET /repos/{owner}/{repo}/keys/{key_id}"],
         getDeployment: ["GET /repos/{owner}/{repo}/deployments/{deployment_id}"],
         getDeploymentBranchPolicy: [
@@ -3435,6 +3619,12 @@ var require_dist_node11 = __commonJS({
         ],
         getRepoRuleSuites: ["GET /repos/{owner}/{repo}/rulesets/rule-suites"],
         getRepoRuleset: ["GET /repos/{owner}/{repo}/rulesets/{ruleset_id}"],
+        getRepoRulesetHistory: [
+          "GET /repos/{owner}/{repo}/rulesets/{ruleset_id}/history"
+        ],
+        getRepoRulesetVersion: [
+          "GET /repos/{owner}/{repo}/rulesets/{ruleset_id}/history/{version_id}"
+        ],
         getRepoRulesets: ["GET /repos/{owner}/{repo}/rulesets"],
         getStatusChecksProtection: [
           "GET /repos/{owner}/{repo}/branches/{branch}/protection/required_status_checks"
@@ -3622,16 +3812,19 @@ var require_dist_node11 = __commonJS({
           "GET /repos/{owner}/{repo}/secret-scanning/alerts/{alert_number}"
         ],
         getScanHistory: ["GET /repos/{owner}/{repo}/secret-scanning/scan-history"],
-        listAlertsForEnterprise: [
-          "GET /enterprises/{enterprise}/secret-scanning/alerts"
-        ],
         listAlertsForOrg: ["GET /orgs/{org}/secret-scanning/alerts"],
         listAlertsForRepo: ["GET /repos/{owner}/{repo}/secret-scanning/alerts"],
         listLocationsForAlert: [
           "GET /repos/{owner}/{repo}/secret-scanning/alerts/{alert_number}/locations"
         ],
+        listOrgPatternConfigs: [
+          "GET /orgs/{org}/secret-scanning/pattern-configurations"
+        ],
         updateAlert: [
           "PATCH /repos/{owner}/{repo}/secret-scanning/alerts/{alert_number}"
+        ],
+        updateOrgPatternConfigs: [
+          "PATCH /orgs/{org}/secret-scanning/pattern-configurations"
         ]
       },
       securityAdvisories: {
@@ -3662,14 +3855,8 @@ var require_dist_node11 = __commonJS({
         addOrUpdateMembershipForUserInOrg: [
           "PUT /orgs/{org}/teams/{team_slug}/memberships/{username}"
         ],
-        addOrUpdateProjectPermissionsInOrg: [
-          "PUT /orgs/{org}/teams/{team_slug}/projects/{project_id}"
-        ],
         addOrUpdateRepoPermissionsInOrg: [
           "PUT /orgs/{org}/teams/{team_slug}/repos/{owner}/{repo}"
-        ],
-        checkPermissionsForProjectInOrg: [
-          "GET /orgs/{org}/teams/{team_slug}/projects/{project_id}"
         ],
         checkPermissionsForRepoInOrg: [
           "GET /orgs/{org}/teams/{team_slug}/repos/{owner}/{repo}"
@@ -3707,13 +3894,9 @@ var require_dist_node11 = __commonJS({
         listPendingInvitationsInOrg: [
           "GET /orgs/{org}/teams/{team_slug}/invitations"
         ],
-        listProjectsInOrg: ["GET /orgs/{org}/teams/{team_slug}/projects"],
         listReposInOrg: ["GET /orgs/{org}/teams/{team_slug}/repos"],
         removeMembershipForUserInOrg: [
           "DELETE /orgs/{org}/teams/{team_slug}/memberships/{username}"
-        ],
-        removeProjectInOrg: [
-          "DELETE /orgs/{org}/teams/{team_slug}/projects/{project_id}"
         ],
         removeRepoInOrg: [
           "DELETE /orgs/{org}/teams/{team_slug}/repos/{owner}/{repo}"
@@ -3751,6 +3934,15 @@ var require_dist_node11 = __commonJS({
         ],
         createPublicSshKeyForAuthenticatedUser: ["POST /user/keys"],
         createSshSigningKeyForAuthenticatedUser: ["POST /user/ssh_signing_keys"],
+        deleteAttestationsBulk: [
+          "POST /users/{username}/attestations/delete-request"
+        ],
+        deleteAttestationsById: [
+          "DELETE /users/{username}/attestations/{attestation_id}"
+        ],
+        deleteAttestationsBySubjectDigest: [
+          "DELETE /users/{username}/attestations/digest/{subject_digest}"
+        ],
         deleteEmailForAuthenticated: [
           "DELETE /user/emails",
           {},
@@ -3795,6 +3987,9 @@ var require_dist_node11 = __commonJS({
         ],
         list: ["GET /users"],
         listAttestations: ["GET /users/{username}/attestations/{subject_digest}"],
+        listAttestationsBulk: [
+          "POST /users/{username}/attestations/bulk-list{?per_page,before,after}"
+        ],
         listBlockedByAuthenticated: [
           "GET /user/blocks",
           {},
@@ -3853,11 +4048,68 @@ var require_dist_node11 = __commonJS({
         updateAuthenticated: ["PATCH /user"]
       }
     };
-    var endpoints_default = Endpoints;
-    var endpointMethodsMap = /* @__PURE__ */ new Map();
+    endpoints_default = Endpoints;
+  }
+});
+
+// node_modules/@octokit/plugin-rest-endpoint-methods/dist-src/endpoints-to-methods.js
+function endpointsToMethods(octokit) {
+  const newMethods = {};
+  for (const scope of endpointMethodsMap.keys()) {
+    newMethods[scope] = new Proxy({ octokit, scope, cache: {} }, handler);
+  }
+  return newMethods;
+}
+function decorate(octokit, scope, methodName, defaults, decorations) {
+  const requestWithDefaults = octokit.request.defaults(defaults);
+  function withDecorations(...args) {
+    let options = requestWithDefaults.endpoint.merge(...args);
+    if (decorations.mapToData) {
+      options = Object.assign({}, options, {
+        data: options[decorations.mapToData],
+        [decorations.mapToData]: void 0
+      });
+      return requestWithDefaults(options);
+    }
+    if (decorations.renamed) {
+      const [newScope, newMethodName] = decorations.renamed;
+      octokit.log.warn(
+        `octokit.${scope}.${methodName}() has been renamed to octokit.${newScope}.${newMethodName}()`
+      );
+    }
+    if (decorations.deprecated) {
+      octokit.log.warn(decorations.deprecated);
+    }
+    if (decorations.renamedParameters) {
+      const options2 = requestWithDefaults.endpoint.merge(...args);
+      for (const [name, alias] of Object.entries(
+        decorations.renamedParameters
+      )) {
+        if (name in options2) {
+          octokit.log.warn(
+            `"${name}" parameter is deprecated for "octokit.${scope}.${methodName}()". Use "${alias}" instead`
+          );
+          if (!(alias in options2)) {
+            options2[alias] = options2[name];
+          }
+          delete options2[name];
+        }
+      }
+      return requestWithDefaults(options2);
+    }
+    return requestWithDefaults(...args);
+  }
+  return Object.assign(withDecorations, requestWithDefaults);
+}
+var endpointMethodsMap, handler;
+var init_endpoints_to_methods = __esm({
+  "node_modules/@octokit/plugin-rest-endpoint-methods/dist-src/endpoints-to-methods.js"() {
+    "use strict";
+    init_endpoints();
+    endpointMethodsMap = /* @__PURE__ */ new Map();
     for (const [scope, endpoints] of Object.entries(endpoints_default)) {
-      for (const [methodName, endpoint] of Object.entries(endpoints)) {
-        const [route, defaults, decorations] = endpoint;
+      for (const [methodName, endpoint2] of Object.entries(endpoints)) {
+        const [route, defaults, decorations] = endpoint2;
         const [method, url] = route.split(/ /);
         const endpointDefaults = Object.assign(
           {
@@ -3877,7 +4129,7 @@ var require_dist_node11 = __commonJS({
         });
       }
     }
-    var handler = {
+    handler = {
       has({ scope }, methodName) {
         return endpointMethodsMap.get(scope).has(methodName);
       },
@@ -3927,110 +4179,61 @@ var require_dist_node11 = __commonJS({
         return cache[methodName];
       }
     };
-    function endpointsToMethods(octokit) {
-      const newMethods = {};
-      for (const scope of endpointMethodsMap.keys()) {
-        newMethods[scope] = new Proxy({ octokit, scope, cache: {} }, handler);
-      }
-      return newMethods;
-    }
-    function decorate(octokit, scope, methodName, defaults, decorations) {
-      const requestWithDefaults = octokit.request.defaults(defaults);
-      function withDecorations(...args) {
-        let options = requestWithDefaults.endpoint.merge(...args);
-        if (decorations.mapToData) {
-          options = Object.assign({}, options, {
-            data: options[decorations.mapToData],
-            [decorations.mapToData]: void 0
-          });
-          return requestWithDefaults(options);
-        }
-        if (decorations.renamed) {
-          const [newScope, newMethodName] = decorations.renamed;
-          octokit.log.warn(
-            `octokit.${scope}.${methodName}() has been renamed to octokit.${newScope}.${newMethodName}()`
-          );
-        }
-        if (decorations.deprecated) {
-          octokit.log.warn(decorations.deprecated);
-        }
-        if (decorations.renamedParameters) {
-          const options2 = requestWithDefaults.endpoint.merge(...args);
-          for (const [name, alias] of Object.entries(
-            decorations.renamedParameters
-          )) {
-            if (name in options2) {
-              octokit.log.warn(
-                `"${name}" parameter is deprecated for "octokit.${scope}.${methodName}()". Use "${alias}" instead`
-              );
-              if (!(alias in options2)) {
-                options2[alias] = options2[name];
-              }
-              delete options2[name];
-            }
-          }
-          return requestWithDefaults(options2);
-        }
-        return requestWithDefaults(...args);
-      }
-      return Object.assign(withDecorations, requestWithDefaults);
-    }
-    function restEndpointMethods(octokit) {
-      const api = endpointsToMethods(octokit);
-      return {
-        rest: api
-      };
-    }
-    restEndpointMethods.VERSION = VERSION;
-    function legacyRestEndpointMethods(octokit) {
-      const api = endpointsToMethods(octokit);
-      return {
-        ...api,
-        rest: api
-      };
-    }
-    legacyRestEndpointMethods.VERSION = VERSION;
   }
 });
 
-// node_modules/@octokit/rest/dist-node/index.js
-var require_dist_node12 = __commonJS({
-  "node_modules/@octokit/rest/dist-node/index.js"(exports2, module2) {
+// node_modules/@octokit/plugin-rest-endpoint-methods/dist-src/index.js
+function restEndpointMethods(octokit) {
+  const api = endpointsToMethods(octokit);
+  return {
+    rest: api
+  };
+}
+function legacyRestEndpointMethods(octokit) {
+  const api = endpointsToMethods(octokit);
+  return {
+    ...api,
+    rest: api
+  };
+}
+var init_dist_src4 = __esm({
+  "node_modules/@octokit/plugin-rest-endpoint-methods/dist-src/index.js"() {
     "use strict";
-    var __defProp2 = Object.defineProperty;
-    var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
-    var __getOwnPropNames2 = Object.getOwnPropertyNames;
-    var __hasOwnProp2 = Object.prototype.hasOwnProperty;
-    var __export2 = (target, all) => {
-      for (var name in all)
-        __defProp2(target, name, { get: all[name], enumerable: true });
-    };
-    var __copyProps2 = (to, from, except, desc) => {
-      if (from && typeof from === "object" || typeof from === "function") {
-        for (let key of __getOwnPropNames2(from))
-          if (!__hasOwnProp2.call(to, key) && key !== except)
-            __defProp2(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc2(from, key)) || desc.enumerable });
+    init_version3();
+    init_endpoints_to_methods();
+    restEndpointMethods.VERSION = VERSION7;
+    legacyRestEndpointMethods.VERSION = VERSION7;
+  }
+});
+
+// node_modules/@octokit/rest/dist-src/version.js
+var VERSION8;
+var init_version4 = __esm({
+  "node_modules/@octokit/rest/dist-src/version.js"() {
+    "use strict";
+    VERSION8 = "22.0.1";
+  }
+});
+
+// node_modules/@octokit/rest/dist-src/index.js
+var dist_src_exports = {};
+__export(dist_src_exports, {
+  Octokit: () => Octokit2
+});
+var Octokit2;
+var init_dist_src5 = __esm({
+  "node_modules/@octokit/rest/dist-src/index.js"() {
+    "use strict";
+    init_dist_src2();
+    init_dist_src3();
+    init_dist_bundle5();
+    init_dist_src4();
+    init_version4();
+    Octokit2 = Octokit.plugin(requestLog, legacyRestEndpointMethods, paginateRest).defaults(
+      {
+        userAgent: `octokit-rest.js/${VERSION8}`
       }
-      return to;
-    };
-    var __toCommonJS2 = (mod) => __copyProps2(__defProp2({}, "__esModule", { value: true }), mod);
-    var index_exports2 = {};
-    __export2(index_exports2, {
-      Octokit: () => Octokit
-    });
-    module2.exports = __toCommonJS2(index_exports2);
-    var import_core = require_dist_node8();
-    var import_plugin_request_log = require_dist_node9();
-    var import_plugin_paginate_rest = require_dist_node10();
-    var import_plugin_rest_endpoint_methods = require_dist_node11();
-    var VERSION = "20.1.2";
-    var Octokit = import_core.Octokit.plugin(
-      import_plugin_request_log.requestLog,
-      import_plugin_rest_endpoint_methods.legacyRestEndpointMethods,
-      import_plugin_paginate_rest.paginateRest
-    ).defaults({
-      userAgent: `octokit-rest.js/${VERSION}`
-    });
+    );
   }
 });
 
@@ -4223,14 +4426,14 @@ async function fetchPriorReviews(options) {
   if (!options.token) {
     return null;
   }
-  const octokit = options.octokit ?? new (await Promise.resolve().then(() => __toESM(require_dist_node12()))).Octokit({ auth: options.token });
+  const octokit = options.octokit ?? new (await Promise.resolve().then(() => (init_dist_src5(), dist_src_exports))).Octokit({ auth: options.token });
   const base = { owner: options.owner, repo: options.repo };
   const perPage = { ...base, per_page: 100 };
   const paginateAll = async (fn, params) => {
     if (!fn) return [];
-    const request = fn;
+    const request2 = fn;
     if (octokit.paginate) return octokit.paginate(fn, params);
-    return (await request(params)).data;
+    return (await request2(params)).data;
   };
   try {
     const raw = [];
@@ -4302,3 +4505,22 @@ async function fetchPriorReviews(options) {
   fetchPriorReviews,
   formatPriorReviews
 });
+/*! Bundled license information:
+
+content-type/dist/index.js:
+  (*!
+   * content-type
+   * Copyright(c) 2015 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+@octokit/request-error/dist-src/index.js:
+  (* v8 ignore else -- @preserve -- Bug with vitest coverage where it sees an else branch that doesn't exist *)
+
+@octokit/request/dist-bundle/index.js:
+  (* v8 ignore next -- @preserve *)
+  (* v8 ignore else -- @preserve *)
+
+@octokit/graphql/dist-bundle/index.js:
+  (* v8 ignore if -- @preserve *)
+*/

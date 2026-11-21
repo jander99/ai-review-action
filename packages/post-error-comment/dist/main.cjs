@@ -2513,7 +2513,7 @@ var require_connect = __commonJS({
     var util = require_util();
     var { InvalidArgumentError, ConnectTimeoutError } = require_errors();
     var timers = require_timers();
-    function noop2() {
+    function noop3() {
     }
     var tls;
     var SessionCache;
@@ -2638,7 +2638,7 @@ var require_connect = __commonJS({
     }
     var setupConnectTimeout = process.platform === "win32" ? (socketWeakRef, opts) => {
       if (!opts.timeout) {
-        return noop2;
+        return noop3;
       }
       let s1 = null;
       let s2 = null;
@@ -2654,7 +2654,7 @@ var require_connect = __commonJS({
       };
     } : (socketWeakRef, opts) => {
       if (!opts.timeout) {
-        return noop2;
+        return noop3;
       }
       let s1 = null;
       const fastTimer = timers.setFastTimeout(() => {
@@ -5445,7 +5445,7 @@ var require_body = __commonJS({
       random = (max) => Math.floor(Math.random(max));
     }
     var textEncoder = new TextEncoder();
-    function noop2() {
+    function noop3() {
     }
     var hasFinalizationRegistry = globalThis.FinalizationRegistry && process.version.indexOf("v18") !== 0;
     var streamRegistry;
@@ -5453,7 +5453,7 @@ var require_body = __commonJS({
       streamRegistry = new FinalizationRegistry((weakRef) => {
         const stream = weakRef.deref();
         if (stream && !stream.locked && !isDisturbed(stream) && !isErrored(stream)) {
-          stream.cancel("Response object has been garbage collected").catch(noop2);
+          stream.cancel("Response object has been garbage collected").catch(noop3);
         }
       });
     }
@@ -7675,7 +7675,7 @@ var require_client = __commonJS({
     var connectH2 = require_client_h2();
     var deprecatedInterceptorWarned = false;
     var kClosedResolve = /* @__PURE__ */ Symbol("kClosedResolve");
-    var noop2 = () => {
+    var noop3 = () => {
     };
     function getPipelining(client) {
       return client[kPipelining] ?? client[kHTTPContext]?.defaultPipelining ?? 1;
@@ -7967,14 +7967,14 @@ var require_client = __commonJS({
           });
         });
         if (client.destroyed) {
-          util.destroy(socket.on("error", noop2), new ClientDestroyedError());
+          util.destroy(socket.on("error", noop3), new ClientDestroyedError());
           return;
         }
         assert(socket);
         try {
           client[kHTTPContext] = socket.alpnProtocol === "h2" ? await connectH2(client, socket) : await connectH1(client, socket);
         } catch (err) {
-          socket.destroy().on("error", noop2);
+          socket.destroy().on("error", noop3);
           throw err;
         }
         client[kConnecting] = false;
@@ -8719,7 +8719,7 @@ var require_proxy_agent = __commonJS({
     function defaultFactory(origin, opts) {
       return new Pool(origin, opts);
     }
-    var noop2 = () => {
+    var noop3 = () => {
     };
     function defaultAgentFactory(origin, opts) {
       if (opts.connections === 1) {
@@ -8836,7 +8836,7 @@ var require_proxy_agent = __commonJS({
                 servername: this[kProxyTls]?.servername || proxyHostname
               });
               if (statusCode !== 200) {
-                socket.on("error", noop2).destroy();
+                socket.on("error", noop3).destroy();
                 callback(new RequestAbortedError(`Proxy response (${statusCode}) !== 200 when HTTP Tunneling`));
               }
               if (opts2.protocol !== "https:") {
@@ -9452,7 +9452,7 @@ var require_readable = __commonJS({
     var kAbort = /* @__PURE__ */ Symbol("kAbort");
     var kContentType = /* @__PURE__ */ Symbol("kContentType");
     var kContentLength = /* @__PURE__ */ Symbol("kContentLength");
-    var noop2 = () => {
+    var noop3 = () => {
     };
     var BodyReadable = class extends Readable {
       constructor({
@@ -9584,7 +9584,7 @@ var require_readable = __commonJS({
             } else {
               resolve(null);
             }
-          }).on("error", noop2).on("data", function(chunk) {
+          }).on("error", noop3).on("data", function(chunk) {
             limit -= chunk.length;
             if (limit <= 0) {
               this.destroy();
@@ -27976,7 +27976,7 @@ var require_readable2 = __commonJS({
     var kBody = /* @__PURE__ */ Symbol("kBody");
     var kAbort = /* @__PURE__ */ Symbol("abort");
     var kContentType = /* @__PURE__ */ Symbol("kContentType");
-    var noop2 = () => {
+    var noop3 = () => {
     };
     module2.exports = class BodyReadable extends Readable {
       constructor({
@@ -28098,7 +28098,7 @@ var require_readable2 = __commonJS({
         return new Promise((resolve, reject) => {
           const signalListenerCleanup = signal ? util.addAbortListener(signal, () => {
             this.destroy();
-          }) : noop2;
+          }) : noop3;
           this.on("close", function() {
             signalListenerCleanup();
             if (signal && signal.aborted) {
@@ -28106,7 +28106,7 @@ var require_readable2 = __commonJS({
             } else {
               resolve(null);
             }
-          }).on("error", noop2).on("data", function(chunk) {
+          }).on("error", noop3).on("data", function(chunk) {
             limit -= chunk.length;
             if (limit <= 0) {
               this.destroy();
@@ -37200,7 +37200,7 @@ var require_dist_node2 = __commonJS({
         return template.replace(/\/$/, "");
       }
     }
-    function parse2(options) {
+    function parse3(options) {
       let method = options.method.toUpperCase();
       let url = (options.url || "/").replace(/:([a-z]\w+)/g, "{$1}");
       let headers = Object.assign({}, options.headers);
@@ -37264,7 +37264,7 @@ var require_dist_node2 = __commonJS({
       );
     }
     function endpointWithDefaults2(defaults, route, options) {
-      return parse2(merge2(defaults, route, options));
+      return parse3(merge2(defaults, route, options));
     }
     function withDefaults4(oldDefaults, newDefaults) {
       const DEFAULTS22 = merge2(oldDefaults, newDefaults);
@@ -37273,7 +37273,7 @@ var require_dist_node2 = __commonJS({
         DEFAULTS: DEFAULTS22,
         defaults: withDefaults4.bind(null, DEFAULTS22),
         merge: merge2.bind(null, DEFAULTS22),
-        parse: parse2
+        parse: parse3
       });
     }
     var endpoint2 = withDefaults4(null, DEFAULTS2);
@@ -37884,9 +37884,9 @@ var require_dist_node7 = __commonJS({
   }
 });
 
-// node_modules/@octokit/core/dist-node/index.js
+// node_modules/@actions/github/node_modules/@octokit/core/dist-node/index.js
 var require_dist_node8 = __commonJS({
-  "node_modules/@octokit/core/dist-node/index.js"(exports2, module2) {
+  "node_modules/@actions/github/node_modules/@octokit/core/dist-node/index.js"(exports2, module2) {
     "use strict";
     var __defProp2 = Object.defineProperty;
     var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
@@ -37916,16 +37916,16 @@ var require_dist_node8 = __commonJS({
     var import_graphql2 = require_dist_node6();
     var import_auth_token2 = require_dist_node7();
     var VERSION9 = "5.2.2";
-    var noop2 = () => {
+    var noop3 = () => {
     };
     var consoleWarn2 = console.warn.bind(console);
     var consoleError2 = console.error.bind(console);
     function createLogger2(logger = {}) {
       if (typeof logger.debug !== "function") {
-        logger.debug = noop2;
+        logger.debug = noop3;
       }
       if (typeof logger.info !== "function") {
-        logger.info = noop2;
+        logger.info = noop3;
       }
       if (typeof logger.warn !== "function") {
         logger.warn = consoleWarn2;
@@ -38050,9 +38050,9 @@ var require_dist_node8 = __commonJS({
   }
 });
 
-// node_modules/@octokit/plugin-rest-endpoint-methods/dist-node/index.js
+// node_modules/@actions/github/node_modules/@octokit/plugin-rest-endpoint-methods/dist-node/index.js
 var require_dist_node9 = __commonJS({
-  "node_modules/@octokit/plugin-rest-endpoint-methods/dist-node/index.js"(exports2, module2) {
+  "node_modules/@actions/github/node_modules/@octokit/plugin-rest-endpoint-methods/dist-node/index.js"(exports2, module2) {
     "use strict";
     var __defProp2 = Object.defineProperty;
     var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
@@ -40206,9 +40206,9 @@ var require_dist_node9 = __commonJS({
   }
 });
 
-// node_modules/@octokit/plugin-paginate-rest/dist-node/index.js
+// node_modules/@actions/github/node_modules/@octokit/plugin-paginate-rest/dist-node/index.js
 var require_dist_node10 = __commonJS({
-  "node_modules/@octokit/plugin-paginate-rest/dist-node/index.js"(exports2, module2) {
+  "node_modules/@actions/github/node_modules/@octokit/plugin-paginate-rest/dist-node/index.js"(exports2, module2) {
     "use strict";
     var __defProp2 = Object.defineProperty;
     var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
@@ -40686,102 +40686,6 @@ var require_github = __commonJS({
       return new GitHubWithPlugins((0, utils_1.getOctokitOptions)(token, options));
     }
     exports2.getOctokit = getOctokit;
-  }
-});
-
-// node_modules/fast-content-type-parse/index.js
-var require_fast_content_type_parse = __commonJS({
-  "node_modules/fast-content-type-parse/index.js"(exports2, module2) {
-    "use strict";
-    var NullObject = function NullObject2() {
-    };
-    NullObject.prototype = /* @__PURE__ */ Object.create(null);
-    var paramRE = /; *([!#$%&'*+.^\w`|~-]+)=("(?:[\v\u0020\u0021\u0023-\u005b\u005d-\u007e\u0080-\u00ff]|\\[\v\u0020-\u00ff])*"|[!#$%&'*+.^\w`|~-]+) */gu;
-    var quotedPairRE = /\\([\v\u0020-\u00ff])/gu;
-    var mediaTypeRE = /^[!#$%&'*+.^\w|~-]+\/[!#$%&'*+.^\w|~-]+$/u;
-    var defaultContentType = { type: "", parameters: new NullObject() };
-    Object.freeze(defaultContentType.parameters);
-    Object.freeze(defaultContentType);
-    function parse2(header) {
-      if (typeof header !== "string") {
-        throw new TypeError("argument header is required and must be a string");
-      }
-      let index = header.indexOf(";");
-      const type = index !== -1 ? header.slice(0, index).trim() : header.trim();
-      if (mediaTypeRE.test(type) === false) {
-        throw new TypeError("invalid media type");
-      }
-      const result = {
-        type: type.toLowerCase(),
-        parameters: new NullObject()
-      };
-      if (index === -1) {
-        return result;
-      }
-      let key;
-      let match;
-      let value;
-      paramRE.lastIndex = index;
-      while (match = paramRE.exec(header)) {
-        if (match.index !== index) {
-          throw new TypeError("invalid parameter format");
-        }
-        index += match[0].length;
-        key = match[1].toLowerCase();
-        value = match[2];
-        if (value[0] === '"') {
-          value = value.slice(1, value.length - 1);
-          quotedPairRE.test(value) && (value = value.replace(quotedPairRE, "$1"));
-        }
-        result.parameters[key] = value;
-      }
-      if (index !== header.length) {
-        throw new TypeError("invalid parameter format");
-      }
-      return result;
-    }
-    function safeParse2(header) {
-      if (typeof header !== "string") {
-        return defaultContentType;
-      }
-      let index = header.indexOf(";");
-      const type = index !== -1 ? header.slice(0, index).trim() : header.trim();
-      if (mediaTypeRE.test(type) === false) {
-        return defaultContentType;
-      }
-      const result = {
-        type: type.toLowerCase(),
-        parameters: new NullObject()
-      };
-      if (index === -1) {
-        return result;
-      }
-      let key;
-      let match;
-      let value;
-      paramRE.lastIndex = index;
-      while (match = paramRE.exec(header)) {
-        if (match.index !== index) {
-          return defaultContentType;
-        }
-        index += match[0].length;
-        key = match[1].toLowerCase();
-        value = match[2];
-        if (value[0] === '"') {
-          value = value.slice(1, value.length - 1);
-          quotedPairRE.test(value) && (value = value.replace(quotedPairRE, "$1"));
-        }
-        result.parameters[key] = value;
-      }
-      if (index !== header.length) {
-        return defaultContentType;
-      }
-      return result;
-    }
-    module2.exports.default = { parse: parse2, safeParse: safeParse2 };
-    module2.exports.parse = parse2;
-    module2.exports.safeParse = safeParse2;
-    module2.exports.defaultContentType = defaultContentType;
   }
 });
 
@@ -41277,7 +41181,7 @@ function error(message, properties = {}) {
 // packages/post-error-comment/src/action.ts
 var import_github = __toESM(require_github());
 
-// packages/post-error-comment/node_modules/universal-user-agent/index.js
+// node_modules/@octokit/core/node_modules/universal-user-agent/index.js
 function getUserAgent() {
   if (typeof navigator === "object" && "userAgent" in navigator) {
     return navigator.userAgent;
@@ -41288,7 +41192,7 @@ function getUserAgent() {
   return "<environment undetectable>";
 }
 
-// packages/post-error-comment/node_modules/before-after-hook/lib/register.js
+// node_modules/@octokit/core/node_modules/before-after-hook/lib/register.js
 function register(state, name, method, options) {
   if (typeof method !== "function") {
     throw new Error("method for before hook must be a function");
@@ -41311,7 +41215,7 @@ function register(state, name, method, options) {
   });
 }
 
-// packages/post-error-comment/node_modules/before-after-hook/lib/add.js
+// node_modules/@octokit/core/node_modules/before-after-hook/lib/add.js
 function addHook(state, kind, name, hook2) {
   const orig = hook2;
   if (!state.registry[name]) {
@@ -41346,7 +41250,7 @@ function addHook(state, kind, name, hook2) {
   });
 }
 
-// packages/post-error-comment/node_modules/before-after-hook/lib/remove.js
+// node_modules/@octokit/core/node_modules/before-after-hook/lib/remove.js
 function removeHook(state, name, method) {
   if (!state.registry[name]) {
     return;
@@ -41360,7 +41264,7 @@ function removeHook(state, name, method) {
   state.registry[name].splice(index, 1);
 }
 
-// packages/post-error-comment/node_modules/before-after-hook/index.js
+// node_modules/@octokit/core/node_modules/before-after-hook/index.js
 var bind = Function.bind;
 var bindable = bind.bind(bind);
 function bindApi(hook2, state, name) {
@@ -41394,7 +41298,7 @@ function Collection() {
 }
 var before_after_hook_default = { Singular, Collection };
 
-// packages/post-error-comment/node_modules/@octokit/endpoint/dist-bundle/index.js
+// node_modules/@octokit/core/node_modules/@octokit/endpoint/dist-bundle/index.js
 var VERSION = "0.0.0-development";
 var userAgent = `octokit-endpoint.js/${VERSION} ${getUserAgent()}`;
 var DEFAULTS = {
@@ -41529,7 +41433,7 @@ function isKeyOperator(operator) {
 function getValues(context2, operator, key, modifier) {
   var value = context2[key], result = [];
   if (isDefined(value) && value !== "") {
-    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    if (typeof value === "string" || typeof value === "number" || typeof value === "bigint" || typeof value === "boolean") {
       value = value.toString();
       if (modifier && modifier !== "*") {
         value = value.substring(0, parseInt(modifier, 10));
@@ -41707,10 +41611,526 @@ function withDefaults(oldDefaults, newDefaults) {
 }
 var endpoint = withDefaults(null, DEFAULTS);
 
-// packages/post-error-comment/node_modules/@octokit/request/dist-bundle/index.js
-var import_fast_content_type_parse = __toESM(require_fast_content_type_parse(), 1);
+// node_modules/content-type/dist/index.js
+var SP = 32;
+var HTAB = 9;
+var SEMI = 59;
+var EQ = 61;
+var DQUOTE = 34;
+var BSLASH = 92;
+var COMMA = 44;
+var LOWER_CASE = 1;
+var OWS = 2;
+var SEMI_FLAG = 4;
+var COMMA_FLAG = 8;
+var TOKEN_FLAG = 16;
+var NON_ASCII = 65280;
+var CASE_FLAGS = LOWER_CASE | NON_ASCII;
+var CHAR_MAP = new Uint8Array(256);
+CHAR_MAP[HTAB] |= OWS;
+CHAR_MAP[SP] |= OWS;
+CHAR_MAP[SEMI] |= SEMI_FLAG;
+CHAR_MAP[COMMA] |= COMMA_FLAG;
+for (let code = 128; code <= 255; code++) {
+  CHAR_MAP[code] |= LOWER_CASE;
+}
+for (const char of "!#$%&'*+-.^_`|~") {
+  CHAR_MAP[char.charCodeAt(0)] |= TOKEN_FLAG;
+}
+for (let code = 48; code <= 57; code++) {
+  CHAR_MAP[code] |= TOKEN_FLAG;
+}
+for (let code = 65; code <= 90; code++) {
+  CHAR_MAP[code] |= LOWER_CASE | TOKEN_FLAG;
+}
+for (let code = 97; code <= 122; code++) {
+  CHAR_MAP[code] |= TOKEN_FLAG;
+}
+var NullObject = /* @__PURE__ */ (() => {
+  const C = function() {
+  };
+  C.prototype = /* @__PURE__ */ Object.create(null);
+  return C;
+})();
+function parse2(header, options) {
+  const stopFlags = SEMI_FLAG | (options?.comma === true ? COMMA_FLAG : 0);
+  const len = header.length;
+  let valueStart = options?.start ?? 0;
+  while ((CHAR_MAP[header.charCodeAt(valueStart)] & OWS) !== 0) {
+    valueStart++;
+  }
+  let index = valueStart;
+  let typeFlags = 0;
+  let whitespace = -1;
+  let stop = options?.parameters === false ? COMMA_FLAG : 0;
+  while (index < len) {
+    const code = header.charCodeAt(index);
+    const flags = CHAR_MAP[code];
+    if ((flags & stopFlags) !== 0) {
+      stop |= flags & COMMA_FLAG;
+      break;
+    }
+    if ((flags & OWS) !== 0) {
+      if (whitespace === -1)
+        whitespace = index;
+    } else {
+      whitespace = -1;
+    }
+    typeFlags |= code & NON_ASCII | flags;
+    index++;
+  }
+  const valueEnd = whitespace === -1 ? index : whitespace;
+  const value = header.slice(valueStart, valueEnd);
+  const type = (typeFlags & CASE_FLAGS) === 0 ? value : value.toLowerCase();
+  if (index === len || stop !== 0) {
+    return { type, index, parameters: new NullObject() };
+  }
+  return parseParameters(header, type, index, len, stopFlags);
+}
+function parseParameters(header, type, index, len, stopFlags) {
+  const parameters = new NullObject();
+  parameter: while (index < len) {
+    index++;
+    while ((CHAR_MAP[header.charCodeAt(index)] & OWS) !== 0) {
+      index++;
+    }
+    const keyStart = index;
+    let keyFlags = 0;
+    let keyWhitespace = -1;
+    while (index < len) {
+      const code = header.charCodeAt(index);
+      const flags = CHAR_MAP[code];
+      if ((flags & stopFlags) !== 0) {
+        if ((flags & COMMA_FLAG) !== 0)
+          break parameter;
+        continue parameter;
+      }
+      if (code === EQ) {
+        const keyEnd = keyWhitespace === -1 ? index : keyWhitespace;
+        const value = header.slice(keyStart, keyEnd);
+        const key = (keyFlags & CASE_FLAGS) === 0 ? value : value.toLowerCase();
+        index++;
+        while ((CHAR_MAP[header.charCodeAt(index)] & OWS) !== 0) {
+          index++;
+        }
+        if (index < len && header.charCodeAt(index) === DQUOTE) {
+          const quotedStart = ++index;
+          let escaped = false;
+          while (index < len) {
+            const code2 = header.charCodeAt(index);
+            if (code2 === DQUOTE) {
+              if (parameters[key] === void 0) {
+                parameters[key] = escaped ? unescapeQuotedPairs(header, quotedStart, index) : header.slice(quotedStart, index);
+              }
+              index++;
+              let stop2 = 0;
+              while (index < len) {
+                const code3 = header.charCodeAt(index);
+                const flags2 = CHAR_MAP[code3];
+                if ((flags2 & stopFlags) !== 0) {
+                  stop2 = flags2 & COMMA_FLAG;
+                  break;
+                }
+                index++;
+              }
+              if (stop2 !== 0)
+                break parameter;
+              continue parameter;
+            }
+            if (code2 === BSLASH && index + 1 < len) {
+              escaped = true;
+              index += 2;
+              continue;
+            }
+            index++;
+          }
+          continue parameter;
+        }
+        const valueStart = index;
+        let stop = 0;
+        let valueWhitespace = -1;
+        while (index < len) {
+          const code2 = header.charCodeAt(index);
+          const flags2 = CHAR_MAP[code2];
+          if ((flags2 & stopFlags) !== 0) {
+            stop = flags2 & COMMA_FLAG;
+            break;
+          }
+          if ((flags2 & OWS) !== 0) {
+            if (valueWhitespace === -1)
+              valueWhitespace = index;
+          } else {
+            valueWhitespace = -1;
+          }
+          index++;
+        }
+        if (parameters[key] === void 0) {
+          const valueEnd = valueWhitespace === -1 ? index : valueWhitespace;
+          parameters[key] = header.slice(valueStart, valueEnd);
+        }
+        if (stop !== 0)
+          break parameter;
+        continue parameter;
+      }
+      if ((flags & OWS) !== 0) {
+        if (keyWhitespace === -1)
+          keyWhitespace = index;
+      } else {
+        keyWhitespace = -1;
+      }
+      keyFlags |= code & NON_ASCII | flags;
+      index++;
+    }
+  }
+  return { type, index, parameters };
+}
+function unescapeQuotedPairs(str, start, end) {
+  let result = "";
+  for (let index = start; index < end; index++) {
+    if (str.charCodeAt(index) === BSLASH) {
+      result += str.slice(start, index);
+      start = ++index;
+    }
+  }
+  return result + str.slice(start, end);
+}
 
-// packages/post-error-comment/node_modules/@octokit/request-error/dist-src/index.js
+// node_modules/json-with-bigint/json-with-bigint.js
+var intRegex = /^-?\d+$/;
+var noiseValue = /^-?\d+n+$/;
+var originalStringify = JSON.stringify;
+var originalParse = JSON.parse;
+var customFormat = /^-?\d+n$/;
+var bigIntsStringify = /([\[:])?"(-?\d+)n"($|\s*[,\}\]])/g;
+var noiseStringify = /([\[:])?("-?\d+n+)n("$|"\s*[,\}\]])/g;
+var isUnstringifiable = (val) => val === void 0 || typeof val === "function" || typeof val === "symbol";
+var isRawJSON = (val) => val !== null && typeof val === "object" && val.constructor && val.constructor.name === "RawJSON";
+var stringifyIteratively = (rootValue, replacer, spaceParam) => {
+  let space = "";
+  if (typeof spaceParam === "number") {
+    space = " ".repeat(Math.min(10, Math.max(0, Math.floor(spaceParam))));
+  } else if (typeof spaceParam === "string") {
+    space = spaceParam.slice(0, 10);
+  }
+  const isFunctionReplacer = typeof replacer === "function";
+  const propertyList = Array.isArray(replacer) ? new Set(replacer.map(String)) : null;
+  const prepareVal = (parent, key, val) => {
+    const isObject = val !== null && typeof val === "object";
+    const hasToJSON = isObject && typeof val.toJSON === "function";
+    if (hasToJSON) {
+      val = val.toJSON(key);
+    }
+    const isNoise = typeof val === "string" && noiseValue.test(val);
+    if (isNoise) return val + "n";
+    const isBigInt = typeof val === "bigint";
+    if (isBigInt) {
+      const supportsRawJSON = "rawJSON" in JSON;
+      if (supportsRawJSON) return JSON.rawJSON(val.toString());
+      return val.toString() + "n";
+    }
+    if (isFunctionReplacer) {
+      val = replacer.call(parent, key, val);
+    }
+    const isPostReplacerObject = val !== null && typeof val === "object";
+    if (isPostReplacerObject) {
+      const isPrimitiveWrapper = val instanceof Number || val instanceof String || val instanceof Boolean;
+      if (isPrimitiveWrapper) {
+        val = val.valueOf();
+      }
+    }
+    return val;
+  };
+  const rootProcessed = prepareVal({ "": rootValue }, "", rootValue);
+  if (isUnstringifiable(rootProcessed)) {
+    return void 0;
+  }
+  const isRootPrimitive = rootProcessed === null || typeof rootProcessed !== "object";
+  const isRootNativeRawJSON = isRawJSON(rootProcessed);
+  if (isRootPrimitive || isRootNativeRawJSON) {
+    return originalStringify(rootProcessed);
+  }
+  const chunks = [];
+  let level = 0;
+  const stack = [
+    {
+      parent: { "": rootProcessed },
+      key: "",
+      val: rootProcessed,
+      isArray: Array.isArray(rootProcessed),
+      keys: Array.isArray(rootProcessed) ? null : Object.keys(rootProcessed),
+      index: 0,
+      first: true
+    }
+  ];
+  const visited = new WeakSet([rootProcessed]);
+  while (stack.length > 0) {
+    const node = stack[stack.length - 1];
+    if (node.index === 0) {
+      chunks.push(node.isArray ? "[" : "{");
+      level++;
+    }
+    let isDone = false;
+    if (node.isArray) {
+      if (node.index < node.val.length) {
+        if (!node.first) chunks.push(",");
+        if (space) chunks.push("\n" + space.repeat(level));
+        const childRaw = node.val[node.index];
+        const childVal = prepareVal(node.val, String(node.index), childRaw);
+        if (isUnstringifiable(childVal)) {
+          chunks.push("null");
+          node.first = false;
+          node.index++;
+        } else {
+          const isComplexObject = childVal !== null && typeof childVal === "object";
+          const isNativeRaw = isRawJSON(childVal);
+          if (isComplexObject && !isNativeRaw) {
+            if (visited.has(childVal)) {
+              throw new TypeError("Converting circular structure to JSON");
+            }
+            visited.add(childVal);
+            stack.push({
+              parent: node.val,
+              key: String(node.index),
+              val: childVal,
+              isArray: Array.isArray(childVal),
+              keys: Array.isArray(childVal) ? null : Object.keys(childVal),
+              index: 0,
+              first: true
+            });
+            node.first = false;
+            node.index++;
+          } else {
+            chunks.push(originalStringify(childVal));
+            node.first = false;
+            node.index++;
+          }
+        }
+      } else {
+        isDone = true;
+      }
+    } else {
+      while (node.index < node.keys.length) {
+        const k = node.keys[node.index++];
+        const isFilteredOutByArray = propertyList && !propertyList.has(k);
+        if (isFilteredOutByArray) continue;
+        const childRaw = node.val[k];
+        const childVal = prepareVal(node.val, k, childRaw);
+        if (isUnstringifiable(childVal)) continue;
+        if (!node.first) chunks.push(",");
+        if (space) {
+          chunks.push("\n" + space.repeat(level) + originalStringify(k) + ": ");
+        } else {
+          chunks.push(originalStringify(k) + ":");
+        }
+        const isComplexObject = childVal !== null && typeof childVal === "object";
+        const isNativeRaw = isRawJSON(childVal);
+        if (isComplexObject && !isNativeRaw) {
+          if (visited.has(childVal)) {
+            throw new TypeError("Converting circular structure to JSON");
+          }
+          visited.add(childVal);
+          stack.push({
+            parent: node.val,
+            key: k,
+            val: childVal,
+            isArray: Array.isArray(childVal),
+            keys: Array.isArray(childVal) ? null : Object.keys(childVal),
+            index: 0,
+            first: true
+          });
+          node.first = false;
+          break;
+        } else {
+          chunks.push(originalStringify(childVal));
+          node.first = false;
+        }
+      }
+      const isNodeFullyProcessed = node.index >= node.keys.length && stack[stack.length - 1] === node;
+      if (isNodeFullyProcessed) {
+        isDone = true;
+      }
+    }
+    if (isDone) {
+      level--;
+      if (!node.first && space) chunks.push("\n" + space.repeat(level));
+      chunks.push(node.isArray ? "]" : "}");
+      visited.delete(node.val);
+      stack.pop();
+    }
+  }
+  return chunks.join("");
+};
+var JSONStringify = (value, replacer, space) => {
+  try {
+    const supportsRawJSON = "rawJSON" in JSON;
+    if (supportsRawJSON) {
+      return originalStringify(
+        value,
+        (key, val) => {
+          if (typeof val === "bigint") return JSON.rawJSON(val.toString());
+          const hasFunctionReplacer = typeof replacer === "function";
+          if (hasFunctionReplacer) return replacer(key, val);
+          const isKeyInArrayReplacer = Array.isArray(replacer) && replacer.includes(key);
+          if (isKeyInArrayReplacer) return val;
+          return val;
+        },
+        space
+      );
+    }
+    if (!value) return originalStringify(value, replacer, space);
+    const convertedToCustomJSON = originalStringify(
+      value,
+      (key, val) => {
+        const isNoise = typeof val === "string" && noiseValue.test(val);
+        if (isNoise) return val.toString() + "n";
+        if (typeof val === "bigint") return val.toString() + "n";
+        const hasFunctionReplacer = typeof replacer === "function";
+        if (hasFunctionReplacer) return replacer(key, val);
+        const isKeyInArrayReplacer = Array.isArray(replacer) && replacer.includes(key);
+        if (isKeyInArrayReplacer) return val;
+        return val;
+      },
+      space
+    );
+    const processedJSON = convertedToCustomJSON.replace(
+      bigIntsStringify,
+      "$1$2$3"
+    );
+    const denoisedJSON = processedJSON.replace(noiseStringify, "$1$2$3");
+    return denoisedJSON;
+  } catch (error2) {
+    if (error2 instanceof RangeError) {
+      const convertedJSON = stringifyIteratively(value, replacer, space);
+      if (convertedJSON === void 0) return void 0;
+      const supportsRawJSON = "rawJSON" in JSON;
+      if (supportsRawJSON) return convertedJSON;
+      const processedJSON = convertedJSON.replace(bigIntsStringify, "$1$2$3");
+      return processedJSON.replace(noiseStringify, "$1$2$3");
+    }
+    throw error2;
+  }
+};
+var featureCache = /* @__PURE__ */ new Map();
+var isContextSourceSupported = () => {
+  const parseFingerprint = JSON.parse.toString();
+  if (featureCache.has(parseFingerprint)) {
+    return featureCache.get(parseFingerprint);
+  }
+  try {
+    const result = JSON.parse(
+      "1",
+      (_, __, context2) => !!context2?.source && context2.source === "1"
+    );
+    featureCache.set(parseFingerprint, result);
+    return result;
+  } catch {
+    featureCache.set(parseFingerprint, false);
+    return false;
+  }
+};
+var convertMarkedBigIntsReviver = (key, value, context2, userReviver) => {
+  const isCustomFormatBigInt = typeof value === "string" && customFormat.test(value);
+  if (isCustomFormatBigInt) return BigInt(value.slice(0, -1));
+  const isNoiseValue = typeof value === "string" && noiseValue.test(value);
+  if (isNoiseValue) return value.slice(0, -1);
+  const hasUserReviver = typeof userReviver === "function";
+  if (!hasUserReviver) return value;
+  return userReviver(key, value, context2);
+};
+var JSONParseV2 = (text, reviver) => {
+  return JSON.parse(text, (key, value, context2) => {
+    const isNumber = typeof value === "number";
+    const isOutOfBounds = value > Number.MAX_SAFE_INTEGER || value < Number.MIN_SAFE_INTEGER;
+    const isBigNumber = isNumber && isOutOfBounds;
+    const isInt = context2 && intRegex.test(context2.source);
+    const isBigInt = isBigNumber && isInt;
+    if (isBigInt) return BigInt(context2.source);
+    const hasCustomReviver = typeof reviver === "function";
+    if (!hasCustomReviver) return value;
+    return reviver(key, value, context2);
+  });
+};
+var MAX_INT = Number.MAX_SAFE_INTEGER.toString();
+var MAX_DIGITS = MAX_INT.length;
+var stringsOrLargeNumbers = /"(?:[^"\\]|\\.)*"|-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?/g;
+var noiseValueWithQuotes = /^"-?\d+n+"$/;
+var applyReviverIteratively = (parsed, userReviver) => {
+  const rootHolder = { "": parsed };
+  const stack = [{ parent: rootHolder, key: "", visited: false }];
+  while (stack.length > 0) {
+    const node = stack[stack.length - 1];
+    if (!node.visited) {
+      node.visited = true;
+      const value = node.parent[node.key];
+      const isComplexObject = value !== null && typeof value === "object";
+      if (isComplexObject) {
+        const keys = Object.keys(value);
+        for (let i = keys.length - 1; i >= 0; i--) {
+          stack.push({ parent: value, key: keys[i], visited: false });
+        }
+      }
+    } else {
+      const { parent, key } = node;
+      let value = parent[key];
+      if (typeof value === "string") {
+        const isCustomFormatBigInt = customFormat.test(value);
+        if (isCustomFormatBigInt) {
+          value = BigInt(value.slice(0, -1));
+        } else {
+          const isNoise = noiseValue.test(value);
+          if (isNoise) value = value.slice(0, -1);
+        }
+      }
+      const hasUserReviver = typeof userReviver === "function";
+      if (hasUserReviver) {
+        value = userReviver.call(parent, key, value);
+      }
+      const isDeleted = value === void 0;
+      if (isDeleted) {
+        delete parent[key];
+      } else {
+        parent[key] = value;
+      }
+      stack.pop();
+    }
+  }
+  return rootHolder[""];
+};
+var serializeBigInts = (text) => {
+  return text.replace(
+    stringsOrLargeNumbers,
+    (match, digits, fractional, exponential) => {
+      const isString = match[0] === '"';
+      const isNoise = isString && noiseValueWithQuotes.test(match);
+      if (isNoise) return match.substring(0, match.length - 1) + 'n"';
+      const hasFractionalOrExponential = fractional || exponential;
+      const isLessThanMaxSafeInt = digits && (digits.length < MAX_DIGITS || digits.length === MAX_DIGITS && digits <= MAX_INT);
+      const isStandardValue = isString || hasFractionalOrExponential || isLessThanMaxSafeInt;
+      if (isStandardValue) return match;
+      return '"' + match + 'n"';
+    }
+  );
+};
+var JSONParse = (text, reviver) => {
+  if (!text) return originalParse(text, reviver);
+  try {
+    if (isContextSourceSupported()) return JSONParseV2(text, reviver);
+    const serializedData = serializeBigInts(text);
+    return originalParse(
+      serializedData,
+      (key, value, context2) => convertMarkedBigIntsReviver(key, value, context2, reviver)
+    );
+  } catch (error2) {
+    if (error2 instanceof RangeError) {
+      const serializedData = serializeBigInts(text);
+      const parsed = originalParse(serializedData);
+      return applyReviverIteratively(parsed, reviver);
+    }
+    throw error2;
+  }
+};
+
+// node_modules/@octokit/core/node_modules/@octokit/request-error/dist-src/index.js
 var RequestError = class extends Error {
   name;
   /**
@@ -41726,7 +42146,7 @@ var RequestError = class extends Error {
    */
   response;
   constructor(message, statusCode, options) {
-    super(message);
+    super(message, { cause: options.cause });
     this.name = "HttpError";
     this.status = Number.parseInt(statusCode);
     if (Number.isNaN(this.status)) {
@@ -41749,8 +42169,8 @@ var RequestError = class extends Error {
   }
 };
 
-// packages/post-error-comment/node_modules/@octokit/request/dist-bundle/index.js
-var VERSION2 = "9.2.4";
+// node_modules/@octokit/core/node_modules/@octokit/request/dist-bundle/index.js
+var VERSION2 = "10.0.16";
 var defaults_default = {
   headers: {
     "user-agent": `octokit-request.js/${VERSION2} ${getUserAgent()}`
@@ -41764,6 +42184,7 @@ function isPlainObject2(value) {
   const Ctor = Object.prototype.hasOwnProperty.call(proto, "constructor") && proto.constructor;
   return typeof Ctor === "function" && Ctor instanceof Ctor && Function.prototype.call(Ctor) === Function.prototype.call(value);
 }
+var noop = () => "";
 async function fetchWrapper(requestOptions) {
   const fetch = requestOptions.request?.fetch || globalThis.fetch;
   if (!fetch) {
@@ -41773,7 +42194,7 @@ async function fetchWrapper(requestOptions) {
   }
   const log = requestOptions.request?.log || console;
   const parseSuccessResponseBody = requestOptions.request?.parseSuccessResponseBody !== false;
-  const body = isPlainObject2(requestOptions.body) || Array.isArray(requestOptions.body) ? JSON.stringify(requestOptions.body) : requestOptions.body;
+  const body = isPlainObject2(requestOptions.body) || Array.isArray(requestOptions.body) ? JSONStringify(requestOptions.body) : requestOptions.body;
   const requestHeaders = Object.fromEntries(
     Object.entries(requestOptions.headers).map(([name, value]) => [
       name,
@@ -41865,21 +42286,27 @@ async function fetchWrapper(requestOptions) {
 async function getResponseData(response) {
   const contentType = response.headers.get("content-type");
   if (!contentType) {
-    return response.text().catch(() => "");
+    return response.text().catch(noop);
   }
-  const mimetype = (0, import_fast_content_type_parse.safeParse)(contentType);
+  const mimetype = parse2(contentType);
   if (isJSONResponse(mimetype)) {
     let text = "";
     try {
       text = await response.text();
-      return JSON.parse(text);
+      return JSONParse(text);
     } catch (err) {
       return text;
     }
-  } else if (mimetype.type.startsWith("text/") || mimetype.parameters.charset?.toLowerCase() === "utf-8") {
-    return response.text().catch(() => "");
+  } else if (mimetype.type.startsWith("text/") || // `application/octet-stream` is the canonical "arbitrary binary" type
+  // (RFC 2046) and must never be decoded as text, even when the response
+  // carries a (misleading) `charset=utf-8` parameter — see #751.
+  mimetype.parameters.charset?.toLowerCase() === "utf-8" && mimetype.type !== "application/octet-stream") {
+    return response.text().catch(noop);
   } else {
-    return response.arrayBuffer().catch(() => new ArrayBuffer(0));
+    return response.arrayBuffer().catch(
+      /* v8 ignore next -- @preserve */
+      () => new ArrayBuffer(0)
+    );
   }
 }
 function isJSONResponse(mimetype) {
@@ -41892,9 +42319,10 @@ function toErrorMessage(data) {
   if (data instanceof ArrayBuffer) {
     return "Unknown error";
   }
-  if ("message" in data) {
-    const suffix = "documentation_url" in data ? ` - ${data.documentation_url}` : "";
-    return Array.isArray(data.errors) ? `${data.message}: ${data.errors.map((v) => JSON.stringify(v)).join(", ")}${suffix}` : `${data.message}${suffix}`;
+  if (typeof data === "object" && data !== null && "message" in data) {
+    const objectData = data;
+    const suffix = "documentation_url" in objectData ? ` - ${objectData.documentation_url}` : "";
+    return Array.isArray(objectData.errors) ? `${objectData.message}: ${objectData.errors.map((v) => JSON.stringify(v)).join(", ")}${suffix}` : `${objectData.message}${suffix}`;
   }
   return `Unknown error: ${JSON.stringify(data)}`;
 }
@@ -41923,7 +42351,7 @@ function withDefaults2(oldEndpoint, newDefaults) {
 }
 var request = withDefaults2(endpoint, defaults_default);
 
-// packages/post-error-comment/node_modules/@octokit/graphql/dist-bundle/index.js
+// node_modules/@octokit/core/node_modules/@octokit/graphql/dist-bundle/index.js
 var VERSION3 = "0.0.0-development";
 function _buildMessageForResponseErrors(data) {
   return `Request failed due to following response errors:
@@ -41941,6 +42369,9 @@ var GraphqlResponseError = class extends Error {
       Error.captureStackTrace(this, this.constructor);
     }
   }
+  request;
+  headers;
+  response;
   name = "GraphqlResponseError";
   errors;
   data;
@@ -42030,7 +42461,7 @@ function withCustomRequest(customRequest) {
   });
 }
 
-// packages/post-error-comment/node_modules/@octokit/auth-token/dist-bundle/index.js
+// node_modules/@octokit/core/node_modules/@octokit/auth-token/dist-bundle/index.js
 var b64url = "(?:[a-zA-Z0-9_-]+)";
 var sep = "\\.";
 var jwtRE = new RegExp(`^${b64url}${sep}${b64url}${sep}${b64url}$`);
@@ -42075,20 +42506,20 @@ var createTokenAuth = function createTokenAuth2(token) {
   });
 };
 
-// packages/post-error-comment/node_modules/@octokit/core/dist-src/version.js
-var VERSION4 = "6.1.6";
+// node_modules/@octokit/core/dist-src/version.js
+var VERSION4 = "7.0.8";
 
-// packages/post-error-comment/node_modules/@octokit/core/dist-src/index.js
-var noop = () => {
+// node_modules/@octokit/core/dist-src/index.js
+var noop2 = () => {
 };
 var consoleWarn = console.warn.bind(console);
 var consoleError = console.error.bind(console);
 function createLogger(logger = {}) {
   if (typeof logger.debug !== "function") {
-    logger.debug = noop;
+    logger.debug = noop2;
   }
   if (typeof logger.info !== "function") {
-    logger.info = noop;
+    logger.info = noop2;
   }
   if (typeof logger.warn !== "function") {
     logger.warn = consoleWarn;
@@ -42212,10 +42643,10 @@ var Octokit = class {
   auth;
 };
 
-// packages/post-error-comment/node_modules/@octokit/plugin-request-log/dist-src/version.js
-var VERSION5 = "5.3.1";
+// node_modules/@octokit/plugin-request-log/dist-src/version.js
+var VERSION5 = "6.0.0";
 
-// packages/post-error-comment/node_modules/@octokit/plugin-request-log/dist-src/index.js
+// node_modules/@octokit/plugin-request-log/dist-src/index.js
 function requestLog(octokit) {
   octokit.hook.wrap("request", (request2, options) => {
     octokit.log.debug("request", options);
@@ -42239,7 +42670,7 @@ function requestLog(octokit) {
 }
 requestLog.VERSION = VERSION5;
 
-// packages/post-error-comment/node_modules/@octokit/plugin-paginate-rest/dist-bundle/index.js
+// node_modules/@octokit/plugin-paginate-rest/dist-bundle/index.js
 var VERSION6 = "0.0.0-development";
 function normalizePaginatedListResponse(response) {
   if (!response.data) {
@@ -42248,14 +42679,16 @@ function normalizePaginatedListResponse(response) {
       data: []
     };
   }
-  const responseNeedsNormalization = "total_count" in response.data && !("url" in response.data);
+  const responseNeedsNormalization = ("total_count" in response.data || "total_commits" in response.data) && !("url" in response.data);
   if (!responseNeedsNormalization) return response;
   const incompleteResults = response.data.incomplete_results;
   const repositorySelection = response.data.repository_selection;
   const totalCount = response.data.total_count;
+  const totalCommits = response.data.total_commits;
   delete response.data.incomplete_results;
   delete response.data.repository_selection;
   delete response.data.total_count;
+  delete response.data.total_commits;
   const namespaceKey = Object.keys(response.data)[0];
   const data = response.data[namespaceKey];
   response.data = data;
@@ -42266,6 +42699,7 @@ function normalizePaginatedListResponse(response) {
     response.data.repository_selection = repositorySelection;
   }
   response.data.total_count = totalCount;
+  response.data.total_commits = totalCommits;
   return response;
 }
 function iterator(octokit, route, parameters) {
@@ -42284,6 +42718,16 @@ function iterator(octokit, route, parameters) {
           url = ((normalizedResponse.headers.link || "").match(
             /<([^<>]+)>;\s*rel="next"/
           ) || [])[1];
+          if (!url && "total_commits" in normalizedResponse.data) {
+            const parsedUrl = new URL(normalizedResponse.url);
+            const params = parsedUrl.searchParams;
+            const page = parseInt(params.get("page") || "1", 10);
+            const per_page = parseInt(params.get("per_page") || "250", 10);
+            if (page * per_page < normalizedResponse.data.total_commits) {
+              params.set("page", String(page + 1));
+              url = parsedUrl.toString();
+            }
+          }
           return { value: normalizedResponse };
         } catch (error2) {
           if (error2.status !== 409) throw error2;
@@ -42342,10 +42786,10 @@ function paginateRest(octokit) {
 }
 paginateRest.VERSION = VERSION6;
 
-// packages/post-error-comment/node_modules/@octokit/plugin-rest-endpoint-methods/dist-src/version.js
-var VERSION7 = "13.5.0";
+// node_modules/@octokit/plugin-rest-endpoint-methods/dist-src/version.js
+var VERSION7 = "17.0.0";
 
-// packages/post-error-comment/node_modules/@octokit/plugin-rest-endpoint-methods/dist-src/generated/endpoints.js
+// node_modules/@octokit/plugin-rest-endpoint-methods/dist-src/generated/endpoints.js
 var Endpoints = {
   actions: {
     addCustomLabelsToSelfHostedRunnerForOrg: [
@@ -42403,6 +42847,12 @@ var Endpoints = {
     ],
     deleteArtifact: [
       "DELETE /repos/{owner}/{repo}/actions/artifacts/{artifact_id}"
+    ],
+    deleteCustomImageFromOrg: [
+      "DELETE /orgs/{org}/actions/hosted-runners/images/custom/{image_definition_id}"
+    ],
+    deleteCustomImageVersionFromOrg: [
+      "DELETE /orgs/{org}/actions/hosted-runners/images/custom/{image_definition_id}/versions/{version}"
     ],
     deleteEnvironmentSecret: [
       "DELETE /repos/{owner}/{repo}/environments/{environment_name}/secrets/{secret_name}"
@@ -42477,6 +42927,12 @@ var Endpoints = {
       "GET /repos/{owner}/{repo}/actions/permissions/selected-actions"
     ],
     getArtifact: ["GET /repos/{owner}/{repo}/actions/artifacts/{artifact_id}"],
+    getCustomImageForOrg: [
+      "GET /orgs/{org}/actions/hosted-runners/images/custom/{image_definition_id}"
+    ],
+    getCustomImageVersionForOrg: [
+      "GET /orgs/{org}/actions/hosted-runners/images/custom/{image_definition_id}/versions/{version}"
+    ],
     getCustomOidcSubClaimForRepo: [
       "GET /repos/{owner}/{repo}/actions/oidc/customization/sub"
     ],
@@ -42556,6 +43012,12 @@ var Endpoints = {
       "GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}/timing"
     ],
     listArtifactsForRepo: ["GET /repos/{owner}/{repo}/actions/artifacts"],
+    listCustomImageVersionsForOrg: [
+      "GET /orgs/{org}/actions/hosted-runners/images/custom/{image_definition_id}/versions"
+    ],
+    listCustomImagesForOrg: [
+      "GET /orgs/{org}/actions/hosted-runners/images/custom"
+    ],
     listEnvironmentSecrets: [
       "GET /repos/{owner}/{repo}/environments/{environment_name}/secrets"
     ],
@@ -42814,8 +43276,17 @@ var Endpoints = {
     getGithubActionsBillingUser: [
       "GET /users/{username}/settings/billing/actions"
     ],
+    getGithubBillingPremiumRequestUsageReportOrg: [
+      "GET /organizations/{org}/settings/billing/premium_request/usage"
+    ],
+    getGithubBillingPremiumRequestUsageReportUser: [
+      "GET /users/{username}/settings/billing/premium_request/usage"
+    ],
     getGithubBillingUsageReportOrg: [
       "GET /organizations/{org}/settings/billing/usage"
+    ],
+    getGithubBillingUsageReportUser: [
+      "GET /users/{username}/settings/billing/usage"
     ],
     getGithubPackagesBillingOrg: ["GET /orgs/{org}/settings/billing/packages"],
     getGithubPackagesBillingUser: [
@@ -42827,6 +43298,13 @@ var Endpoints = {
     getSharedStorageBillingUser: [
       "GET /users/{username}/settings/billing/shared-storage"
     ]
+  },
+  campaigns: {
+    createCampaign: ["POST /orgs/{org}/campaigns"],
+    deleteCampaign: ["DELETE /orgs/{org}/campaigns/{campaign_number}"],
+    getCampaignSummary: ["GET /orgs/{org}/campaigns/{campaign_number}"],
+    listOrgCampaigns: ["GET /orgs/{org}/campaigns"],
+    updateCampaign: ["PATCH /orgs/{org}/campaigns/{campaign_number}"]
   },
   checks: {
     create: ["POST /repos/{owner}/{repo}/check-runs"],
@@ -43106,10 +43584,9 @@ var Endpoints = {
     getCopilotSeatDetailsForUser: [
       "GET /orgs/{org}/members/{username}/copilot"
     ],
-    listCopilotSeats: ["GET /orgs/{org}/copilot/billing/seats"],
-    usageMetricsForOrg: ["GET /orgs/{org}/copilot/usage"],
-    usageMetricsForTeam: ["GET /orgs/{org}/team/{team_slug}/copilot/usage"]
+    listCopilotSeats: ["GET /orgs/{org}/copilot/billing/seats"]
   },
+  credentials: { revoke: ["POST /credentials/revoke"] },
   dependabot: {
     addSelectedRepoToOrgSecret: [
       "PUT /orgs/{org}/dependabot/secrets/{secret_name}/repositories/{repository_id}"
@@ -43146,11 +43623,20 @@ var Endpoints = {
     removeSelectedRepoFromOrgSecret: [
       "DELETE /orgs/{org}/dependabot/secrets/{secret_name}/repositories/{repository_id}"
     ],
+    repositoryAccessForOrg: [
+      "GET /organizations/{org}/dependabot/repository-access"
+    ],
+    setRepositoryAccessDefaultLevel: [
+      "PUT /organizations/{org}/dependabot/repository-access/default-level"
+    ],
     setSelectedReposForOrgSecret: [
       "PUT /orgs/{org}/dependabot/secrets/{secret_name}/repositories"
     ],
     updateAlert: [
       "PATCH /repos/{owner}/{repo}/dependabot/alerts/{alert_number}"
+    ],
+    updateRepositoryAccessForOrg: [
+      "PATCH /organizations/{org}/dependabot/repository-access"
     ]
   },
   dependencyGraph: {
@@ -43163,6 +43649,51 @@ var Endpoints = {
     exportSbom: ["GET /repos/{owner}/{repo}/dependency-graph/sbom"]
   },
   emojis: { get: ["GET /emojis"] },
+  enterpriseTeamMemberships: {
+    add: [
+      "PUT /enterprises/{enterprise}/teams/{enterprise-team}/memberships/{username}"
+    ],
+    bulkAdd: [
+      "POST /enterprises/{enterprise}/teams/{enterprise-team}/memberships/add"
+    ],
+    bulkRemove: [
+      "POST /enterprises/{enterprise}/teams/{enterprise-team}/memberships/remove"
+    ],
+    get: [
+      "GET /enterprises/{enterprise}/teams/{enterprise-team}/memberships/{username}"
+    ],
+    list: ["GET /enterprises/{enterprise}/teams/{enterprise-team}/memberships"],
+    remove: [
+      "DELETE /enterprises/{enterprise}/teams/{enterprise-team}/memberships/{username}"
+    ]
+  },
+  enterpriseTeamOrganizations: {
+    add: [
+      "PUT /enterprises/{enterprise}/teams/{enterprise-team}/organizations/{org}"
+    ],
+    bulkAdd: [
+      "POST /enterprises/{enterprise}/teams/{enterprise-team}/organizations/add"
+    ],
+    bulkRemove: [
+      "POST /enterprises/{enterprise}/teams/{enterprise-team}/organizations/remove"
+    ],
+    delete: [
+      "DELETE /enterprises/{enterprise}/teams/{enterprise-team}/organizations/{org}"
+    ],
+    getAssignment: [
+      "GET /enterprises/{enterprise}/teams/{enterprise-team}/organizations/{org}"
+    ],
+    getAssignments: [
+      "GET /enterprises/{enterprise}/teams/{enterprise-team}/organizations"
+    ]
+  },
+  enterpriseTeams: {
+    create: ["POST /enterprises/{enterprise}/teams"],
+    delete: ["DELETE /enterprises/{enterprise}/teams/{team_slug}"],
+    get: ["GET /enterprises/{enterprise}/teams/{team_slug}"],
+    list: ["GET /enterprises/{enterprise}/teams"],
+    update: ["PATCH /enterprises/{enterprise}/teams/{team_slug}"]
+  },
   gists: {
     checkIsStarred: ["GET /gists/{gist_id}/star"],
     create: ["POST /gists"],
@@ -43256,6 +43787,9 @@ var Endpoints = {
     addAssignees: [
       "POST /repos/{owner}/{repo}/issues/{issue_number}/assignees"
     ],
+    addBlockedByDependency: [
+      "POST /repos/{owner}/{repo}/issues/{issue_number}/dependencies/blocked_by"
+    ],
     addLabels: ["POST /repos/{owner}/{repo}/issues/{issue_number}/labels"],
     addSubIssue: [
       "POST /repos/{owner}/{repo}/issues/{issue_number}/sub_issues"
@@ -43282,10 +43816,17 @@ var Endpoints = {
     getEvent: ["GET /repos/{owner}/{repo}/issues/events/{event_id}"],
     getLabel: ["GET /repos/{owner}/{repo}/labels/{name}"],
     getMilestone: ["GET /repos/{owner}/{repo}/milestones/{milestone_number}"],
+    getParent: ["GET /repos/{owner}/{repo}/issues/{issue_number}/parent"],
     list: ["GET /issues"],
     listAssignees: ["GET /repos/{owner}/{repo}/assignees"],
     listComments: ["GET /repos/{owner}/{repo}/issues/{issue_number}/comments"],
     listCommentsForRepo: ["GET /repos/{owner}/{repo}/issues/comments"],
+    listDependenciesBlockedBy: [
+      "GET /repos/{owner}/{repo}/issues/{issue_number}/dependencies/blocked_by"
+    ],
+    listDependenciesBlocking: [
+      "GET /repos/{owner}/{repo}/issues/{issue_number}/dependencies/blocking"
+    ],
     listEvents: ["GET /repos/{owner}/{repo}/issues/{issue_number}/events"],
     listEventsForRepo: ["GET /repos/{owner}/{repo}/issues/events"],
     listEventsForTimeline: [
@@ -43311,6 +43852,9 @@ var Endpoints = {
     ],
     removeAssignees: [
       "DELETE /repos/{owner}/{repo}/issues/{issue_number}/assignees"
+    ],
+    removeDependencyBlockedBy: [
+      "DELETE /repos/{owner}/{repo}/issues/{issue_number}/dependencies/blocked_by/{issue_id}"
     ],
     removeLabel: [
       "DELETE /repos/{owner}/{repo}/issues/{issue_number}/labels/{name}"
@@ -43414,30 +43958,61 @@ var Endpoints = {
     convertMemberToOutsideCollaborator: [
       "PUT /orgs/{org}/outside_collaborators/{username}"
     ],
+    createArtifactStorageRecord: [
+      "POST /orgs/{org}/artifacts/metadata/storage-record"
+    ],
     createInvitation: ["POST /orgs/{org}/invitations"],
     createIssueType: ["POST /orgs/{org}/issue-types"],
-    createOrUpdateCustomProperties: ["PATCH /orgs/{org}/properties/schema"],
-    createOrUpdateCustomPropertiesValuesForRepos: [
-      "PATCH /orgs/{org}/properties/values"
+    createWebhook: ["POST /orgs/{org}/hooks"],
+    customPropertiesForOrgsCreateOrUpdateOrganizationValues: [
+      "PATCH /organizations/{org}/org-properties/values"
     ],
-    createOrUpdateCustomProperty: [
+    customPropertiesForOrgsGetOrganizationValues: [
+      "GET /organizations/{org}/org-properties/values"
+    ],
+    customPropertiesForReposCreateOrUpdateOrganizationDefinition: [
       "PUT /orgs/{org}/properties/schema/{custom_property_name}"
     ],
-    createWebhook: ["POST /orgs/{org}/hooks"],
+    customPropertiesForReposCreateOrUpdateOrganizationDefinitions: [
+      "PATCH /orgs/{org}/properties/schema"
+    ],
+    customPropertiesForReposCreateOrUpdateOrganizationValues: [
+      "PATCH /orgs/{org}/properties/values"
+    ],
+    customPropertiesForReposDeleteOrganizationDefinition: [
+      "DELETE /orgs/{org}/properties/schema/{custom_property_name}"
+    ],
+    customPropertiesForReposGetOrganizationDefinition: [
+      "GET /orgs/{org}/properties/schema/{custom_property_name}"
+    ],
+    customPropertiesForReposGetOrganizationDefinitions: [
+      "GET /orgs/{org}/properties/schema"
+    ],
+    customPropertiesForReposGetOrganizationValues: [
+      "GET /orgs/{org}/properties/values"
+    ],
     delete: ["DELETE /orgs/{org}"],
+    deleteAttestationsBulk: ["POST /orgs/{org}/attestations/delete-request"],
+    deleteAttestationsById: [
+      "DELETE /orgs/{org}/attestations/{attestation_id}"
+    ],
+    deleteAttestationsBySubjectDigest: [
+      "DELETE /orgs/{org}/attestations/digest/{subject_digest}"
+    ],
     deleteIssueType: ["DELETE /orgs/{org}/issue-types/{issue_type_id}"],
     deleteWebhook: ["DELETE /orgs/{org}/hooks/{hook_id}"],
-    enableOrDisableSecurityProductOnAllOrgRepos: [
-      "POST /orgs/{org}/{security_product}/{enablement}",
-      {},
-      {
-        deprecated: "octokit.rest.orgs.enableOrDisableSecurityProductOnAllOrgRepos() is deprecated, see https://docs.github.com/rest/orgs/orgs#enable-or-disable-a-security-feature-for-an-organization"
-      }
+    disableSelectedRepositoryImmutableReleasesOrganization: [
+      "DELETE /orgs/{org}/settings/immutable-releases/repositories/{repository_id}"
+    ],
+    enableSelectedRepositoryImmutableReleasesOrganization: [
+      "PUT /orgs/{org}/settings/immutable-releases/repositories/{repository_id}"
     ],
     get: ["GET /orgs/{org}"],
-    getAllCustomProperties: ["GET /orgs/{org}/properties/schema"],
-    getCustomProperty: [
-      "GET /orgs/{org}/properties/schema/{custom_property_name}"
+    getImmutableReleasesSettings: [
+      "GET /orgs/{org}/settings/immutable-releases"
+    ],
+    getImmutableReleasesSettingsRepositories: [
+      "GET /orgs/{org}/settings/immutable-releases/repositories"
     ],
     getMembershipForAuthenticatedUser: ["GET /user/memberships/orgs/{org}"],
     getMembershipForUser: ["GET /orgs/{org}/memberships/{username}"],
@@ -43453,9 +44028,15 @@ var Endpoints = {
     ],
     list: ["GET /organizations"],
     listAppInstallations: ["GET /orgs/{org}/installations"],
+    listArtifactStorageRecords: [
+      "GET /orgs/{org}/artifacts/{subject_digest}/metadata/storage-records"
+    ],
+    listAttestationRepositories: ["GET /orgs/{org}/attestations/repositories"],
     listAttestations: ["GET /orgs/{org}/attestations/{subject_digest}"],
+    listAttestationsBulk: [
+      "POST /orgs/{org}/attestations/bulk-list{?per_page,before,after}"
+    ],
     listBlockedUsers: ["GET /orgs/{org}/blocks"],
-    listCustomPropertiesValuesForRepos: ["GET /orgs/{org}/properties/values"],
     listFailedInvitations: ["GET /orgs/{org}/failed_invitations"],
     listForAuthenticatedUser: ["GET /user/orgs"],
     listForUser: ["GET /users/{username}/orgs"],
@@ -43493,9 +44074,6 @@ var Endpoints = {
     redeliverWebhookDelivery: [
       "POST /orgs/{org}/hooks/{hook_id}/deliveries/{delivery_id}/attempts"
     ],
-    removeCustomProperty: [
-      "DELETE /orgs/{org}/properties/schema/{custom_property_name}"
-    ],
     removeMember: ["DELETE /orgs/{org}/members/{username}"],
     removeMembershipForUser: ["DELETE /orgs/{org}/memberships/{username}"],
     removeOutsideCollaborator: [
@@ -43528,6 +44106,12 @@ var Endpoints = {
     ],
     revokeOrgRoleUser: [
       "DELETE /orgs/{org}/organization-roles/users/{username}/{role_id}"
+    ],
+    setImmutableReleasesSettings: [
+      "PUT /orgs/{org}/settings/immutable-releases"
+    ],
+    setImmutableReleasesSettingsRepositories: [
+      "PUT /orgs/{org}/settings/immutable-releases/repositories"
     ],
     setMembershipForUser: ["PUT /orgs/{org}/memberships/{username}"],
     setPublicMembershipForAuthenticatedUser: [
@@ -43649,180 +44233,43 @@ var Endpoints = {
     ]
   },
   projects: {
-    addCollaborator: [
-      "PUT /projects/{project_id}/collaborators/{username}",
-      {},
-      {
-        deprecated: "octokit.rest.projects.addCollaborator() is deprecated, see https://docs.github.com/rest/projects/collaborators#add-project-collaborator"
-      }
+    addItemForOrg: ["POST /orgs/{org}/projectsV2/{project_number}/items"],
+    addItemForUser: [
+      "POST /users/{username}/projectsV2/{project_number}/items"
     ],
-    createCard: [
-      "POST /projects/columns/{column_id}/cards",
-      {},
-      {
-        deprecated: "octokit.rest.projects.createCard() is deprecated, see https://docs.github.com/rest/projects/cards#create-a-project-card"
-      }
+    deleteItemForOrg: [
+      "DELETE /orgs/{org}/projectsV2/{project_number}/items/{item_id}"
     ],
-    createColumn: [
-      "POST /projects/{project_id}/columns",
-      {},
-      {
-        deprecated: "octokit.rest.projects.createColumn() is deprecated, see https://docs.github.com/rest/projects/columns#create-a-project-column"
-      }
+    deleteItemForUser: [
+      "DELETE /users/{username}/projectsV2/{project_number}/items/{item_id}"
     ],
-    createForAuthenticatedUser: [
-      "POST /user/projects",
-      {},
-      {
-        deprecated: "octokit.rest.projects.createForAuthenticatedUser() is deprecated, see https://docs.github.com/rest/projects/projects#create-a-user-project"
-      }
+    getFieldForOrg: [
+      "GET /orgs/{org}/projectsV2/{project_number}/fields/{field_id}"
     ],
-    createForOrg: [
-      "POST /orgs/{org}/projects",
-      {},
-      {
-        deprecated: "octokit.rest.projects.createForOrg() is deprecated, see https://docs.github.com/rest/projects/projects#create-an-organization-project"
-      }
+    getFieldForUser: [
+      "GET /users/{username}/projectsV2/{project_number}/fields/{field_id}"
     ],
-    createForRepo: [
-      "POST /repos/{owner}/{repo}/projects",
-      {},
-      {
-        deprecated: "octokit.rest.projects.createForRepo() is deprecated, see https://docs.github.com/rest/projects/projects#create-a-repository-project"
-      }
+    getForOrg: ["GET /orgs/{org}/projectsV2/{project_number}"],
+    getForUser: ["GET /users/{username}/projectsV2/{project_number}"],
+    getOrgItem: ["GET /orgs/{org}/projectsV2/{project_number}/items/{item_id}"],
+    getUserItem: [
+      "GET /users/{username}/projectsV2/{project_number}/items/{item_id}"
     ],
-    delete: [
-      "DELETE /projects/{project_id}",
-      {},
-      {
-        deprecated: "octokit.rest.projects.delete() is deprecated, see https://docs.github.com/rest/projects/projects#delete-a-project"
-      }
+    listFieldsForOrg: ["GET /orgs/{org}/projectsV2/{project_number}/fields"],
+    listFieldsForUser: [
+      "GET /users/{username}/projectsV2/{project_number}/fields"
     ],
-    deleteCard: [
-      "DELETE /projects/columns/cards/{card_id}",
-      {},
-      {
-        deprecated: "octokit.rest.projects.deleteCard() is deprecated, see https://docs.github.com/rest/projects/cards#delete-a-project-card"
-      }
+    listForOrg: ["GET /orgs/{org}/projectsV2"],
+    listForUser: ["GET /users/{username}/projectsV2"],
+    listItemsForOrg: ["GET /orgs/{org}/projectsV2/{project_number}/items"],
+    listItemsForUser: [
+      "GET /users/{username}/projectsV2/{project_number}/items"
     ],
-    deleteColumn: [
-      "DELETE /projects/columns/{column_id}",
-      {},
-      {
-        deprecated: "octokit.rest.projects.deleteColumn() is deprecated, see https://docs.github.com/rest/projects/columns#delete-a-project-column"
-      }
+    updateItemForOrg: [
+      "PATCH /orgs/{org}/projectsV2/{project_number}/items/{item_id}"
     ],
-    get: [
-      "GET /projects/{project_id}",
-      {},
-      {
-        deprecated: "octokit.rest.projects.get() is deprecated, see https://docs.github.com/rest/projects/projects#get-a-project"
-      }
-    ],
-    getCard: [
-      "GET /projects/columns/cards/{card_id}",
-      {},
-      {
-        deprecated: "octokit.rest.projects.getCard() is deprecated, see https://docs.github.com/rest/projects/cards#get-a-project-card"
-      }
-    ],
-    getColumn: [
-      "GET /projects/columns/{column_id}",
-      {},
-      {
-        deprecated: "octokit.rest.projects.getColumn() is deprecated, see https://docs.github.com/rest/projects/columns#get-a-project-column"
-      }
-    ],
-    getPermissionForUser: [
-      "GET /projects/{project_id}/collaborators/{username}/permission",
-      {},
-      {
-        deprecated: "octokit.rest.projects.getPermissionForUser() is deprecated, see https://docs.github.com/rest/projects/collaborators#get-project-permission-for-a-user"
-      }
-    ],
-    listCards: [
-      "GET /projects/columns/{column_id}/cards",
-      {},
-      {
-        deprecated: "octokit.rest.projects.listCards() is deprecated, see https://docs.github.com/rest/projects/cards#list-project-cards"
-      }
-    ],
-    listCollaborators: [
-      "GET /projects/{project_id}/collaborators",
-      {},
-      {
-        deprecated: "octokit.rest.projects.listCollaborators() is deprecated, see https://docs.github.com/rest/projects/collaborators#list-project-collaborators"
-      }
-    ],
-    listColumns: [
-      "GET /projects/{project_id}/columns",
-      {},
-      {
-        deprecated: "octokit.rest.projects.listColumns() is deprecated, see https://docs.github.com/rest/projects/columns#list-project-columns"
-      }
-    ],
-    listForOrg: [
-      "GET /orgs/{org}/projects",
-      {},
-      {
-        deprecated: "octokit.rest.projects.listForOrg() is deprecated, see https://docs.github.com/rest/projects/projects#list-organization-projects"
-      }
-    ],
-    listForRepo: [
-      "GET /repos/{owner}/{repo}/projects",
-      {},
-      {
-        deprecated: "octokit.rest.projects.listForRepo() is deprecated, see https://docs.github.com/rest/projects/projects#list-repository-projects"
-      }
-    ],
-    listForUser: [
-      "GET /users/{username}/projects",
-      {},
-      {
-        deprecated: "octokit.rest.projects.listForUser() is deprecated, see https://docs.github.com/rest/projects/projects#list-user-projects"
-      }
-    ],
-    moveCard: [
-      "POST /projects/columns/cards/{card_id}/moves",
-      {},
-      {
-        deprecated: "octokit.rest.projects.moveCard() is deprecated, see https://docs.github.com/rest/projects/cards#move-a-project-card"
-      }
-    ],
-    moveColumn: [
-      "POST /projects/columns/{column_id}/moves",
-      {},
-      {
-        deprecated: "octokit.rest.projects.moveColumn() is deprecated, see https://docs.github.com/rest/projects/columns#move-a-project-column"
-      }
-    ],
-    removeCollaborator: [
-      "DELETE /projects/{project_id}/collaborators/{username}",
-      {},
-      {
-        deprecated: "octokit.rest.projects.removeCollaborator() is deprecated, see https://docs.github.com/rest/projects/collaborators#remove-user-as-a-collaborator"
-      }
-    ],
-    update: [
-      "PATCH /projects/{project_id}",
-      {},
-      {
-        deprecated: "octokit.rest.projects.update() is deprecated, see https://docs.github.com/rest/projects/projects#update-a-project"
-      }
-    ],
-    updateCard: [
-      "PATCH /projects/columns/cards/{card_id}",
-      {},
-      {
-        deprecated: "octokit.rest.projects.updateCard() is deprecated, see https://docs.github.com/rest/projects/cards#update-an-existing-project-card"
-      }
-    ],
-    updateColumn: [
-      "PATCH /projects/columns/{column_id}",
-      {},
-      {
-        deprecated: "octokit.rest.projects.updateColumn() is deprecated, see https://docs.github.com/rest/projects/columns#update-an-existing-project-column"
-      }
+    updateItemForUser: [
+      "PATCH /users/{username}/projectsV2/{project_number}/items/{item_id}"
     ]
   },
   pulls: {
@@ -43985,6 +44432,7 @@ var Endpoints = {
       "GET /repos/{owner}/{repo}/automated-security-fixes"
     ],
     checkCollaborator: ["GET /repos/{owner}/{repo}/collaborators/{username}"],
+    checkImmutableReleases: ["GET /repos/{owner}/{repo}/immutable-releases"],
     checkPrivateVulnerabilityReporting: [
       "GET /repos/{owner}/{repo}/private-vulnerability-reporting"
     ],
@@ -44020,9 +44468,6 @@ var Endpoints = {
     createForAuthenticatedUser: ["POST /user/repos"],
     createFork: ["POST /repos/{owner}/{repo}/forks"],
     createInOrg: ["POST /orgs/{org}/repos"],
-    createOrUpdateCustomPropertiesValues: [
-      "PATCH /repos/{owner}/{repo}/properties/values"
-    ],
     createOrUpdateEnvironment: [
       "PUT /repos/{owner}/{repo}/environments/{environment_name}"
     ],
@@ -44036,6 +44481,12 @@ var Endpoints = {
       "POST /repos/{template_owner}/{template_repo}/generate"
     ],
     createWebhook: ["POST /repos/{owner}/{repo}/hooks"],
+    customPropertiesForReposCreateOrUpdateRepositoryValues: [
+      "PATCH /repos/{owner}/{repo}/properties/values"
+    ],
+    customPropertiesForReposGetRepositoryValues: [
+      "GET /repos/{owner}/{repo}/properties/values"
+    ],
     declineInvitation: [
       "DELETE /user/repository_invitations/{invitation_id}",
       {},
@@ -44090,6 +44541,9 @@ var Endpoints = {
     disableDeploymentProtectionRule: [
       "DELETE /repos/{owner}/{repo}/environments/{environment_name}/deployment_protection_rules/{protection_rule_id}"
     ],
+    disableImmutableReleases: [
+      "DELETE /repos/{owner}/{repo}/immutable-releases"
+    ],
     disablePrivateVulnerabilityReporting: [
       "DELETE /repos/{owner}/{repo}/private-vulnerability-reporting"
     ],
@@ -44106,6 +44560,7 @@ var Endpoints = {
     enableAutomatedSecurityFixes: [
       "PUT /repos/{owner}/{repo}/automated-security-fixes"
     ],
+    enableImmutableReleases: ["PUT /repos/{owner}/{repo}/immutable-releases"],
     enablePrivateVulnerabilityReporting: [
       "PUT /repos/{owner}/{repo}/private-vulnerability-reporting"
     ],
@@ -44157,7 +44612,6 @@ var Endpoints = {
     getCustomDeploymentProtectionRule: [
       "GET /repos/{owner}/{repo}/environments/{environment_name}/deployment_protection_rules/{protection_rule_id}"
     ],
-    getCustomPropertiesValues: ["GET /repos/{owner}/{repo}/properties/values"],
     getDeployKey: ["GET /repos/{owner}/{repo}/keys/{key_id}"],
     getDeployment: ["GET /repos/{owner}/{repo}/deployments/{deployment_id}"],
     getDeploymentBranchPolicy: [
@@ -44375,13 +44829,7 @@ var Endpoints = {
   search: {
     code: ["GET /search/code"],
     commits: ["GET /search/commits"],
-    issuesAndPullRequests: [
-      "GET /search/issues",
-      {},
-      {
-        deprecated: "octokit.rest.search.issuesAndPullRequests() is deprecated, see https://docs.github.com/rest/search/search#search-issues-and-pull-requests"
-      }
-    ],
+    issuesAndPullRequests: ["GET /search/issues"],
     labels: ["GET /search/labels"],
     repos: ["GET /search/repositories"],
     topics: ["GET /search/topics"],
@@ -44395,16 +44843,19 @@ var Endpoints = {
       "GET /repos/{owner}/{repo}/secret-scanning/alerts/{alert_number}"
     ],
     getScanHistory: ["GET /repos/{owner}/{repo}/secret-scanning/scan-history"],
-    listAlertsForEnterprise: [
-      "GET /enterprises/{enterprise}/secret-scanning/alerts"
-    ],
     listAlertsForOrg: ["GET /orgs/{org}/secret-scanning/alerts"],
     listAlertsForRepo: ["GET /repos/{owner}/{repo}/secret-scanning/alerts"],
     listLocationsForAlert: [
       "GET /repos/{owner}/{repo}/secret-scanning/alerts/{alert_number}/locations"
     ],
+    listOrgPatternConfigs: [
+      "GET /orgs/{org}/secret-scanning/pattern-configurations"
+    ],
     updateAlert: [
       "PATCH /repos/{owner}/{repo}/secret-scanning/alerts/{alert_number}"
+    ],
+    updateOrgPatternConfigs: [
+      "PATCH /orgs/{org}/secret-scanning/pattern-configurations"
     ]
   },
   securityAdvisories: {
@@ -44435,36 +44886,8 @@ var Endpoints = {
     addOrUpdateMembershipForUserInOrg: [
       "PUT /orgs/{org}/teams/{team_slug}/memberships/{username}"
     ],
-    addOrUpdateProjectPermissionsInOrg: [
-      "PUT /orgs/{org}/teams/{team_slug}/projects/{project_id}",
-      {},
-      {
-        deprecated: "octokit.rest.teams.addOrUpdateProjectPermissionsInOrg() is deprecated, see https://docs.github.com/rest/teams/teams#add-or-update-team-project-permissions"
-      }
-    ],
-    addOrUpdateProjectPermissionsLegacy: [
-      "PUT /teams/{team_id}/projects/{project_id}",
-      {},
-      {
-        deprecated: "octokit.rest.teams.addOrUpdateProjectPermissionsLegacy() is deprecated, see https://docs.github.com/rest/teams/teams#add-or-update-team-project-permissions-legacy"
-      }
-    ],
     addOrUpdateRepoPermissionsInOrg: [
       "PUT /orgs/{org}/teams/{team_slug}/repos/{owner}/{repo}"
-    ],
-    checkPermissionsForProjectInOrg: [
-      "GET /orgs/{org}/teams/{team_slug}/projects/{project_id}",
-      {},
-      {
-        deprecated: "octokit.rest.teams.checkPermissionsForProjectInOrg() is deprecated, see https://docs.github.com/rest/teams/teams#check-team-permissions-for-a-project"
-      }
-    ],
-    checkPermissionsForProjectLegacy: [
-      "GET /teams/{team_id}/projects/{project_id}",
-      {},
-      {
-        deprecated: "octokit.rest.teams.checkPermissionsForProjectLegacy() is deprecated, see https://docs.github.com/rest/teams/teams#check-team-permissions-for-a-project-legacy"
-      }
     ],
     checkPermissionsForRepoInOrg: [
       "GET /orgs/{org}/teams/{team_slug}/repos/{owner}/{repo}"
@@ -44502,37 +44925,9 @@ var Endpoints = {
     listPendingInvitationsInOrg: [
       "GET /orgs/{org}/teams/{team_slug}/invitations"
     ],
-    listProjectsInOrg: [
-      "GET /orgs/{org}/teams/{team_slug}/projects",
-      {},
-      {
-        deprecated: "octokit.rest.teams.listProjectsInOrg() is deprecated, see https://docs.github.com/rest/teams/teams#list-team-projects"
-      }
-    ],
-    listProjectsLegacy: [
-      "GET /teams/{team_id}/projects",
-      {},
-      {
-        deprecated: "octokit.rest.teams.listProjectsLegacy() is deprecated, see https://docs.github.com/rest/teams/teams#list-team-projects-legacy"
-      }
-    ],
     listReposInOrg: ["GET /orgs/{org}/teams/{team_slug}/repos"],
     removeMembershipForUserInOrg: [
       "DELETE /orgs/{org}/teams/{team_slug}/memberships/{username}"
-    ],
-    removeProjectInOrg: [
-      "DELETE /orgs/{org}/teams/{team_slug}/projects/{project_id}",
-      {},
-      {
-        deprecated: "octokit.rest.teams.removeProjectInOrg() is deprecated, see https://docs.github.com/rest/teams/teams#remove-a-project-from-a-team"
-      }
-    ],
-    removeProjectLegacy: [
-      "DELETE /teams/{team_id}/projects/{project_id}",
-      {},
-      {
-        deprecated: "octokit.rest.teams.removeProjectLegacy() is deprecated, see https://docs.github.com/rest/teams/teams#remove-a-project-from-a-team-legacy"
-      }
     ],
     removeRepoInOrg: [
       "DELETE /orgs/{org}/teams/{team_slug}/repos/{owner}/{repo}"
@@ -44570,6 +44965,15 @@ var Endpoints = {
     ],
     createPublicSshKeyForAuthenticatedUser: ["POST /user/keys"],
     createSshSigningKeyForAuthenticatedUser: ["POST /user/ssh_signing_keys"],
+    deleteAttestationsBulk: [
+      "POST /users/{username}/attestations/delete-request"
+    ],
+    deleteAttestationsById: [
+      "DELETE /users/{username}/attestations/{attestation_id}"
+    ],
+    deleteAttestationsBySubjectDigest: [
+      "DELETE /users/{username}/attestations/digest/{subject_digest}"
+    ],
     deleteEmailForAuthenticated: [
       "DELETE /user/emails",
       {},
@@ -44614,6 +45018,9 @@ var Endpoints = {
     ],
     list: ["GET /users"],
     listAttestations: ["GET /users/{username}/attestations/{subject_digest}"],
+    listAttestationsBulk: [
+      "POST /users/{username}/attestations/bulk-list{?per_page,before,after}"
+    ],
     listBlockedByAuthenticated: [
       "GET /user/blocks",
       {},
@@ -44674,7 +45081,7 @@ var Endpoints = {
 };
 var endpoints_default = Endpoints;
 
-// packages/post-error-comment/node_modules/@octokit/plugin-rest-endpoint-methods/dist-src/endpoints-to-methods.js
+// node_modules/@octokit/plugin-rest-endpoint-methods/dist-src/endpoints-to-methods.js
 var endpointMethodsMap = /* @__PURE__ */ new Map();
 for (const [scope, endpoints] of Object.entries(endpoints_default)) {
   for (const [methodName, endpoint2] of Object.entries(endpoints)) {
@@ -44797,7 +45204,7 @@ function decorate(octokit, scope, methodName, defaults, decorations) {
   return Object.assign(withDecorations, requestWithDefaults);
 }
 
-// packages/post-error-comment/node_modules/@octokit/plugin-rest-endpoint-methods/dist-src/index.js
+// node_modules/@octokit/plugin-rest-endpoint-methods/dist-src/index.js
 function restEndpointMethods(octokit) {
   const api = endpointsToMethods(octokit);
   return {
@@ -44814,10 +45221,10 @@ function legacyRestEndpointMethods(octokit) {
 }
 legacyRestEndpointMethods.VERSION = VERSION7;
 
-// packages/post-error-comment/node_modules/@octokit/rest/dist-src/version.js
-var VERSION8 = "21.1.1";
+// node_modules/@octokit/rest/dist-src/version.js
+var VERSION8 = "22.0.1";
 
-// packages/post-error-comment/node_modules/@octokit/rest/dist-src/index.js
+// node_modules/@octokit/rest/dist-src/index.js
 var Octokit2 = Octokit.plugin(requestLog, legacyRestEndpointMethods, paginateRest).defaults(
   {
     userAgent: `octokit-rest.js/${VERSION8}`
@@ -44902,4 +45309,21 @@ undici/lib/fetch/body.js:
 undici/lib/web/websocket/frame.js:
 undici/lib/websocket/frame.js:
   (*! ws. MIT License. Einar Otto Stangvik <einaros@gmail.com> *)
+
+content-type/dist/index.js:
+  (*!
+   * content-type
+   * Copyright(c) 2015 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+@octokit/request-error/dist-src/index.js:
+  (* v8 ignore else -- @preserve -- Bug with vitest coverage where it sees an else branch that doesn't exist *)
+
+@octokit/request/dist-bundle/index.js:
+  (* v8 ignore next -- @preserve *)
+  (* v8 ignore else -- @preserve *)
+
+@octokit/graphql/dist-bundle/index.js:
+  (* v8 ignore if -- @preserve *)
 */
