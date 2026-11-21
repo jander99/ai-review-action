@@ -19,6 +19,12 @@
       "matchPackageNames": ["@anthropic-ai/sdk", "openai", "@google/genai", "@typesafe-ai/sdk"],
       "groupName": "provider SDKs",
       "automerge": false
+    },
+    {
+      "description": "Nx 24 cannot load TypeScript 7 (tsModule.readConfigFile is not a function); hold majors until Nx supports it",
+      "matchPackageNames": ["typescript"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
     }
   ]
 }

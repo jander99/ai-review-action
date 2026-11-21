@@ -50,6 +50,9 @@ jobs:
         run: yarn nx run run-reviews:build-tests --skip-nx-cache
 
       - name: Check dist is up to date
+        # Renovate cannot rebuild bundles; dist-sync.yml rebuilds and
+        # commits them to main after a Renovate PR merges.
+        if: ${{ !startsWith(github.head_ref, 'renovate/') }}
         run: |
           set -euo pipefail
           # Phase 3: the root action is a single JS bundle under
