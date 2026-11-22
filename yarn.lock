@@ -66,9 +66,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@anthropic-ai/sdk@npm:1.11.0":
-  version: 1.11.0
-  resolution: "@anthropic-ai/sdk@npm:1.11.0"
+"@anthropic-ai/sdk@npm:1.12.0":
+  version: 1.12.0
+  resolution: "@anthropic-ai/sdk@npm:1.12.0"
   dependencies:
     "@opentelemetry/api": "npm:^1.4.1"
     json-schema-to-ts: "npm:^3.1.1"
@@ -80,7 +80,7 @@ __metadata:
       optional: true
   bin:
     anthropic-ai-sdk: bin/cli
-  checksum: 10c0/d6f95b068be686e9ee53d2abb79c286fc58996ff8746eb282c469e7cffa171a6aa067de7cb06aaf8f47c91ada2c286f862916fd5934fba86d9559596d683ed10
+  checksum: 10c0/4e534653387bb1a7712863985ab0b9a44446a5fb9be4a30a547e018ca176de45585529580abeb4728fa49bb0d1c7f2e2a214327b3ffcfd25b815d3b3cb44229b
   languageName: node
   linkType: hard
 
@@ -1613,7 +1613,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@jander99/ai-review-llm-clients@workspace:packages/llm-clients"
   dependencies:
-    "@anthropic-ai/sdk": "npm:1.11.0"
+    "@anthropic-ai/sdk": "npm:1.12.0"
     "@google/genai": "npm:3.6.1"
     ajv: "npm:8.20.0"
     openai: "npm:7.62.0"
