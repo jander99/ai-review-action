@@ -1626,7 +1626,6 @@ __metadata:
   dependencies:
     "@actions/core": "npm:^3.0.0"
     "@actions/github": "npm:^9.0.0"
-    "@octokit/rest": "npm:^22.0.0"
   languageName: unknown
   linkType: soft
 
@@ -1634,8 +1633,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@jander99/ai-review-previous-reviews@workspace:packages/previous-reviews"
   dependencies:
+    "@actions/github": "npm:^9.0.0"
     "@jander99/ai-review-review-contract": "npm:1.0.0"
-    "@octokit/rest": "npm:^22.0.0"
   languageName: unknown
   linkType: soft
 
@@ -1660,7 +1659,6 @@ __metadata:
   dependencies:
     "@actions/core": "npm:^3.0.0"
     "@actions/github": "npm:^9.0.0"
-    "@octokit/rest": "npm:^22.0.0"
   languageName: unknown
   linkType: soft
 
@@ -1971,15 +1969,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@octokit/plugin-request-log@npm:^6.0.0":
-  version: 6.0.0
-  resolution: "@octokit/plugin-request-log@npm:6.0.0"
-  peerDependencies:
-    "@octokit/core": ">=6"
-  checksum: 10c0/40e46ad0c77235742d0bf698ab4e17df1ae06e0d7824ffc5867ed71e27de860875adb73d89629b823fe8647459a8f262c26ed1aa6ee374873fa94095f37df0bb
-  languageName: node
-  linkType: hard
-
 "@octokit/plugin-rest-endpoint-methods@npm:^17.0.0":
   version: 17.0.0
   resolution: "@octokit/plugin-rest-endpoint-methods@npm:17.0.0"
@@ -2011,18 +2000,6 @@ __metadata:
     json-with-bigint: "npm:^3.5.12"
     universal-user-agent: "npm:^7.0.2"
   checksum: 10c0/db3f1d1ab32f2238889c07ac2d0e4d9ec39afa7614a6c19e15136bad12118c4b538ccfb6a013c89ba8d1074da13efe8bb489d0557bce6cc7d5894587a7beded6
-  languageName: node
-  linkType: hard
-
-"@octokit/rest@npm:^22.0.0":
-  version: 22.0.1
-  resolution: "@octokit/rest@npm:22.0.1"
-  dependencies:
-    "@octokit/core": "npm:^7.0.6"
-    "@octokit/plugin-paginate-rest": "npm:^14.0.0"
-    "@octokit/plugin-request-log": "npm:^6.0.0"
-    "@octokit/plugin-rest-endpoint-methods": "npm:^17.0.0"
-  checksum: 10c0/f3abd84e887cc837973214ce70720a9bba53f5575f40601c6122aa25206e9055d859c0388437f0a137f6cd0e4ff405e1b46b903475b0db32a17bada0c6513d5b
   languageName: node
   linkType: hard
 
@@ -2489,7 +2466,6 @@ __metadata:
     "@actions/github": "npm:^9.0.0"
     "@nx/esbuild": "npm:24.0.6"
     "@nx/js": "npm:24.0.6"
-    "@octokit/rest": "npm:^22.0.0"
     "@types/node": "npm:26.6.6"
     esbuild: "npm:0.28.2"
     knip: "npm:6.47.0"

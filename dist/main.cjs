@@ -19161,6 +19161,63 @@ var require_undici = __commonJS({
   }
 });
 
+// node_modules/@actions/github/lib/context.js
+var import_fs2, import_os3, Context;
+var init_context = __esm({
+  "node_modules/@actions/github/lib/context.js"() {
+    "use strict";
+    import_fs2 = require("fs");
+    import_os3 = require("os");
+    Context = class {
+      /**
+       * Hydrate the context from the environment
+       */
+      constructor() {
+        var _a7, _b, _c;
+        this.payload = {};
+        if (process.env.GITHUB_EVENT_PATH) {
+          if ((0, import_fs2.existsSync)(process.env.GITHUB_EVENT_PATH)) {
+            this.payload = JSON.parse((0, import_fs2.readFileSync)(process.env.GITHUB_EVENT_PATH, { encoding: "utf8" }));
+          } else {
+            const path9 = process.env.GITHUB_EVENT_PATH;
+            process.stdout.write(`GITHUB_EVENT_PATH ${path9} does not exist${import_os3.EOL}`);
+          }
+        }
+        this.eventName = process.env.GITHUB_EVENT_NAME;
+        this.sha = process.env.GITHUB_SHA;
+        this.ref = process.env.GITHUB_REF;
+        this.workflow = process.env.GITHUB_WORKFLOW;
+        this.action = process.env.GITHUB_ACTION;
+        this.actor = process.env.GITHUB_ACTOR;
+        this.job = process.env.GITHUB_JOB;
+        this.runAttempt = parseInt(process.env.GITHUB_RUN_ATTEMPT, 10);
+        this.runNumber = parseInt(process.env.GITHUB_RUN_NUMBER, 10);
+        this.runId = parseInt(process.env.GITHUB_RUN_ID, 10);
+        this.apiUrl = (_a7 = process.env.GITHUB_API_URL) !== null && _a7 !== void 0 ? _a7 : `https://api.github.com`;
+        this.serverUrl = (_b = process.env.GITHUB_SERVER_URL) !== null && _b !== void 0 ? _b : `https://github.com`;
+        this.graphqlUrl = (_c = process.env.GITHUB_GRAPHQL_URL) !== null && _c !== void 0 ? _c : `https://api.github.com/graphql`;
+      }
+      get issue() {
+        const payload = this.payload;
+        return Object.assign(Object.assign({}, this.repo), { number: (payload.issue || payload.pull_request || payload).number });
+      }
+      get repo() {
+        if (process.env.GITHUB_REPOSITORY) {
+          const [owner, repo] = process.env.GITHUB_REPOSITORY.split("/");
+          return { owner, repo };
+        }
+        if (this.payload.repository) {
+          return {
+            owner: this.payload.repository.owner.login,
+            repo: this.payload.repository.name
+          };
+        }
+        throw new Error("context.repo requires a GITHUB_REPOSITORY environment variable like 'owner/repo'");
+      }
+    };
+  }
+});
+
 // node_modules/@actions/github/node_modules/@actions/http-client/lib/proxy.js
 var require_proxy = __commonJS({
   "node_modules/@actions/github/node_modules/@actions/http-client/lib/proxy.js"(exports2) {
@@ -19930,6 +19987,82 @@ var require_lib = __commonJS({
     };
     exports2.HttpClient = HttpClient3;
     var lowercaseKeys2 = (obj) => Object.keys(obj).reduce((c, k) => (c[k.toLowerCase()] = obj[k], c), {});
+  }
+});
+
+// node_modules/@actions/github/lib/internal/utils.js
+function getAuthString(token, options) {
+  if (!token && !options.auth) {
+    throw new Error("Parameter token or opts.auth is required");
+  } else if (token && options.auth) {
+    throw new Error("Parameters token and opts.auth may not both be specified");
+  }
+  return typeof options.auth === "string" ? options.auth : `token ${token}`;
+}
+function getProxyAgent(destinationUrl) {
+  const hc = new httpClient.HttpClient();
+  return hc.getAgent(destinationUrl);
+}
+function getProxyAgentDispatcher(destinationUrl) {
+  const hc = new httpClient.HttpClient();
+  return hc.getAgentDispatcher(destinationUrl);
+}
+function getProxyFetch(destinationUrl) {
+  const httpDispatcher = getProxyAgentDispatcher(destinationUrl);
+  const proxyFetch = (url, opts) => __awaiter2(this, void 0, void 0, function* () {
+    return (0, import_undici2.fetch)(url, Object.assign(Object.assign({}, opts), { dispatcher: httpDispatcher }));
+  });
+  return proxyFetch;
+}
+function getApiBaseUrl() {
+  return process.env["GITHUB_API_URL"] || "https://api.github.com";
+}
+function getUserAgentWithOrchestrationId(baseUserAgent) {
+  var _a7;
+  const orchId = (_a7 = process.env["ACTIONS_ORCHESTRATION_ID"]) === null || _a7 === void 0 ? void 0 : _a7.trim();
+  if (orchId) {
+    const sanitizedId = orchId.replace(/[^a-z0-9_.-]/gi, "_");
+    const tag = `actions_orchestration_id/${sanitizedId}`;
+    if (baseUserAgent === null || baseUserAgent === void 0 ? void 0 : baseUserAgent.includes(tag))
+      return baseUserAgent;
+    const ua = baseUserAgent ? `${baseUserAgent} ` : "";
+    return `${ua}${tag}`;
+  }
+  return baseUserAgent;
+}
+var httpClient, import_undici2, __awaiter2;
+var init_utils = __esm({
+  "node_modules/@actions/github/lib/internal/utils.js"() {
+    "use strict";
+    httpClient = __toESM(require_lib(), 1);
+    import_undici2 = __toESM(require_undici(), 1);
+    __awaiter2 = function(thisArg, _arguments, P, generator) {
+      function adopt(value) {
+        return value instanceof P ? value : new P(function(resolve3) {
+          resolve3(value);
+        });
+      }
+      return new (P || (P = Promise))(function(resolve3, reject) {
+        function fulfilled(value) {
+          try {
+            step(generator.next(value));
+          } catch (e2) {
+            reject(e2);
+          }
+        }
+        function rejected(value) {
+          try {
+            step(generator["throw"](value));
+          } catch (e2) {
+            reject(e2);
+          }
+        }
+        function step(result) {
+          result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
+        }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+      });
+    };
   }
 });
 
@@ -24072,6 +24205,62 @@ var init_dist_bundle5 = __esm({
       iterator
     });
     paginateRest.VERSION = VERSION6;
+  }
+});
+
+// node_modules/@actions/github/lib/utils.js
+function getOctokitOptions(token, options) {
+  const opts = Object.assign({}, options || {});
+  const auth2 = getAuthString(token, opts);
+  if (auth2) {
+    opts.auth = auth2;
+  }
+  const userAgent2 = getUserAgentWithOrchestrationId(opts.userAgent);
+  if (userAgent2) {
+    opts.userAgent = userAgent2;
+  }
+  return opts;
+}
+var context, baseUrl, defaults, GitHub;
+var init_utils2 = __esm({
+  "node_modules/@actions/github/lib/utils.js"() {
+    "use strict";
+    init_context();
+    init_utils();
+    init_dist_src2();
+    init_dist_src3();
+    init_dist_bundle5();
+    init_utils();
+    context = new Context();
+    baseUrl = getApiBaseUrl();
+    defaults = {
+      baseUrl,
+      request: {
+        agent: getProxyAgent(baseUrl),
+        fetch: getProxyFetch(baseUrl)
+      }
+    };
+    GitHub = Octokit.plugin(restEndpointMethods, paginateRest).defaults(defaults);
+  }
+});
+
+// node_modules/@actions/github/lib/github.js
+var github_exports = {};
+__export(github_exports, {
+  context: () => context2,
+  getOctokit: () => getOctokit
+});
+function getOctokit(token, options, ...additionalPlugins) {
+  const GitHubWithPlugins = GitHub.plugin(...additionalPlugins);
+  return new GitHubWithPlugins(getOctokitOptions(token, options));
+}
+var context2;
+var init_github = __esm({
+  "node_modules/@actions/github/lib/github.js"() {
+    "use strict";
+    init_context();
+    init_utils2();
+    context2 = new Context();
   }
 });
 
@@ -54895,7 +55084,7 @@ function createBaggage(entries = {}) {
   return new BaggageImpl(new Map(Object.entries(entries)));
 }
 var diag;
-var init_utils = __esm({
+var init_utils3 = __esm({
   "node_modules/@opentelemetry/api/dist/baggage/utils.mjs"() {
     "use strict";
     init_diag();
@@ -54909,7 +55098,7 @@ function createContextKey(description2) {
   return Symbol.for(description2);
 }
 var ROOT_CONTEXT;
-var init_context = __esm({
+var init_context2 = __esm({
   "node_modules/@opentelemetry/api/dist/context/context.mjs"() {
     "use strict";
     ROOT_CONTEXT = new class BaseContext {
@@ -55156,7 +55345,7 @@ var NoopContextManager;
 var init_NoopContextManager = __esm({
   "node_modules/@opentelemetry/api/dist/context/NoopContextManager.mjs"() {
     "use strict";
-    init_context();
+    init_context2();
     NoopContextManager = class {
       active() {
         return ROOT_CONTEXT;
@@ -55184,7 +55373,7 @@ var init_NoopContextManager = __esm({
 
 // node_modules/@opentelemetry/api/dist/api/context.mjs
 var API_NAME2, NOOP_CONTEXT_MANAGER, NOOP_TOKEN, ContextAPI;
-var init_context2 = __esm({
+var init_context3 = __esm({
   "node_modules/@opentelemetry/api/dist/api/context.mjs"() {
     "use strict";
     init_global_utils();
@@ -55305,8 +55494,8 @@ var SPAN_KEY;
 var init_context_utils = __esm({
   "node_modules/@opentelemetry/api/dist/trace/context-utils.mjs"() {
     "use strict";
-    init_context();
     init_context2();
+    init_context3();
     init_NonRecordingSpan();
     SPAN_KEY = createContextKey("OpenTelemetry Context Key SPAN");
   }
@@ -55320,7 +55509,7 @@ var contextApi, NoopTracer;
 var init_NoopTracer = __esm({
   "node_modules/@opentelemetry/api/dist/trace/NoopTracer.mjs"() {
     "use strict";
-    init_context2();
+    init_context3();
     init_NonRecordingSpan();
     init_context_utils();
     init_spancontext_utils();
@@ -55475,7 +55664,7 @@ var context3;
 var init_context_api = __esm({
   "node_modules/@opentelemetry/api/dist/context-api.mjs"() {
     "use strict";
-    init_context2();
+    init_context3();
     context3 = ContextAPI.getInstance();
   }
 });
@@ -55517,8 +55706,8 @@ var BAGGAGE_KEY;
 var init_context_helpers = __esm({
   "node_modules/@opentelemetry/api/dist/baggage/context-helpers.mjs"() {
     "use strict";
-    init_context();
     init_context2();
+    init_context3();
     BAGGAGE_KEY = createContextKey("OpenTelemetry Baggage Key");
   }
 });
@@ -55530,7 +55719,7 @@ var init_propagation = __esm({
     "use strict";
     init_global_utils();
     init_diag();
-    init_utils();
+    init_utils3();
     init_TextMapPropagator();
     init_NoopTextMapPropagator();
     init_context_helpers();
@@ -56754,7 +56943,7 @@ function maybe_map2(val, fn) {
   return fn(val);
 }
 var has2, hex_table2, limit2, encode2;
-var init_utils2 = __esm({
+var init_utils4 = __esm({
   "node_modules/@anthropic-ai/sdk/internal/qs/utils.mjs"() {
     "use strict";
     init_formats();
@@ -57065,7 +57254,7 @@ var array_prefix_generators2, push_to_array3, toISOString2, defaults3, sentinel2
 var init_stringify = __esm({
   "node_modules/@anthropic-ai/sdk/internal/qs/stringify.mjs"() {
     "use strict";
-    init_utils2();
+    init_utils4();
     init_formats();
     init_values();
     array_prefix_generators2 = {
@@ -61838,7 +62027,7 @@ var init_sync_interval = __esm({
 });
 
 // node_modules/@anthropic-ai/sdk/internal/utils.mjs
-var init_utils3 = __esm({
+var init_utils5 = __esm({
   "node_modules/@anthropic-ai/sdk/internal/utils.mjs"() {
     "use strict";
     init_values();
@@ -61952,7 +62141,7 @@ var SUPPORTED_STRING_FORMATS;
 var init_transform_json_schema = __esm({
   "node_modules/@anthropic-ai/sdk/lib/transform-json-schema.mjs"() {
     "use strict";
-    init_utils3();
+    init_utils5();
     SUPPORTED_STRING_FORMATS = /* @__PURE__ */ new Set([
       "date-time",
       "time",
@@ -84263,7 +84452,7 @@ var init_credentials2 = __esm({
     "use strict";
     init_error();
     init_detect_platform();
-    init_utils3();
+    init_utils5();
     CREDENTIALS_FILE_VERSION = "1.0";
     PROFILE_NAME_PATTERN = /^[A-Za-z0-9_.-]+$/;
     loadConfigWithSource = async (profile) => {
@@ -86038,76 +86227,6 @@ var init_sdk = __esm({
   }
 });
 
-// node_modules/@octokit/plugin-request-log/dist-src/version.js
-var VERSION11;
-var init_version5 = __esm({
-  "node_modules/@octokit/plugin-request-log/dist-src/version.js"() {
-    "use strict";
-    VERSION11 = "6.0.0";
-  }
-});
-
-// node_modules/@octokit/plugin-request-log/dist-src/index.js
-function requestLog(octokit) {
-  octokit.hook.wrap("request", (request2, options) => {
-    octokit.log.debug("request", options);
-    const start = Date.now();
-    const requestOptions = octokit.request.endpoint.parse(options);
-    const path9 = requestOptions.url.replace(options.baseUrl, "");
-    return request2(options).then((response) => {
-      const requestId = response.headers["x-github-request-id"];
-      octokit.log.info(
-        `${requestOptions.method} ${path9} - ${response.status} with id ${requestId} in ${Date.now() - start}ms`
-      );
-      return response;
-    }).catch((error2) => {
-      const requestId = error2.response?.headers["x-github-request-id"] || "UNKNOWN";
-      octokit.log.error(
-        `${requestOptions.method} ${path9} - ${error2.status} with id ${requestId} in ${Date.now() - start}ms`
-      );
-      throw error2;
-    });
-  });
-}
-var init_dist_src4 = __esm({
-  "node_modules/@octokit/plugin-request-log/dist-src/index.js"() {
-    "use strict";
-    init_version5();
-    requestLog.VERSION = VERSION11;
-  }
-});
-
-// node_modules/@octokit/rest/dist-src/version.js
-var VERSION12;
-var init_version6 = __esm({
-  "node_modules/@octokit/rest/dist-src/version.js"() {
-    "use strict";
-    VERSION12 = "22.0.1";
-  }
-});
-
-// node_modules/@octokit/rest/dist-src/index.js
-var dist_src_exports = {};
-__export(dist_src_exports, {
-  Octokit: () => Octokit2
-});
-var Octokit2;
-var init_dist_src5 = __esm({
-  "node_modules/@octokit/rest/dist-src/index.js"() {
-    "use strict";
-    init_dist_src2();
-    init_dist_src4();
-    init_dist_bundle5();
-    init_dist_src3();
-    init_version6();
-    Octokit2 = Octokit.plugin(requestLog, legacyRestEndpointMethods, paginateRest).defaults(
-      {
-        userAgent: `octokit-rest.js/${VERSION12}`
-      }
-    );
-  }
-});
-
 // packages/root-action/src/action-entry.ts
 var action_entry_exports = {};
 __export(action_entry_exports, {
@@ -86617,123 +86736,8 @@ function warning(message, properties = {}) {
   issueCommand("warning", toCommandProperties(properties), message instanceof Error ? message.toString() : message);
 }
 
-// node_modules/@actions/github/lib/context.js
-var import_fs2 = require("fs");
-var import_os3 = require("os");
-var Context = class {
-  /**
-   * Hydrate the context from the environment
-   */
-  constructor() {
-    var _a7, _b, _c;
-    this.payload = {};
-    if (process.env.GITHUB_EVENT_PATH) {
-      if ((0, import_fs2.existsSync)(process.env.GITHUB_EVENT_PATH)) {
-        this.payload = JSON.parse((0, import_fs2.readFileSync)(process.env.GITHUB_EVENT_PATH, { encoding: "utf8" }));
-      } else {
-        const path9 = process.env.GITHUB_EVENT_PATH;
-        process.stdout.write(`GITHUB_EVENT_PATH ${path9} does not exist${import_os3.EOL}`);
-      }
-    }
-    this.eventName = process.env.GITHUB_EVENT_NAME;
-    this.sha = process.env.GITHUB_SHA;
-    this.ref = process.env.GITHUB_REF;
-    this.workflow = process.env.GITHUB_WORKFLOW;
-    this.action = process.env.GITHUB_ACTION;
-    this.actor = process.env.GITHUB_ACTOR;
-    this.job = process.env.GITHUB_JOB;
-    this.runAttempt = parseInt(process.env.GITHUB_RUN_ATTEMPT, 10);
-    this.runNumber = parseInt(process.env.GITHUB_RUN_NUMBER, 10);
-    this.runId = parseInt(process.env.GITHUB_RUN_ID, 10);
-    this.apiUrl = (_a7 = process.env.GITHUB_API_URL) !== null && _a7 !== void 0 ? _a7 : `https://api.github.com`;
-    this.serverUrl = (_b = process.env.GITHUB_SERVER_URL) !== null && _b !== void 0 ? _b : `https://github.com`;
-    this.graphqlUrl = (_c = process.env.GITHUB_GRAPHQL_URL) !== null && _c !== void 0 ? _c : `https://api.github.com/graphql`;
-  }
-  get issue() {
-    const payload = this.payload;
-    return Object.assign(Object.assign({}, this.repo), { number: (payload.issue || payload.pull_request || payload).number });
-  }
-  get repo() {
-    if (process.env.GITHUB_REPOSITORY) {
-      const [owner, repo] = process.env.GITHUB_REPOSITORY.split("/");
-      return { owner, repo };
-    }
-    if (this.payload.repository) {
-      return {
-        owner: this.payload.repository.owner.login,
-        repo: this.payload.repository.name
-      };
-    }
-    throw new Error("context.repo requires a GITHUB_REPOSITORY environment variable like 'owner/repo'");
-  }
-};
-
-// node_modules/@actions/github/lib/internal/utils.js
-var httpClient = __toESM(require_lib(), 1);
-var import_undici2 = __toESM(require_undici(), 1);
-var __awaiter2 = function(thisArg, _arguments, P, generator) {
-  function adopt(value) {
-    return value instanceof P ? value : new P(function(resolve3) {
-      resolve3(value);
-    });
-  }
-  return new (P || (P = Promise))(function(resolve3, reject) {
-    function fulfilled(value) {
-      try {
-        step(generator.next(value));
-      } catch (e2) {
-        reject(e2);
-      }
-    }
-    function rejected(value) {
-      try {
-        step(generator["throw"](value));
-      } catch (e2) {
-        reject(e2);
-      }
-    }
-    function step(result) {
-      result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
-    }
-    step((generator = generator.apply(thisArg, _arguments || [])).next());
-  });
-};
-function getProxyAgent(destinationUrl) {
-  const hc = new httpClient.HttpClient();
-  return hc.getAgent(destinationUrl);
-}
-function getProxyAgentDispatcher(destinationUrl) {
-  const hc = new httpClient.HttpClient();
-  return hc.getAgentDispatcher(destinationUrl);
-}
-function getProxyFetch(destinationUrl) {
-  const httpDispatcher = getProxyAgentDispatcher(destinationUrl);
-  const proxyFetch = (url, opts) => __awaiter2(this, void 0, void 0, function* () {
-    return (0, import_undici2.fetch)(url, Object.assign(Object.assign({}, opts), { dispatcher: httpDispatcher }));
-  });
-  return proxyFetch;
-}
-function getApiBaseUrl() {
-  return process.env["GITHUB_API_URL"] || "https://api.github.com";
-}
-
-// node_modules/@actions/github/lib/utils.js
-init_dist_src2();
-init_dist_src3();
-init_dist_bundle5();
-var context = new Context();
-var baseUrl = getApiBaseUrl();
-var defaults = {
-  baseUrl,
-  request: {
-    agent: getProxyAgent(baseUrl),
-    fetch: getProxyFetch(baseUrl)
-  }
-};
-var GitHub = Octokit.plugin(restEndpointMethods, paginateRest).defaults(defaults);
-
-// node_modules/@actions/github/lib/github.js
-var context2 = new Context();
+// packages/root-action/src/orchestrate.ts
+init_github();
 
 // packages/review-contract/src/policy.ts
 var JUDGE_SEVERITIES = ["blocker", "major", "minor", "nit"];
@@ -140142,7 +140146,7 @@ function createLlmClient(provider, config) {
 }
 
 // packages/post-check-run/src/main.ts
-init_dist_src5();
+init_github();
 var CHECK_CONCLUSIONS = [
   "action_required",
   "cancelled",
@@ -140159,7 +140163,7 @@ var TRUNCATION_MARKER = `
 ---
 *Review truncated at ${MAX_SUMMARY_CHARS} characters.*`;
 var TRUNCATION_MARKER_LENGTH = TRUNCATION_MARKER.length;
-async function postCheckRun(options, octokitFactory = (token) => new Octokit2({ auth: token })) {
+async function postCheckRun(options, octokitFactory = (token) => getOctokit(token ?? "")) {
   if (!options.review) {
     return { checkRunUrl: "" };
   }
@@ -140200,8 +140204,8 @@ async function postCheckRun(options, octokitFactory = (token) => new Octokit2({ 
 }
 
 // packages/post-error-comment/src/main.ts
-init_dist_src5();
-async function postErrorComment(options, repoContext, octokitFactory = (token) => new Octokit2({ auth: token })) {
+init_github();
+async function postErrorComment(options, repoContext, octokitFactory = (token) => getOctokit(token ?? "")) {
   if (!options.postComment) {
     return { commentUrl: "" };
   }
@@ -140241,8 +140245,11 @@ async function postErrorComment(options, repoContext, octokitFactory = (token) =
   }
 }
 
+// packages/post-comment/src/main.ts
+init_github();
+
 // packages/post-comment/src/review.ts
-init_dist_src5();
+init_github();
 var INLINE_BODY_MAX_CHARS = 65e3;
 var BODY_ONLY_HEADING = "## Findings not on changed lines";
 var ANCHOR_FAILURE_STATUS = 422;
@@ -140292,7 +140299,7 @@ ${BODY_ONLY_HEADING}
 
 ${rendered}`;
 }
-async function postReview(options, ctx, octokitFactory = (token) => new Octokit2({ auth: token })) {
+async function postReview(options, ctx, octokitFactory = (token) => getOctokit(token ?? "")) {
   const { inline, bodyOnly } = planReviewComments(options.findings, options.diff);
   if (!options.postComment) {
     return { reviewUrl: "", inlineCount: inline.length, bodyOnlyCount: bodyOnly.length };
@@ -140440,7 +140447,7 @@ async function fetchPriorReviews(options) {
   if (!options.token) {
     return null;
   }
-  const octokit = options.octokit ?? new (await Promise.resolve().then(() => (init_dist_src5(), dist_src_exports))).Octokit({ auth: options.token });
+  const octokit = options.octokit ?? (await Promise.resolve().then(() => (init_github(), github_exports))).getOctokit(options.token);
   const base = { owner: options.owner, repo: options.repo };
   const perPage = { ...base, per_page: 100 };
   const paginateAll = async (fn, params) => {

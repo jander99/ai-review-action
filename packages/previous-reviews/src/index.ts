@@ -12,7 +12,9 @@
  * degrade to a fresh review.
  */
 
-import type { Octokit } from '@octokit/rest';
+import type { getOctokit } from '@actions/github';
+
+type Octokit = ReturnType<typeof getOctokit>;
 import { parsePriorFindings, type PriorFinding } from '@jander99/ai-review-review-contract';
 
 export const PRIOR_REVIEW_BOT_LOGIN = 'github-actions[bot]';
@@ -247,7 +249,7 @@ export async function fetchPriorReviews(
   if (!options.token) {
     return null;
   }
-  const octokit = options.octokit ?? new (await import('@octokit/rest')).Octokit({ auth: options.token });
+  const octokit = options.octokit ?? (await import('@actions/github')).getOctokit(options.token);
   const base = { owner: options.owner, repo: options.repo };
   const perPage = { ...base, per_page: 100 };
   const paginateAll = async (fn: unknown, params: object): Promise<any[]> => {
