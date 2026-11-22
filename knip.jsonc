@@ -23,9 +23,7 @@
     "packages/root-action": {
       // The repo-root dist/main.cjs bundles src/action-entry.ts (see root project.json).
       "entry": ["src/main.ts", "src/action-entry.ts", "test/**/*.test.cjs"],
-      "project": ["src/**/*.ts", "test/**/*.{cjs,ts}"],
-      // TODO: unused here, but removing it may shift hoisting and drift the committed bundles.
-      "ignoreDependencies": ["@octokit/rest"]
+      "project": ["src/**/*.ts", "test/**/*.{cjs,ts}"]
     }
   }
 }
