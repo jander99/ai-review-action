@@ -10,6 +10,11 @@
   "vulnerabilityAlerts": { "schedule": ["at any time"] },
   "packageRules": [
     {
+      "description": "Workspace-internal packages are not published to npm",
+      "matchPackageNames": ["@jander99/ai-review-*"],
+      "enabled": false
+    },
+    {
       "description": "Keep Nx packages moving together",
       "matchPackageNames": ["nx", "@nx/**"],
       "groupName": "nx"
