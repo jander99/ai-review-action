@@ -1,10 +1,6 @@
 name: AI Review
 
 on:
-  # Disabled on pull requests until the version 2 decision-review design is
-  # built: the v1 review path needs a paid model and currently fails on
-  # provider errors (402 insufficient balance), which only reddens PRs.
-  # Re-enable by restoring the pull_request trigger below.
   workflow_dispatch:
   # pull_request:
   #   types:

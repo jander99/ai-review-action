@@ -31,8 +31,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      # For production, replace v1 with a full commit SHA.
-      - uses: jander99/ai-review-action@v1
+      # For production, replace v2 with a full commit SHA.
+      - uses: jander99/ai-review-action@v2
         with:
           prompts: file:examples/prompts/code-review.md
           llm-provider: anthropic
@@ -44,7 +44,7 @@ jobs:
           post-comment: true
 ```
 
-In production, resolve the `v1` (or `v2`) tag to its full commit SHA and pin the action to it.
+In production, resolve the `v2` tag to its full commit SHA and pin the action to it.
 
 ## Provider matrix
 
@@ -127,7 +127,7 @@ steps:
   - uses: actions/checkout@v6
     with:
       fetch-depth: 0     # required: the action resolves the base commit
-  - uses: jander99/ai-review-action@v1
+  - uses: jander99/ai-review-action@v2
     with:
       prompts: file:examples/prompts/code-review.md
       llm-provider: openai

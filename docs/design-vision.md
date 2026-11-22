@@ -1,6 +1,6 @@
 # AI Review Action — Design
 
-> Status: **v2 implemented.** The full design and plan are in `docs/superpowers/`.
+> Status: **v2 implemented.**
 
 ## Summary
 
@@ -41,4 +41,3 @@ Before a release, run the repeat-stability study and the end-to-end overlap meas
 ## Related documentation
 
 - [README](../README.md), [Contributing](../CONTRIBUTING.md), [Security policy](../SECURITY.md), [Architecture](architecture.md).
-- [Design spec](superpowers/specs/2026-11-19-decision-review-pipeline-design.md) and [implementation plan](superpowers/plans/2026-11-19-decision-review-pipeline.md).
