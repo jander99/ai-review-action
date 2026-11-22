@@ -7,7 +7,9 @@
  * rejects (422) is retried once as body-only rather than lost.
  */
 
-import { Octokit } from '@octokit/rest';
+import { getOctokit } from '@actions/github';
+
+type Octokit = ReturnType<typeof getOctokit>;
 import {
   findAnchorHunk,
   parseUnifiedDiff,
@@ -100,7 +102,7 @@ function withBodyOnlySection(body: string, bodyOnly: ReadonlyArray<PostableFindi
 export async function postReview(
   options: PostReviewOptions,
   ctx: { owner: string; repo: string; pullNumber: number },
-  octokitFactory: (token: string | undefined) => Octokit = (token) => new Octokit({ auth: token }),
+  octokitFactory: (token: string | undefined) => Octokit = (token) => getOctokit(token ?? ''),
 ): Promise<PostReviewResult> {
   const { inline, bodyOnly } = planReviewComments(options.findings, options.diff);
   if (!options.postComment) {

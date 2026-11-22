@@ -4,7 +4,7 @@
   "main": "dist/index.cjs",
   "private": true,
   "dependencies": {
-    "@jander99/ai-review-review-contract": "1.0.0",
-    "@octokit/rest": "^22.0.0"
+    "@actions/github": "^9.0.0",
+    "@jander99/ai-review-review-contract": "1.0.0"
   }
 }

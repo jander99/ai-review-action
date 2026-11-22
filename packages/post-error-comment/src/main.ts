@@ -1,4 +1,6 @@
-import { Octokit } from '@octokit/rest';
+import { getOctokit } from '@actions/github';
+
+type Octokit = ReturnType<typeof getOctokit>;
 
 export interface PostErrorCommentOptions {
   token: string | undefined;
@@ -15,7 +17,7 @@ export interface PostErrorCommentResult {
 export async function postErrorComment(
   options: PostErrorCommentOptions,
   repoContext: { owner: string; repo: string; issueNumber: number },
-  octokitFactory: (token: string | undefined) => Octokit = (token) => new Octokit({ auth: token }),
+  octokitFactory: (token: string | undefined) => Octokit = (token) => getOctokit(token ?? ''),
 ): Promise<PostErrorCommentResult> {
   if (!options.postComment) {
     return { commentUrl: '' };
