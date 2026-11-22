@@ -49418,7 +49418,7 @@ var VERSION3;
 var init_version = __esm({
   "node_modules/@anthropic-ai/sdk/version.mjs"() {
     "use strict";
-    VERSION3 = "1.11.0";
+    VERSION3 = "1.12.0";
   }
 });
 
@@ -74856,7 +74856,7 @@ var init_batches2 = __esm({
 });
 
 // node_modules/@anthropic-ai/sdk/resources/messages/messages.mjs
-var AvailableToolsLimitExceededError, CompactionBlockAmbiguousError, CompactionBlockMisplacedError, CompactionContentMismatchError, CompactionIncompleteTurnError, CompactionNothingToSummarizeError, CompactionSignatureInvalidError, CompactionTooManyToolReferencesError, CompactionToolChangesMismatchError, ThreadAlreadyContinuedError, ThreadContinueInFlightError, ThreadFingerprintMismatchError, ThreadUnsupportedRequestError, ToolNameConflictError, ToolReferenceUnresolvedError, ThreadNotFoundError, CompactionUnavailableError, Messages4, DEPRECATED_MODELS2, MODELS_TO_WARN_WITH_THINKING_ENABLED2;
+var AvailableToolsLimitExceededError, CompactionBlockAmbiguousError, CompactionBlockMisplacedError, CompactionContentMismatchError, CompactionIncompleteTurnError, CompactionNothingToSummarizeError, CompactionSignatureInvalidError, CompactionTooManyToolReferencesError, CompactionToolChangesMismatchError, ImageDimensionsTooLargeError, ThreadAlreadyContinuedError, ThreadContinueInFlightError, ThreadFingerprintMismatchError, ThreadUnsupportedRequestError, ToolNameConflictError, ToolReferenceUnresolvedError, ThreadNotFoundError, CompactionUnavailableError, Messages4, DEPRECATED_MODELS2, MODELS_TO_WARN_WITH_THINKING_ENABLED2;
 var init_messages3 = __esm({
   "node_modules/@anthropic-ai/sdk/resources/messages/messages.mjs"() {
     "use strict";
@@ -74924,6 +74924,12 @@ var init_messages3 = __esm({
       }
       CompactionToolChangesMismatchError2._errorName = "CompactionToolChangesMismatchError";
       return CompactionToolChangesMismatchError2;
+    })();
+    ImageDimensionsTooLargeError = /* @__PURE__ */ (() => {
+      class ImageDimensionsTooLargeError2 extends BadRequestError4 {
+      }
+      ImageDimensionsTooLargeError2._errorName = "ImageDimensionsTooLargeError";
+      return ImageDimensionsTooLargeError2;
     })();
     ThreadAlreadyContinuedError = /* @__PURE__ */ (() => {
       class ThreadAlreadyContinuedError2 extends BadRequestError4 {
@@ -75126,6 +75132,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
       Messages5.CompactionSignatureInvalidError = CompactionSignatureInvalidError;
       Messages5.CompactionTooManyToolReferencesError = CompactionTooManyToolReferencesError;
       Messages5.CompactionToolChangesMismatchError = CompactionToolChangesMismatchError;
+      Messages5.ImageDimensionsTooLargeError = ImageDimensionsTooLargeError;
       Messages5.ThreadAlreadyContinuedError = ThreadAlreadyContinuedError;
       Messages5.ThreadContinueInFlightError = ThreadContinueInFlightError;
       Messages5.ThreadFingerprintMismatchError = ThreadFingerprintMismatchError;
@@ -78961,6 +78968,7 @@ var init_error_classes = __esm({
       ["400 external_key_validation_failed", ExternalKeyValidationFailedError],
       ["400 external_key_validation_timed_out", ExternalKeyValidationTimedOutError],
       ["400 file_not_downloadable", FileNotDownloadableError],
+      ["400 image_dimensions_too_large", ImageDimensionsTooLargeError],
       ["400 invalid_config_type_change", BetaInvalidConfigTypeChangeError],
       ["400 invalid_metadata", BetaInvalidMetadataError],
       ["400 invite_already_exists", InviteAlreadyExistsError],
@@ -80263,7 +80271,7 @@ var init_client = __esm({
                 parsed[line.substring(0, colon).trim()] = line.substring(colon + 1).trim();
               }
             }
-            options.defaultHeaders = { ...parsed, ...options.defaultHeaders };
+            options.defaultHeaders = options.defaultHeaders instanceof Headers || Array.isArray(options.defaultHeaders) ? buildHeaders2([parsed, options.defaultHeaders]) : { ...parsed, ...options.defaultHeaders };
           }
           const inherited = opts.__auth;
           delete options.__auth;
@@ -81055,6 +81063,7 @@ var init_client = __esm({
       Anthropic2.CompactionSignatureInvalidError = CompactionSignatureInvalidError;
       Anthropic2.CompactionTooManyToolReferencesError = CompactionTooManyToolReferencesError;
       Anthropic2.CompactionToolChangesMismatchError = CompactionToolChangesMismatchError;
+      Anthropic2.ImageDimensionsTooLargeError = ImageDimensionsTooLargeError;
       Anthropic2.ThreadAlreadyContinuedError = ThreadAlreadyContinuedError;
       Anthropic2.ThreadContinueInFlightError = ThreadContinueInFlightError;
       Anthropic2.ThreadFingerprintMismatchError = ThreadFingerprintMismatchError;
