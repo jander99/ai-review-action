@@ -2462,7 +2462,6 @@ __metadata:
   resolution: "ai-review-action-monorepo@workspace:."
   dependencies:
     "@actions/core": "npm:^3.0.0"
-    "@actions/exec": "npm:^3.0.0"
     "@actions/github": "npm:^9.0.0"
     "@nx/esbuild": "npm:24.0.6"
     "@nx/js": "npm:24.0.6"
