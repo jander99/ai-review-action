@@ -1,7 +1,7 @@
 {
   "name": "ai-review-action-monorepo",
   "private": true,
-  "packageManager": "yarn@4.18.1",
+  "packageManager": "yarn@4.19.0",
   "workspaces": [
     "packages/*"
   ],
