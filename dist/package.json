@@ -14,12 +14,12 @@
     "@actions/github": "^9.0.0"
   },
   "devDependencies": {
-    "@nx/esbuild": "24.0.6",
-    "@nx/js": "24.0.6",
+    "@nx/esbuild": "24.0.7",
+    "@nx/js": "24.0.7",
     "@types/node": "26.6.6",
     "esbuild": "0.28.2",
     "knip": "6.47.0",
-    "nx": "24.0.6",
+    "nx": "24.0.7",
     "typescript": "6.0.3"
   }
 }
