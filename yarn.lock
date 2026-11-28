@@ -66,9 +66,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@anthropic-ai/sdk@npm:1.12.0":
-  version: 1.12.0
-  resolution: "@anthropic-ai/sdk@npm:1.12.0"
+"@anthropic-ai/sdk@npm:1.14.0":
+  version: 1.14.0
+  resolution: "@anthropic-ai/sdk@npm:1.14.0"
   dependencies:
     "@opentelemetry/api": "npm:^1.4.1"
     json-schema-to-ts: "npm:^3.1.1"
@@ -80,7 +80,7 @@ __metadata:
       optional: true
   bin:
     anthropic-ai-sdk: bin/cli
-  checksum: 10c0/4e534653387bb1a7712863985ab0b9a44446a5fb9be4a30a547e018ca176de45585529580abeb4728fa49bb0d1c7f2e2a214327b3ffcfd25b815d3b3cb44229b
+  checksum: 10c0/ea62119415b4f3043cea3d4968c938b2bb85d5d23e79218c6081ebe126d88f88b456f1d06782066af9e77ea396c5b1f7598b7bad41ec455afee5213d0b13b093
   languageName: node
   linkType: hard
 
@@ -1613,10 +1613,10 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@jander99/ai-review-llm-clients@workspace:packages/llm-clients"
   dependencies:
-    "@anthropic-ai/sdk": "npm:1.12.0"
+    "@anthropic-ai/sdk": "npm:1.14.0"
     "@google/genai": "npm:3.6.1"
     ajv: "npm:8.20.0"
-    openai: "npm:7.62.0"
+    openai: "npm:7.64.0"
   languageName: unknown
   linkType: soft
 
@@ -3767,9 +3767,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"openai@npm:7.62.0":
-  version: 7.62.0
-  resolution: "openai@npm:7.62.0"
+"openai@npm:7.64.0":
+  version: 7.64.0
+  resolution: "openai@npm:7.64.0"
   peerDependencies:
     "@aws-sdk/credential-provider-node": ">=3.972.0 <4"
     "@smithy/hash-node": ">=4.3.0 <5"
@@ -3793,7 +3793,7 @@ __metadata:
       optional: true
     zod:
       optional: true
-  checksum: 10c0/0c6a40c073d8813837e8f8636b0ae8f5ce16212e915bff2b70c41e4781d9ea23774d9b2d29613743ad951cae2040a926ef717d9080c351ef730dd73fd0b5ad0e
+  checksum: 10c0/e185d77f7a5c2d63d3d9092e537281428a1b41a2dd94f72eed223181f9ff682be2ffbbcbff5ce72b2cc5c4adff8c27b41ffd9a893317362e4991ff99b9530b31
   languageName: node
   linkType: hard
 
